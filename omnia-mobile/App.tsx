@@ -11,9 +11,7 @@ export default function App() {
   useEffect(() => {
     // Listen for authentication state changes
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      const authStatus = currentUser !== null;
-      console.log('Auth state changed:', authStatus, typeof authStatus);
-      setIsAuthenticated(authStatus);
+      setIsAuthenticated(currentUser !== null);
       setLoading(false);
     });
 
@@ -30,7 +28,6 @@ export default function App() {
     );
   }
 
-  console.log('Passing isAuthenticated to Navigation:', isAuthenticated, typeof isAuthenticated);
   return <Navigation isAuthenticated={isAuthenticated} />;
 }
 

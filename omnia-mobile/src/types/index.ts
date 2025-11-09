@@ -4,6 +4,8 @@ import { User } from 'firebase/auth';
 export type RootStackParamList = {
   Login: undefined;
   Main: undefined;
+  Pairing: undefined;
+  Account: undefined;
 };
 
 // Auth types

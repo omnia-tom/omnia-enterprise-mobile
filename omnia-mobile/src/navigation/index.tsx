@@ -3,6 +3,8 @@ import { NavigationContainer, NavigationContainerRef } from '@react-navigation/n
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/LoginScreen';
 import MainScreen from '../screens/MainScreen';
+import PairingScreen from '../screens/PairingScreen';
+import AccountScreen from '../screens/AccountScreen';
 import { RootStackParamList } from '../types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -12,14 +14,12 @@ interface NavigationProps {
 }
 
 export default function Navigation({ isAuthenticated }: NavigationProps) {
-  console.log('Navigation received isAuthenticated:', isAuthenticated, typeof isAuthenticated);
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
 
   useEffect(() => {
-    console.log('Navigation useEffect - isAuthenticated:', isAuthenticated, typeof isAuthenticated);
     // Navigate to appropriate screen when auth state changes
     if (navigationRef.current) {
-      if (isAuthenticated === true) {
+      if (isAuthenticated) {
         navigationRef.current.navigate('Main');
       } else {
         navigationRef.current.navigate('Login');
@@ -41,6 +41,14 @@ export default function Navigation({ isAuthenticated }: NavigationProps) {
         <Stack.Screen
           name="Main"
           component={MainScreen}
+        />
+        <Stack.Screen
+          name="Pairing"
+          component={PairingScreen}
+        />
+        <Stack.Screen
+          name="Account"
+          component={AccountScreen}
         />
       </Stack.Navigator>
     </NavigationContainer>
