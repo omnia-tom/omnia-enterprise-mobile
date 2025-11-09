@@ -1,0 +1,41 @@
+import { initializeApp, getApps } from 'firebase/app';
+import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Firebase configuration for Omnia Enterprise Portal
+// IMPORTANT: Copy this file to firebase.ts and replace these values with your actual Firebase credentials
+// Get them from: Firebase Console → Project Settings → General → Your apps
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "omnia-enterprise-portal.firebaseapp.com",
+  projectId: "omnia-enterprise-portal",
+  storageBucket: "omnia-enterprise-portal.firebasestorage.app",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+// Initialize Firebase only if it hasn't been initialized yet
+let app;
+if (getApps().length === 0) {
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApps()[0];
+}
+
+// Initialize Auth with AsyncStorage persistence for React Native
+let auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+  });
+} catch (error) {
+  // If already initialized, just get the existing auth instance
+  auth = getAuth(app);
+}
+
+// Initialize Firestore
+const db = getFirestore(app);
+
+export { auth, db };
+export default app;
