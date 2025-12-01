@@ -59,7 +59,7 @@ export default function DevicesScreen() {
           const data = doc.data();
           devicesData.push({
             id: doc.id,
-            deviceName: data.deviceName || 'Unknown Device',
+            deviceName: data.name || 'Unknown Device',
             status: data.status || 'offline',
             battery: data.battery,
             model: data.metadata?.model || data.model,
