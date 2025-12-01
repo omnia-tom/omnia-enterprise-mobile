@@ -38,6 +38,9 @@ interface Device {
     lng: number;
   };
   pairedPersonaId?: string;
+  battery_left?: number;
+  battery_right?: number;
+  lastBatteryUpdate?: any;
   bleDeviceId?: string;
   bleDeviceName?: string;
   bleDeviceId_left?: string;
@@ -144,6 +147,9 @@ export default function MainScreen() {
             deviceName: data.name || 'Unknown Device',
             status: data.status || 'offline',
             battery: data.battery,
+            battery_left: data.battery_left,
+            battery_right: data.battery_right,
+            lastBatteryUpdate: data.lastBatteryUpdate,
             model: data.metadata?.model || data.model,
             type: data.type || data.metadata?.type,
             deviceType: data.deviceType || data.metadata?.deviceType,
@@ -208,7 +214,8 @@ export default function MainScreen() {
     (navigation as any).navigate('BLEConnection', {
       deviceId: device.id,
       deviceName: device.deviceName,
-      savedBleDeviceId: device.bleDeviceId,
+      savedBleDeviceId_left: device.bleDeviceId_left,
+      savedBleDeviceId_right: device.bleDeviceId_right,
     });
   };
 
@@ -458,6 +465,26 @@ export default function MainScreen() {
                               <View style={styles.bleArmIndicator}>
                                 <View style={styles.bleArmDot} />
                                 <Text style={styles.bleArmText}>Right</Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      )}
+
+                      {(device.battery_left != null || device.battery_right != null) && (
+                        <View style={styles.bleConnectionSection}>
+                          <Text style={styles.bleConnectionTitle}>Battery:</Text>
+                          <View style={styles.bleArmsRow}>
+                            {device.battery_left != null && (
+                              <View style={styles.bleArmIndicator}>
+                                <View style={styles.bleArmDot} />
+                                <Text style={styles.bleArmText}>Left: {device.battery_left}%</Text>
+                              </View>
+                            )}
+                            {device.battery_right != null && (
+                              <View style={styles.bleArmIndicator}>
+                                <View style={styles.bleArmDot} />
+                                <Text style={styles.bleArmText}>Right: {device.battery_right}%</Text>
                               </View>
                             )}
                           </View>

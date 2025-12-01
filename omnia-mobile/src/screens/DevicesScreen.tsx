@@ -19,6 +19,9 @@ interface Device {
   deviceName: string;
   status: 'online' | 'offline' | 'pending';
   battery?: number;
+  battery_left?: number;
+  battery_right?: number;
+  lastBatteryUpdate?: any;
   model?: string;
   pairedAt?: any;
   location?: {
@@ -62,6 +65,9 @@ export default function DevicesScreen() {
             deviceName: data.name || 'Unknown Device',
             status: data.status || 'offline',
             battery: data.battery,
+            battery_left: data.battery_left,
+            battery_right: data.battery_right,
+            lastBatteryUpdate: data.lastBatteryUpdate,
             model: data.metadata?.model || data.model,
             pairedAt: data.pairedAt || data.metadata?.pairedAt,
             location: data.location,
@@ -91,6 +97,9 @@ export default function DevicesScreen() {
             deviceName: data.deviceName || 'Unknown Device',
             status: data.status || 'offline',
             battery: data.battery,
+            battery_left: data.battery_left,
+            battery_right: data.battery_right,
+            lastBatteryUpdate: data.lastBatteryUpdate,
             model: data.metadata?.model || data.model,
             pairedAt: data.pairedAt || data.metadata?.pairedAt,
             location: data.location,
@@ -311,7 +320,59 @@ export default function DevicesScreen() {
               </View>
 
               <View style={styles.deviceInfo}>
-                {device.battery !== undefined && (
+                {/* Show left/right battery if available, otherwise show single battery */}
+                {(device.battery_left !== undefined || device.battery_right !== undefined) ? (
+                  <>
+                    {device.battery_left !== undefined && (
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Left Battery:</Text>
+                        <View style={styles.batteryContainer}>
+                          <View style={styles.batteryBar}>
+                            <View
+                              style={[
+                                styles.batteryFill,
+                                {
+                                  width: `${device.battery_left}%`,
+                                  backgroundColor:
+                                    device.battery_left > 50
+                                      ? '#4CAF50'
+                                      : device.battery_left > 20
+                                      ? '#FFC107'
+                                      : '#FF6B6B',
+                                },
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.batteryText}>{device.battery_left}%</Text>
+                        </View>
+                      </View>
+                    )}
+                    {device.battery_right !== undefined && (
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Right Battery:</Text>
+                        <View style={styles.batteryContainer}>
+                          <View style={styles.batteryBar}>
+                            <View
+                              style={[
+                                styles.batteryFill,
+                                {
+                                  width: `${device.battery_right}%`,
+                                  backgroundColor:
+                                    device.battery_right > 50
+                                      ? '#4CAF50'
+                                      : device.battery_right > 20
+                                      ? '#FFC107'
+                                      : '#FF6B6B',
+                                },
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.batteryText}>{device.battery_right}%</Text>
+                        </View>
+                      </View>
+                    )}
+                  </>
+                ) : device.battery !== undefined ? (
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Battery:</Text>
                     <View style={styles.batteryContainer}>
@@ -334,7 +395,7 @@ export default function DevicesScreen() {
                       <Text style={styles.batteryText}>{device.battery}%</Text>
                     </View>
                   </View>
-                )}
+                ) : null}
 
                 {device.pairedAt && (
                   <View style={styles.infoRow}>

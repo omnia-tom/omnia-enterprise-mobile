@@ -99,7 +99,13 @@ export class EvenRealitiesG1Protocol implements GlassesProtocol {
   }
 
   getBatteryRequestCommand(): Uint8Array {
-    // Request battery status: 0xF5 0x0F (request case battery)
+    // Request battery and firmware info: 0x2C 0x01
+    // This returns both left and right glasses battery levels
+    return new Uint8Array([0x2C, 0x01]);
+  }
+
+  getCaseBatteryRequestCommand(): Uint8Array {
+    // Request case battery status: 0xF5 0x0F
     return new Uint8Array([0xF5, 0x0F]);
   }
 
@@ -143,6 +149,38 @@ export class EvenRealitiesG1Protocol implements GlassesProtocol {
   parseIncomingData(data: Uint8Array): any {
     if (data.length < 2) return null;
 
+    // Battery and firmware info response (0x2C = 44)
+    if (data[0] === 44 || data[0] === 0x2C) {
+      // Response format from wiki:
+      // 0x2C [Model(A/B)] [Left Battery 0-100] [Right Battery 0-100] [00 00 00] [firmware versions...]
+      console.log('Battery info response (0x2C):', Array.from(data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+
+      if (data.length >= 4) {
+        // Byte 1: Model ('A' or 'B' in ASCII, could be 0x41 or 0x42)
+        const model = String.fromCharCode(data[1]);
+        // Byte 2: Left battery (0-100)
+        const leftBattery = data[2];
+        // Byte 3: Right battery (0-100)
+        const rightBattery = data[3];
+
+        return {
+          type: 'battery_info_response',
+          model: model,
+          leftBattery: leftBattery,
+          rightBattery: rightBattery,
+          rawData: Array.from(data),
+          hexString: Array.from(data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ')
+        };
+      }
+
+      // Fallback if data is too short
+      return {
+        type: 'battery_info_response',
+        rawData: Array.from(data),
+        hexString: Array.from(data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ')
+      };
+    }
+
     // Device events (0xF5 = 245)
     if (data[0] === 245 || data[0] === 0xF5) {
       const eventType = data[1];
@@ -168,14 +206,38 @@ export class EvenRealitiesG1Protocol implements GlassesProtocol {
           }
           return { type: 'case_battery', percentage: null };
         case 10:
-          // Acknowledgment - byte[2] contains the sequence number
+          // 0x0A can be either ACK or glasses battery level
           if (data.length >= 3) {
+            // If byte[2] is in battery range (0-100), it's battery level
+            if (data[2] <= 100) {
+              return { type: 'glasses_battery', percentage: data[2] };
+            }
             return { type: 'ack', sequenceNumber: data[2] };
           }
           return { type: 'ack' };
         case 17:
-          // Glasses status/battery info
-          return { type: 'glasses_status' };
+          // Glasses status/battery info (0xF5 0x11)
+          // The response contains 20 bytes of status data
+          // We need to find where the battery percentage is
+          console.log('Glasses status (0x11) full data:', Array.from(data));
+
+          // Try common battery positions in the payload
+          if (data.length >= 3) {
+            // Battery might be in byte 2 (0-100 range)
+            const possibleBattery = data[2];
+            if (possibleBattery <= 100) {
+              return {
+                type: 'glasses_status',
+                battery: possibleBattery,
+                rawData: Array.from(data)
+              };
+            }
+          }
+
+          return {
+            type: 'glasses_status',
+            rawData: Array.from(data)
+          };
         default:
           // Log unknown event types for debugging
           return { type: 'unknown_event', eventType, rawData: Array.from(data) };

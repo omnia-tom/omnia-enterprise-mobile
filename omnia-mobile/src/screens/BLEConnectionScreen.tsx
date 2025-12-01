@@ -30,7 +30,8 @@ import { ArmConnectionState, GlassesConnectionState } from '../types';
 interface BLEConnectionScreenParams {
   deviceId: string;
   deviceName: string;
-  savedBleDeviceId?: string;
+  savedBleDeviceId_left?: string;
+  savedBleDeviceId_right?: string;
 }
 
 interface ScannedDevice {
@@ -45,7 +46,7 @@ interface ScannedDevice {
 export default function BLEConnectionScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { deviceId, deviceName, savedBleDeviceId } = (route.params || {}) as BLEConnectionScreenParams;
+  const { deviceId, deviceName, savedBleDeviceId_left, savedBleDeviceId_right } = (route.params || {}) as BLEConnectionScreenParams;
 
   const bleManagerRef = useRef<BleManager | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -74,9 +75,13 @@ export default function BLEConnectionScreen() {
   // Battery state
   const [batteryStatus, setBatteryStatus] = useState<{
     caseBattery: number | null;
+    leftBattery: number | null;
+    rightBattery: number | null;
     glassesState: string | null;
   }>({
     caseBattery: null,
+    leftBattery: null,
+    rightBattery: null,
     glassesState: null,
   });
 
@@ -139,26 +144,76 @@ export default function BLEConnectionScreen() {
             }));
 
             for (const device of evenConnectedDevices) {
-              addLog(`  • ${device.name || 'Unknown'}`);
-
               const armSide = evenProtocol.getArmFromDeviceName(device.name || '');
-              if (armSide) {
-                const scannedDevice: ScannedDevice = {
-                  id: device.id,
-                  name: device.name,
-                  rssi: 0,
-                  isConnectable: true,
-                  device: device,
-                };
+              addLog(`  • ${device.name || 'Unknown'} (${armSide} arm, ID: ${device.id})`);
 
-                // Auto-connect without delay
-                setTimeout(() => {
-                  connectToDevice(scannedDevice);
-                }, 500 * (armSide === 'left' ? 1 : 2)); // Stagger connections
+              if (armSide) {
+                // Check if actually still connected
+                const isConnected = await device.isConnected();
+                addLog(`    ${armSide} connection status: ${isConnected ? 'CONNECTED ✓' : 'DISCONNECTED ✗'}`);
+
+                if (isConnected) {
+                  // Device is already connected - restore the reference directly
+                  // instead of reconnecting
+                  try {
+                    addLog(`    ⚡ Restoring ${armSide} arm connection...`);
+
+                    // Discover services
+                    const services = await device.services();
+                    const targetService = services.find(s =>
+                      s.uuid.toLowerCase() === evenProtocol.serviceUUID.toLowerCase()
+                    );
+
+                    if (targetService) {
+                      const characteristics = await targetService.characteristics();
+                      const txChar = characteristics.find(c =>
+                        c.uuid.toLowerCase() === evenProtocol.txCharacteristicUUID.toLowerCase()
+                      );
+                      const rxChar = characteristics.find(c =>
+                        c.uuid.toLowerCase() === evenProtocol.rxCharacteristicUUID.toLowerCase()
+                      );
+
+                      // Store the connection
+                      connectedArmsRef.current[armSide] = {
+                        side: armSide,
+                        device: device,
+                        txCharacteristic: txChar || null,
+                        rxCharacteristic: rxChar || null,
+                      };
+
+                      // Update UI state
+                      const armState: ArmConnectionState = {
+                        side: armSide,
+                        connected: true,
+                        deviceId: device.id,
+                        deviceName: device.name || 'Unknown',
+                      };
+
+                      setConnectionState(prev => {
+                        const newState = {
+                          ...prev,
+                          [armSide === 'left' ? 'leftArm' : 'rightArm']: armState,
+                        };
+                        newState.isFullyConnected =
+                          evenProtocol.requiresDualArm()
+                            ? (newState.leftArm?.connected && newState.rightArm?.connected) || false
+                            : true;
+                        return newState;
+                      });
+
+                      addLog(`    ✅ ${armSide} arm restored successfully!`);
+                    }
+                  } catch (error) {
+                    console.error(`Error restoring ${armSide} connection:`, error);
+                    addLog(`    ❌ Failed to restore ${armSide} arm`);
+                  }
+                } else {
+                  addLog(`    ⚠️ ${armSide} arm disconnected - will need to scan`);
+                }
               }
             }
 
-            addLog('🔄 Automatically connecting to paired devices...');
+            addLog('🔄 Automatically reconnecting to paired devices...');
           } else {
             addLog('💡 No paired Even devices found. Tap "Start Scan" to find devices.');
           }
@@ -224,17 +279,11 @@ export default function BLEConnectionScreen() {
 
     return () => {
       mounted = false;
-      // Disconnect all arms on unmount
-      Object.values(connectedArmsRef.current).forEach(arm => {
-        if (arm) {
-          try {
-            arm.device.cancelConnection();
-          } catch (error) {
-            console.error('Error disconnecting arm:', error);
-          }
-        }
-      });
+      // DON'T disconnect arms on unmount - keep connection alive
+      // The user may navigate away and come back
+      // Connections will be maintained in the background
 
+      // Only stop scanning if we're currently scanning
       if (bleManagerRef.current) {
         try {
           bleManagerRef.current.stopDeviceScan();
@@ -324,42 +373,45 @@ export default function BLEConnectionScreen() {
     connectingArmsRef.current.clear(); // Clear connecting set
     addLog('Starting scan for Even devices only...');
 
-    // Check for already connected devices
+    // Check for already connected devices AND saved device IDs
     try {
       const connectedDevices = await bleManagerRef.current.connectedDevices([]);
       const evenConnectedDevices = connectedDevices.filter(d =>
         d.name && d.name.toLowerCase().includes('even')
       );
 
-      if (evenConnectedDevices.length > 0) {
-        addLog(`Found ${evenConnectedDevices.length} already connected Even device(s)`);
+      addLog(`Found ${evenConnectedDevices.length} connected Even device(s)`);
 
-        // Try to use already connected devices
-        for (const device of evenConnectedDevices) {
-          addLog(`Attempting to use connected device: ${device.name}`);
+      // Also check if we have saved device IDs to reconnect
+      if (savedBleDeviceId_left || savedBleDeviceId_right) {
+        addLog(`Saved IDs: Left=${savedBleDeviceId_left || 'none'}, Right=${savedBleDeviceId_right || 'none'}`);
+      }
 
-          const scannedDevice: ScannedDevice = {
-            id: device.id,
-            name: device.name,
-            rssi: 0,
-            isConnectable: true,
-            device: device,
-          };
+      // Try to use already connected devices
+      for (const device of evenConnectedDevices) {
+        addLog(`Found connected: ${device.name} (${device.id})`);
 
-          // Add to scanned devices list
-          setScannedDevices(prev => [...prev, scannedDevice]);
+        const scannedDevice: ScannedDevice = {
+          id: device.id,
+          name: device.name,
+          rssi: 0,
+          isConnectable: true,
+          device: device,
+        };
 
-          // Auto-connect to use the existing connection
-          const deviceProtocol = getProtocolForDevice(device.name || '');
-          if (deviceProtocol instanceof EvenRealitiesG1Protocol) {
-            const armSide = deviceProtocol.getArmFromDeviceName(device.name || '');
-            if (armSide && !connectedArmsRef.current[armSide]) {
-              addLog(`→ Queuing ${armSide} arm (already paired)...`);
-              connectingArmsRef.current.add(device.id);
-              setTimeout(() => {
-                connectToDevice(scannedDevice);
-              }, 500);
-            }
+        // Add to scanned devices list
+        setScannedDevices(prev => [...prev, scannedDevice]);
+
+        // Auto-connect to use the existing connection
+        const deviceProtocol = getProtocolForDevice(device.name || '');
+        if (deviceProtocol instanceof EvenRealitiesG1Protocol) {
+          const armSide = deviceProtocol.getArmFromDeviceName(device.name || '');
+          if (armSide && !connectedArmsRef.current[armSide]) {
+            addLog(`→ Auto-connecting ${armSide} arm (already paired)...`);
+            connectingArmsRef.current.add(device.id);
+            setTimeout(() => {
+              connectToDevice(scannedDevice);
+            }, 500);
           }
         }
       }
@@ -615,6 +667,11 @@ export default function BLEConnectionScreen() {
 
             if (deviceProtocol.parseIncomingData) {
               const parsed = deviceProtocol.parseIncomingData(uint8Data);
+
+              // Log ALL incoming messages for debugging (with hex)
+              const hexData = Array.from(uint8Data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ');
+              console.log(`RX from ${armSide}:`, hexData, parsed);
+
               // Only log if parsed data is not null (filter out empty/null messages)
               if (parsed !== null) {
                 addLog(`📥 Received from ${armSide}: ${JSON.stringify(parsed)}`);
@@ -626,6 +683,54 @@ export default function BLEConnectionScreen() {
                     caseBattery: parsed.percentage,
                   }));
                   addLog(`🔋 Case battery: ${parsed.percentage}%`);
+                } else if (parsed.type === 'glasses_battery' && parsed.percentage !== null) {
+                  // Update battery for this specific arm
+                  const batteryKey = armSide === 'left' ? 'leftBattery' : 'rightBattery';
+                  setBatteryStatus(prev => ({
+                    ...prev,
+                    [batteryKey]: parsed.percentage,
+                  }));
+                  addLog(`🔋 ${armSide.toUpperCase()} glasses battery: ${parsed.percentage}%`);
+
+                  // Save to Firebase (async but don't block)
+                  const deviceDocRef = doc(db, 'devices', deviceId);
+                  updateDoc(deviceDocRef, {
+                    [`battery_${armSide}`]: parsed.percentage,
+                    lastBatteryUpdate: new Date(),
+                  }).catch(error => {
+                    console.error('Error saving battery to Firebase:', error);
+                  });
+                } else if (parsed.type === 'battery_info_response') {
+                  addLog(`📊 Battery info response (0x2C):`);
+                  addLog(`   Hex: ${parsed.hexString}`);
+
+                  // Check if we have battery data
+                  if (parsed.leftBattery !== undefined && parsed.rightBattery !== undefined) {
+                    addLog(`   Model: ${parsed.model}`);
+                    addLog(`   🔋 Left: ${parsed.leftBattery}%`);
+                    addLog(`   🔋 Right: ${parsed.rightBattery}%`);
+
+                    // Update state with BOTH batteries
+                    setBatteryStatus(prev => ({
+                      ...prev,
+                      leftBattery: parsed.leftBattery,
+                      rightBattery: parsed.rightBattery,
+                    }));
+
+                    // Save BOTH batteries to Firebase
+                    const deviceDocRef = doc(db, 'devices', deviceId);
+                    updateDoc(deviceDocRef, {
+                      battery_left: parsed.leftBattery,
+                      battery_right: parsed.rightBattery,
+                      model: parsed.model,
+                      lastBatteryUpdate: new Date(),
+                    }).catch(error => {
+                      console.error('Error saving battery to Firebase:', error);
+                    });
+                  } else {
+                    addLog(`   ⚠️ Could not parse battery data`);
+                    addLog(`   Raw: [${parsed.rawData.join(', ')}]`);
+                  }
                 } else if (parsed.type === 'glasses_on') {
                   setBatteryStatus(prev => ({
                     ...prev,
@@ -646,6 +751,25 @@ export default function BLEConnectionScreen() {
                   addLog(`✓ ACK received from ${armSide} (seq: ${parsed.sequenceNumber || 'unknown'})`);
                 } else if (parsed.type === 'glasses_status') {
                   addLog(`📊 Glasses status update from ${armSide}`);
+
+                  // Check if status contains battery info
+                  if (parsed.battery !== undefined) {
+                    const batteryKey = armSide === 'left' ? 'leftBattery' : 'rightBattery';
+                    setBatteryStatus(prev => ({
+                      ...prev,
+                      [batteryKey]: parsed.battery,
+                    }));
+                    addLog(`🔋 ${armSide.toUpperCase()} battery from status: ${parsed.battery}%`);
+
+                    // Save to Firebase
+                    const deviceDocRef = doc(db, 'devices', deviceId);
+                    updateDoc(deviceDocRef, {
+                      [`battery_${armSide}`]: parsed.battery,
+                      lastBatteryUpdate: new Date(),
+                    }).catch(error => {
+                      console.error('Error saving battery to Firebase:', error);
+                    });
+                  }
                 }
               }
             }
@@ -748,14 +872,11 @@ export default function BLEConnectionScreen() {
         addLog('✓✓ Both arms connected! Ready to send messages.');
         stopScan();
 
-        // Small delay to ensure state updates
-        // setTimeout(() => {
-        //   Alert.alert(
-        //     'Success!',
-        //     `Both arms connected to ${deviceProtocol.name}. You can now send test messages.`,
-        //     [{ text: 'OK' }]
-        //   );
-        // }, 300);
+        // Auto-request battery info after connection
+        setTimeout(() => {
+          addLog('🔋 Auto-requesting battery info...');
+          requestBatteryInfo();
+        }, 1000); // Wait 1 second for connections to stabilize
       }
     } catch (error: any) {
       console.error('Connection error:', error);
@@ -818,18 +939,21 @@ export default function BLEConnectionScreen() {
         updateData.protocol = protocol.name;
       }
 
-      if (connectionState.leftArm) {
-        updateData.bleDeviceId_left = connectionState.leftArm.deviceId;
-        updateData.bleDeviceName_left = connectionState.leftArm.deviceName;
+      // Use connectedArmsRef instead of connectionState (which may not be updated yet)
+      if (connectedArmsRef.current.left) {
+        updateData.bleDeviceId_left = connectedArmsRef.current.left.device.id;
+        updateData.bleDeviceName_left = connectedArmsRef.current.left.device.name || 'Unknown';
       }
-      if (connectionState.rightArm) {
-        updateData.bleDeviceId_right = connectionState.rightArm.deviceId;
-        updateData.bleDeviceName_right = connectionState.rightArm.deviceName;
+      if (connectedArmsRef.current.right) {
+        updateData.bleDeviceId_right = connectedArmsRef.current.right.device.id;
+        updateData.bleDeviceName_right = connectedArmsRef.current.right.device.name || 'Unknown';
       }
 
       await updateDoc(deviceDocRef, updateData);
+      addLog('💾 Connection saved to Firebase');
     } catch (error) {
       console.error('Error saving to Firebase:', error);
+      addLog('❌ Failed to save connection to Firebase');
     }
   };
 
@@ -850,6 +974,72 @@ export default function BLEConnectionScreen() {
       Alert.alert('Disconnected', `${side === 'left' ? 'Left' : 'Right'} arm disconnected`);
     } catch (error) {
       console.error(`Error disconnecting ${side} arm:`, error);
+    }
+  };
+
+  const requestBatteryInfo = async () => {
+    if (!protocol) return;
+
+    try {
+      addLog('🔋 Requesting battery info from both arms...');
+      const batteryCmd = protocol.getBatteryRequestCommand?.();
+      if (!batteryCmd) {
+        addLog('⚠️ Battery request command not available');
+        return;
+      }
+
+      let batteryBase64: string;
+      if (typeof Buffer !== 'undefined') {
+        batteryBase64 = Buffer.from(batteryCmd).toString('base64');
+      } else {
+        batteryBase64 = btoa(Array.from(batteryCmd).map(b => String.fromCharCode(b)).join(''));
+      }
+
+      // Request from both arms
+      let requestCount = 0;
+
+      if (connectedArmsRef.current.left) {
+        try {
+          const services = await connectedArmsRef.current.left.device.services();
+          const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+          if (targetService) {
+            const characteristics = await targetService.characteristics();
+            const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+            if (txChar) {
+              await txChar.writeWithoutResponse(batteryBase64);
+              addLog('   ✅ Battery request sent to LEFT');
+              requestCount++;
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+          }
+        } catch (error: any) {
+          addLog(`   ❌ LEFT battery request failed: ${error.message}`);
+        }
+      }
+
+      if (connectedArmsRef.current.right) {
+        try {
+          const services = await connectedArmsRef.current.right.device.services();
+          const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+          if (targetService) {
+            const characteristics = await targetService.characteristics();
+            const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+            if (txChar) {
+              await txChar.writeWithoutResponse(batteryBase64);
+              addLog('   ✅ Battery request sent to RIGHT');
+              requestCount++;
+            }
+          }
+        } catch (error: any) {
+          addLog(`   ❌ RIGHT battery request failed: ${error.message}`);
+        }
+      }
+
+      if (requestCount > 0) {
+        addLog(`✅ Battery info requested from ${requestCount} arm(s)`);
+      }
+    } catch (error: any) {
+      addLog(`❌ Battery request failed: ${error.message}`);
     }
   };
 
@@ -1339,6 +1529,7 @@ export default function BLEConnectionScreen() {
                     <Text style={styles.sendTestButtonText}>Clear Displays</Text>
                   </View>
                 </TouchableOpacity>
+
               </View>
             )}
 
