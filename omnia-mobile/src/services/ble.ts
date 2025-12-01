@@ -52,7 +52,7 @@ export interface GlassesProtocol {
   getInitCommand(): Uint8Array;
 
   // Messaging
-  createTextMessage(text: string, sequenceNumber?: number): Uint8Array;
+  createTextMessage(text: string, sequenceNumber?: number, replaceContent?: boolean): Uint8Array;
 
   // Control commands
   getManualModeCommand?(): Uint8Array;
@@ -113,7 +113,7 @@ export class EvenRealitiesG1Protocol implements GlassesProtocol {
     return new Uint8Array([0xF5, 0x00]);
   }
 
-  createTextMessage(text: string, sequenceNumber: number = 1, manualMode: boolean = true): Uint8Array {
+  createTextMessage(text: string, sequenceNumber: number = 1, replaceContent: boolean = true): Uint8Array {
     // Text command format:
     // 0x4E {seq} 0x01 0x00 {newscreen} 0x00 0x00 0x01 0x01 {UTF-8 text}
     const textBytes = new TextEncoder().encode(text);
@@ -123,11 +123,13 @@ export class EvenRealitiesG1Protocol implements GlassesProtocol {
     packet[1] = sequenceNumber & 0xFF;  // Sequence number
     packet[2] = 0x01;  // Total packages
     packet[3] = 0x00;  // Current package
-    // newscreen byte:
-    // Lower 4 bits: 0x01 = Display new content
-    // Upper 4 bits: 0x50 = Manual mode, 0x70 = Text show
-    packet[4] = manualMode ? 0x51 : 0x71;  // Display flags
-    packet[5] = 0x00;  // Char position low
+
+    // newscreen byte controls display behavior:
+    // 0x51 = Manual mode + new content (0x50 | 0x01) - REPLACES content
+    // 0x71 = Text show + new content (0x70 | 0x01) - May APPEND content
+    packet[4] = replaceContent ? 0x51 : 0x71;  // Use manual mode flag to force replace
+
+    packet[5] = 0x00;  // Char position low (0 = start of line)
     packet[6] = 0x00;  // Char position high
     packet[7] = 0x01;  // Current page
     packet[8] = 0x01;  // Max page

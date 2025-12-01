@@ -69,6 +69,7 @@ export default function BLEConnectionScreen() {
   const [testMessage, setTestMessage] = useState('Hi');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [connectionLog, setConnectionLog] = useState<string[]>([]);
+  const [sequenceNumber, setSequenceNumber] = useState(1);
 
   // Battery state
   const [batteryStatus, setBatteryStatus] = useState<{
@@ -113,6 +114,9 @@ export default function BLEConnectionScreen() {
 
         bleManagerRef.current = manager;
         setInitialized(true);
+
+        // Wait for Bluetooth to be ready before checking connected devices
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         // Check for already connected Even devices on startup
         try {
@@ -849,6 +853,171 @@ export default function BLEConnectionScreen() {
     }
   };
 
+  const sendMinimalText = async () => {
+    if (!protocol) return;
+
+    try {
+      // Use the simple clear screen command: 0x18
+      const clearCmd = new Uint8Array([0x18]);
+
+      // Convert to base64
+      let clearBase64: string;
+      if (typeof Buffer !== 'undefined') {
+        clearBase64 = Buffer.from(clearCmd).toString('base64');
+      } else {
+        clearBase64 = btoa(String.fromCharCode(0x18));
+      }
+
+      // Send 0x18 clear command to both arms
+      let sentCount = 0;
+
+      if (connectedArmsRef.current.left) {
+        try {
+          addLog('   → Clearing LEFT arm (0x18)...');
+          const services = await connectedArmsRef.current.left.device.services();
+          const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+          if (targetService) {
+            const characteristics = await targetService.characteristics();
+            const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+            if (txChar) {
+              await txChar.writeWithoutResponse(clearBase64);
+              addLog('   ✅ LEFT cleared');
+              sentCount++;
+              await new Promise(resolve => setTimeout(resolve, 50));
+            } else {
+              addLog('   ❌ LEFT: TX char not found');
+            }
+          } else {
+            addLog('   ❌ LEFT: Service not found');
+          }
+        } catch (error: any) {
+          addLog(`   ❌ LEFT error: ${error.message}`);
+          console.error('Error sending minimal text to left:', error);
+        }
+      } else {
+        addLog('   ⚠️ LEFT arm not connected');
+      }
+
+      if (connectedArmsRef.current.right) {
+        try {
+          addLog('   → Clearing RIGHT arm (0x18)...');
+          const services = await connectedArmsRef.current.right.device.services();
+          const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+          if (targetService) {
+            const characteristics = await targetService.characteristics();
+            const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+            if (txChar) {
+              await txChar.writeWithoutResponse(clearBase64);
+              addLog('   ✅ RIGHT cleared');
+              sentCount++;
+            } else {
+              addLog('   ❌ RIGHT: TX char not found');
+            }
+          } else {
+            addLog('   ❌ RIGHT: Service not found');
+          }
+        } catch (error: any) {
+          addLog(`   ❌ RIGHT error: ${error.message}`);
+          console.error('Error sending minimal text to right:', error);
+        }
+      } else {
+        addLog('   ⚠️ RIGHT arm not connected');
+      }
+
+      if (sentCount === 2) {
+        addLog('✅ Clear sent to BOTH arms');
+      } else if (sentCount === 1) {
+        addLog('⚠️ Clear sent to only ONE arm - other display still shows old text!');
+      } else {
+        addLog('❌ Failed to clear either arm');
+      }
+    } catch (error: any) {
+      addLog(`❌ Failed: ${error.message}`);
+    }
+  };
+
+  const clearDisplays = async () => {
+    if (!protocol) return;
+
+    try {
+      addLog('⏳ Clearing displays with 0x18 command...');
+
+      // Use the simple clear screen command: 0x18
+      const clearCmd = new Uint8Array([0x18]);
+      let clearBase64: string;
+      if (typeof Buffer !== 'undefined') {
+        clearBase64 = Buffer.from(clearCmd).toString('base64');
+      } else {
+        clearBase64 = btoa(String.fromCharCode(0x18));
+      }
+
+      let clearedCount = 0;
+
+      // Clear LEFT ARM
+      if (connectedArmsRef.current.left) {
+        try {
+          const services = await connectedArmsRef.current.left.device.services();
+          const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+          if (targetService) {
+            const characteristics = await targetService.characteristics();
+            const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+            if (txChar) {
+              await txChar.writeWithoutResponse(clearBase64);
+              addLog('   ✅ LEFT cleared');
+              clearedCount++;
+              await new Promise(resolve => setTimeout(resolve, 50));
+            } else {
+              addLog('   ❌ LEFT: TX char not found');
+            }
+          } else {
+            addLog('   ❌ LEFT: Service not found');
+          }
+        } catch (error: any) {
+          addLog(`   ❌ LEFT error: ${error.message}`);
+        }
+      } else {
+        addLog('   ⚠️ LEFT arm not connected');
+      }
+
+      // Clear RIGHT ARM
+      addLog('   → Clearing RIGHT arm...');
+      if (connectedArmsRef.current.right) {
+        try {
+          const services = await connectedArmsRef.current.right.device.services();
+          const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+          if (targetService) {
+            const characteristics = await targetService.characteristics();
+            const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+            if (txChar) {
+              await txChar.writeWithoutResponse(clearBase64);
+              addLog('   ✅ RIGHT cleared');
+              clearedCount++;
+            } else {
+              addLog('   ❌ RIGHT: TX char not found');
+            }
+          } else {
+            addLog('   ❌ RIGHT: Service not found');
+          }
+        } catch (error: any) {
+          addLog(`   ❌ RIGHT error: ${error.message}`);
+        }
+      } else {
+        addLog('   ⚠️ RIGHT arm not connected');
+      }
+
+      addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      if (clearedCount === 2) {
+        addLog(`✅ Clear sent to BOTH arms successfully`);
+      } else if (clearedCount === 1) {
+        addLog(`⚠️ Clear sent to only ONE arm - this is why you still see text!`);
+      } else {
+        addLog(`❌ Failed to clear either arm`);
+      }
+    } catch (error: any) {
+      addLog(`❌ Clear failed: ${error.message}`);
+    }
+  };
+
   const sendTestMessage = async () => {
     if (!protocol || !testMessage.trim() || sendingMessage) return;
 
@@ -878,8 +1047,12 @@ export default function BLEConnectionScreen() {
     }
 
     try {
-      // SIMPLIFIED: Just send text with basic 0x71 flag (no manual mode)
-      const messageData = protocol.createTextMessage(testMessage.trim(), 1, false);
+      // Use sequence number 200 for main content display (like DisplayPlus does)
+      // DisplayPlus uses: 123 for alerts, 200 for device summary, 201 for clear
+      const currentSeq = 200;
+
+      // Use 0x71 flag (standard text display mode)
+      const messageData = protocol.createTextMessage(testMessage.trim(), currentSeq, false);
 
       // Log the complete raw message data for debugging
       const hexString = Array.from(messageData).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ');
@@ -889,10 +1062,10 @@ export default function BLEConnectionScreen() {
       // Decode the header for verification
       addLog(`📋 Message header breakdown:`);
       addLog(`   Command: 0x${messageData[0].toString(16)} (should be 0x4e)`);
-      addLog(`   Sequence: ${messageData[1]}`);
+      addLog(`   Sequence: ${messageData[1]} (200 = device summary/main content)`);
       addLog(`   Total packages: ${messageData[2]}`);
       addLog(`   Current package: ${messageData[3]}`);
-      addLog(`   Display flags: 0x${messageData[4].toString(16)} (should be 0x71)`);
+      addLog(`   Display flags: 0x${messageData[4].toString(16)} (0x71 = new content + text show)`);
       addLog(`   Text: "${testMessage.trim()}"`);
 
       // Convert Uint8Array to base64
@@ -911,7 +1084,8 @@ export default function BLEConnectionScreen() {
       // LEFT ARM FIRST
       if (connectedArmsRef.current.left) {
         const leftArm = connectedArmsRef.current.left;
-        addLog('▶️ LEFT ARM:');
+        addLog('▶️ LEFT ARM (left side of glasses):');
+        addLog(`   Message: "${testMessage.trim()}"`);
 
         try {
           const services = await leftArm.device.services();
@@ -923,7 +1097,7 @@ export default function BLEConnectionScreen() {
 
             if (txChar) {
               await txChar.writeWithoutResponse(base64Data);
-              addLog('   ✅ Write completed');
+              addLog('   ✅ LEFT display updated');
               sentCount++;
               // Small delay before right arm
               await new Promise(resolve => setTimeout(resolve, 50));
@@ -936,12 +1110,15 @@ export default function BLEConnectionScreen() {
         } catch (error: any) {
           addLog(`   ❌ Error: ${error.message}`);
         }
+      } else {
+        addLog('⚠️ LEFT ARM: Not connected');
       }
 
       // RIGHT ARM SECOND
       if (connectedArmsRef.current.right) {
         const rightArm = connectedArmsRef.current.right;
-        addLog('▶️ RIGHT ARM:');
+        addLog('▶️ RIGHT ARM (right side of glasses):');
+        addLog(`   Message: "${testMessage.trim()}"`);
 
         try {
           const services = await rightArm.device.services();
@@ -953,7 +1130,7 @@ export default function BLEConnectionScreen() {
 
             if (txChar) {
               await txChar.writeWithoutResponse(base64Data);
-              addLog('   ✅ Write completed');
+              addLog('   ✅ RIGHT display updated');
               sentCount++;
             } else {
               addLog('   ❌ TX characteristic not found');
@@ -964,82 +1141,30 @@ export default function BLEConnectionScreen() {
         } catch (error: any) {
           addLog(`   ❌ Error: ${error.message}`);
         }
+      } else {
+        addLog('⚠️ RIGHT ARM: Not connected');
       }
 
       addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       if (sentCount === 2) {
         addLog(`✅ Message sent to BOTH arms!`);
-        addLog(`🔍 Look at your glasses displays NOW!`);
-        Alert.alert(
-          'Message Sent!',
-          `Sent to both arms.\n\nCheck your glasses displays.`,
-          [{ text: 'OK' }]
-        );
+        addLog(`   Message will clear in 5 seconds...`);
       } else if (sentCount === 1) {
         addLog(`⚠️ Message sent to only ONE arm`);
-        Alert.alert('Partial Success', `Sent to only one arm. Check connection log.`);
       } else {
         addLog(`❌ Failed to send message`);
         Alert.alert('Error', 'Failed to send message. Check connection log.');
       }
 
-      // Don't auto-clear for now - let user see it
-      /* setTimeout(async () => {
-        try {
-          addLog('Clearing message from displays...');
-
-          // Send empty message to clear displays
-          const clearData = protocol.createTextMessage('');
-          let clearBase64: string;
-          if (typeof Buffer !== 'undefined') {
-            clearBase64 = Buffer.from(clearData).toString('base64');
-          } else {
-            const binary = Array.from(clearData).map(byte => String.fromCharCode(byte)).join('');
-            clearBase64 = btoa(binary);
-          }
-
-          // Send clear command SEQUENTIALLY - left first, then right
-          // Clear LEFT arm first
-          if (connectedArmsRef.current.left) {
-            try {
-              const services = await connectedArmsRef.current.left.device.services();
-              const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
-              if (targetService) {
-                const characteristics = await targetService.characteristics();
-                const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
-                if (txChar) {
-                  await txChar.writeWithoutResponse(clearBase64);
-                  // Wait before clearing right
-                  await new Promise(resolve => setTimeout(resolve, 100));
-                }
-              }
-            } catch (error) {
-              console.error('Error clearing left arm:', error);
-            }
-          }
-
-          // Then clear RIGHT arm
-          if (connectedArmsRef.current.right) {
-            try {
-              const services = await connectedArmsRef.current.right.device.services();
-              const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
-              if (targetService) {
-                const characteristics = await targetService.characteristics();
-                const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
-                if (txChar) {
-                  await txChar.writeWithoutResponse(clearBase64);
-                }
-              }
-            } catch (error) {
-              console.error('Error clearing right arm:', error);
-            }
-          }
-          addLog('✓ Message cleared from displays');
-        } catch (error: any) {
-          console.error('Error clearing message:', error);
-          addLog(`⚠️ Failed to clear message: ${error.message}`);
-        }
-      }, 5000); */
+      // Auto-clear after 5 seconds
+      // Note: Text messages can't truly be "cleared" - they persist until replaced
+      // So we'll just send a minimal dot which appears nearly blank
+      if (sentCount > 0) {
+        setTimeout(() => {
+          addLog('⏰ 5 seconds elapsed, sending minimal text...');
+          sendMinimalText();
+        }, 5000);
+      }
 
     } catch (error: any) {
       console.error('Error sending message:', error);
@@ -1203,6 +1328,16 @@ export default function BLEConnectionScreen() {
                       <Text style={styles.sendTestButtonText}>Send to Glasses</Text>
                     )}
                   </LinearGradient>
+                </TouchableOpacity>
+
+                {/* Clear Display Button */}
+                <TouchableOpacity
+                  onPress={clearDisplays}
+                  style={[styles.sendTestButton, { marginTop: 12 }]}
+                >
+                  <View style={[styles.sendTestButtonGradient, { backgroundColor: '#EF4444' }]}>
+                    <Text style={styles.sendTestButtonText}>Clear Displays</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
             )}
