@@ -6,6 +6,7 @@ export type RootStackParamList = {
   Main: undefined;
   Pairing: undefined;
   Account: undefined;
+  Devices: undefined;
 };
 
 // Auth types

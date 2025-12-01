@@ -72,8 +72,13 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="light" />
+    <LinearGradient
+      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.container}
+    >
+      <StatusBar style="dark" />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -83,7 +88,7 @@ export default function LoginScreen() {
           {/* Logo/Header */}
           <View style={styles.header}>
             <LinearGradient
-              colors={['#FFFFFF', '#A394FF']}
+              colors={['#6366F1', '#8B5CF6']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.logoGradient}
@@ -106,7 +111,7 @@ export default function LoginScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="email@company.com"
-                placeholderTextColor="rgba(218, 216, 230, 0.5)"
+                placeholderTextColor="#6B7280"
                 value={formData.email}
                 onChangeText={(text) => setFormData({ ...formData, email: text })}
                 keyboardType="email-address"
@@ -122,7 +127,7 @@ export default function LoginScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="Enter your password"
-                placeholderTextColor="rgba(218, 216, 230, 0.5)"
+                placeholderTextColor="#6B7280"
                 value={formData.password}
                 onChangeText={(text) => setFormData({ ...formData, password: text })}
                 secureTextEntry={!showPassword}
@@ -139,7 +144,7 @@ export default function LoginScreen() {
               style={styles.buttonContainer}
             >
               <LinearGradient
-                colors={['#6E40FF', '#A394FF']}
+                colors={['#6366F1', '#8B5CF6']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={[styles.button, loading && styles.buttonDisabled]}
@@ -159,14 +164,13 @@ export default function LoginScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A0C46',
   },
   keyboardView: {
     flex: 1,
@@ -188,36 +192,36 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#1A0C46',
+    color: '#FFFFFF',
     letterSpacing: 2,
   },
   subtitle: {
     fontSize: 16,
-    color: '#DAD8E6',
+    color: '#6B7280',
     marginTop: 8,
     fontWeight: '600',
   },
   card: {
-    backgroundColor: 'rgba(26, 12, 70, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(107, 77, 255, 0.3)',
+    borderColor: 'rgba(99, 102, 241, 0.3)',
     padding: 24,
-    shadowColor: '#6B4DFF',
+    shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 8,
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1F2937',
     marginBottom: 8,
   },
   description: {
     fontSize: 14,
-    color: '#DAD8E6',
+    color: '#6B7280',
     marginBottom: 24,
   },
   inputContainer: {
@@ -226,17 +230,17 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#1F2937',
     marginBottom: 8,
   },
   input: {
-    backgroundColor: 'rgba(26, 12, 70, 0.4)',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderWidth: 1,
-    borderColor: 'rgba(107, 77, 255, 0.5)',
+    borderColor: 'rgba(99, 102, 241, 0.4)',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: '#1F2937',
   },
   buttonContainer: {
     marginTop: 8,
@@ -257,7 +261,7 @@ const styles = StyleSheet.create({
   },
   helpText: {
     fontSize: 12,
-    color: '#9E9E9E',
+    color: '#6B7280',
     textAlign: 'center',
   },
 });

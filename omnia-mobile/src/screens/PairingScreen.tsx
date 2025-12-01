@@ -55,7 +55,13 @@ export default function PairingScreen() {
           [
             {
               text: 'OK',
-              onPress: () => navigation.goBack(),
+              onPress: () => {
+                if (navigation.canGoBack()) {
+                  navigation.goBack();
+                } else {
+                  navigation.navigate('Main' as never);
+                }
+              },
             },
           ]
         );
@@ -71,13 +77,24 @@ export default function PairingScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="light" />
+    <LinearGradient
+      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.container}
+    >
+      <StatusBar style="dark" />
 
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('Main' as never);
+            }
+          }}
           style={styles.backButton}
         >
           <Text style={styles.backButtonText}>← Back</Text>
@@ -91,7 +108,7 @@ export default function PairingScreen() {
       <View style={styles.scannerContainer}>
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#A394FF" />
+            <ActivityIndicator size="large" color="#6366F1" />
             <Text style={styles.loadingText}>Pairing device...</Text>
             {pairingCode && (
               <Text style={styles.codeText}>Code: {pairingCode}</Text>
@@ -110,36 +127,36 @@ export default function PairingScreen() {
         <Text style={styles.infoText}>3. Display the QR code on the glasses</Text>
         <Text style={styles.infoText}>4. Scan the QR code with this app</Text>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A0C46',
   },
   header: {
     padding: 24,
     paddingTop: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
   },
   backButton: {
     marginBottom: 16,
   },
   backButtonText: {
-    color: '#A394FF',
+    color: '#6366F1',
     fontSize: 16,
     fontWeight: '600',
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1F2937',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#DAD8E6',
+    color: '#6B7280',
   },
   scannerContainer: {
     flex: 1,
@@ -147,31 +164,31 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: 'rgba(107, 77, 255, 0.3)',
+    borderColor: 'rgba(99, 102, 241, 0.3)',
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#1A0C46',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    color: '#FFFFFF',
+    color: '#1F2937',
     fontSize: 18,
     fontWeight: '600',
     marginTop: 16,
   },
   codeText: {
-    color: '#DAD8E6',
+    color: '#6B7280',
     fontSize: 14,
     marginTop: 8,
     fontFamily: 'monospace',
   },
   infoCard: {
-    backgroundColor: 'rgba(26, 12, 70, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(107, 77, 255, 0.3)',
+    borderColor: 'rgba(99, 102, 241, 0.3)',
     padding: 20,
     margin: 16,
     marginBottom: 32,
@@ -179,12 +196,12 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1F2937',
     marginBottom: 12,
   },
   infoText: {
     fontSize: 14,
-    color: '#DAD8E6',
+    color: '#6B7280',
     marginBottom: 8,
   },
 });

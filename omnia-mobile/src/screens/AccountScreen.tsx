@@ -73,14 +73,25 @@ export default function AccountScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="light" />
+    <LinearGradient
+      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.container}
+    >
+      <StatusBar style="dark" />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.navigate('Main' as never);
+              }
+            }}
             style={styles.backButton}
           >
             <Text style={styles.backButtonText}>← Back</Text>
@@ -90,7 +101,7 @@ export default function AccountScreen() {
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#A394FF" />
+            <ActivityIndicator size="large" color="#6366F1" />
           </View>
         ) : (
           <>
@@ -144,14 +155,13 @@ export default function AccountScreen() {
           </>
         )}
       </ScrollView>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A0C46',
   },
   scrollView: {
     flex: 1,
@@ -167,14 +177,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   backButtonText: {
-    color: '#A394FF',
+    color: '#6366F1',
     fontSize: 16,
     fontWeight: '600',
   },
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1F2937',
   },
   loadingContainer: {
     flex: 1,
@@ -183,22 +193,22 @@ const styles = StyleSheet.create({
     paddingTop: 100,
   },
   card: {
-    backgroundColor: 'rgba(26, 12, 70, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(107, 77, 255, 0.3)',
+    borderColor: 'rgba(99, 102, 241, 0.3)',
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#6B4DFF',
+    shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 8,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1F2937',
     marginBottom: 16,
   },
   infoRow: {
@@ -209,25 +219,25 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#DAD8E6',
+    color: '#6B7280',
     width: 100,
   },
   infoValue: {
     fontSize: 14,
-    color: '#FFFFFF',
+    color: '#1F2937',
     flex: 1,
   },
   roleBadge: {
-    backgroundColor: 'rgba(107, 77, 255, 0.2)',
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(107, 77, 255, 0.4)',
+    borderColor: 'rgba(99, 102, 241, 0.4)',
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
   roleText: {
     fontSize: 12,
-    color: '#A394FF',
+    color: '#6366F1',
     fontWeight: '600',
   },
   signOutButton: {

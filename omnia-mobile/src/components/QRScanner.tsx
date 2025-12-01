@@ -57,19 +57,18 @@ export default function QRScanner({ onScan }: QRScannerProps) {
         barcodeScannerSettings={{
           barcodeTypes: ['qr'],
         }}
-      >
-        <View style={styles.overlay}>
-          <View style={styles.scanArea}>
-            <View style={[styles.corner, styles.topLeft]} />
-            <View style={[styles.corner, styles.topRight]} />
-            <View style={[styles.corner, styles.bottomLeft]} />
-            <View style={[styles.corner, styles.bottomRight]} />
-          </View>
-          <Text style={styles.instructions}>
-            Position QR code within the frame
-          </Text>
+      />
+      <View style={styles.overlay}>
+        <View style={styles.scanArea}>
+          <View style={[styles.corner, styles.topLeft]} />
+          <View style={[styles.corner, styles.topRight]} />
+          <View style={[styles.corner, styles.bottomLeft]} />
+          <View style={[styles.corner, styles.bottomRight]} />
         </View>
-      </CameraView>
+        <Text style={styles.instructions}>
+          Position QR code within the frame
+        </Text>
+      </View>
     </View>
   );
 }
@@ -77,7 +76,7 @@ export default function QRScanner({ onScan }: QRScannerProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A0C46',
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -86,7 +85,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
@@ -100,7 +99,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 40,
     height: 40,
-    borderColor: '#A394FF',
+    borderColor: '#6366F1',
   },
   topLeft: {
     top: 0,
@@ -131,23 +130,23 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8,
   },
   instructions: {
-    color: '#FFFFFF',
+    color: '#1F2937',
     fontSize: 16,
     fontWeight: '600',
     marginTop: 32,
     textAlign: 'center',
-    backgroundColor: 'rgba(26, 12, 70, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     padding: 16,
     borderRadius: 8,
   },
   text: {
-    color: '#FFFFFF',
+    color: '#1F2937',
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 8,
   },
   subtext: {
-    color: '#DAD8E6',
+    color: '#6B7280',
     fontSize: 14,
   },
 });

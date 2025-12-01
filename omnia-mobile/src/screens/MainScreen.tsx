@@ -1,11 +1,79 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { auth, db } from '../services/firebase';
 
 export default function MainScreen() {
   const navigation = useNavigation();
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
+  const [loadingPhoto, setLoadingPhoto] = useState(true);
+  const [userInitials, setUserInitials] = useState<string>('👤');
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) {
+      setLoadingPhoto(false);
+      return;
+    }
+
+    // First check Firebase Auth photoURL
+    if (user.photoURL) {
+      setProfilePhotoUrl(user.photoURL);
+      setLoadingPhoto(false);
+      return;
+    }
+
+    // Then check Firestore user document
+    const userDocRef = doc(db, 'users', user.uid);
+    
+    // Set up real-time listener
+    const unsubscribe = onSnapshot(
+      userDocRef,
+      (userDoc) => {
+        const currentUser = auth.currentUser;
+        
+        // Check Firebase Auth photoURL first (takes priority)
+        if (currentUser?.photoURL) {
+          setProfilePhotoUrl(currentUser.photoUrl);
+        } else if (userDoc.exists()) {
+          const userData = userDoc.data();
+          
+          // Check for photoURL in Firestore
+          if (userData.photoUrl) {
+            setProfilePhotoUrl(userData.photoUrl);
+          } else {
+            setProfilePhotoUrl(null);
+          }
+          
+          // Set initials from first and last name
+          if (userData.firstName && userData.lastName) {
+            const initials = `${userData.firstName.charAt(0)}${userData.lastName.charAt(0)}`.toUpperCase();
+            setUserInitials(initials);
+          } else if (userData.email || currentUser?.email) {
+            const email = userData.email || currentUser?.email || '';
+            const initials = email.charAt(0).toUpperCase();
+            setUserInitials(initials);
+          }
+        } else {
+          // No Firestore document, try to get initials from Auth
+          if (currentUser?.email) {
+            const initials = currentUser.email.charAt(0).toUpperCase();
+            setUserInitials(initials);
+          }
+        }
+        setLoadingPhoto(false);
+      },
+      (error) => {
+        console.error('Error fetching user profile:', error);
+        setLoadingPhoto(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   const handlePairDevice = () => {
     navigation.navigate('Pairing' as never);
@@ -15,14 +83,37 @@ export default function MainScreen() {
     navigation.navigate('Account' as never);
   };
 
+  const handleMyDevicesPress = () => {
+    navigation.navigate('Devices' as never);
+  };
+
   return (
-    <View style={styles.container}>
-      <StatusBar style="light" />
+    <LinearGradient
+      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.container}
+    >
+      <StatusBar style="dark" />
 
       {/* Profile Icon - Top Right */}
       <TouchableOpacity style={styles.profileButton} onPress={handleAccountPress}>
         <View style={styles.profileIcon}>
-          <Text style={styles.profileIconText}>👤</Text>
+          {loadingPhoto ? (
+            <ActivityIndicator size="small" color="#6366F1" />
+          ) : profilePhotoUrl ? (
+            <Image
+              source={{ uri: profilePhotoUrl }}
+              style={styles.profileImage}
+              resizeMode="cover"
+              onError={() => {
+                // Fallback to initials if image fails to load
+                setProfilePhotoUrl(null);
+              }}
+            />
+          ) : (
+            <Text style={styles.profileIconText}>{userInitials}</Text>
+          )}
         </View>
       </TouchableOpacity>
 
@@ -40,7 +131,7 @@ export default function MainScreen() {
 
           <TouchableOpacity onPress={handlePairDevice} style={styles.actionButton}>
             <LinearGradient
-              colors={['#6E40FF', '#A394FF']}
+              colors={['#6366F1', '#8B5CF6']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.actionGradient}
@@ -49,8 +140,8 @@ export default function MainScreen() {
             </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButtonOutline}>
-            <Text style={styles.actionTextOutline}>👓 My Devices (Coming Soon)</Text>
+          <TouchableOpacity onPress={handleMyDevicesPress} style={styles.actionButtonOutline}>
+            <Text style={styles.actionTextOutline}>👓 My Devices</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButtonOutline}>
@@ -58,14 +149,13 @@ export default function MainScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A0C46',
   },
   profileButton: {
     position: 'absolute',
@@ -77,14 +167,21 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(107, 77, 255, 0.3)',
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
     borderWidth: 2,
-    borderColor: '#A394FF',
+    borderColor: '#6366F1',
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileIconText: {
-    fontSize: 20,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6366F1',
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
   },
   scrollView: {
     flex: 1,
@@ -98,36 +195,36 @@ const styles = StyleSheet.create({
   },
   welcomeText: {
     fontSize: 16,
-    color: '#DAD8E6',
+    color: '#6B7280',
     marginBottom: 4,
   },
   appName: {
     fontSize: 40,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1F2937',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: '#DAD8E6',
+    color: '#6B7280',
   },
   card: {
-    backgroundColor: 'rgba(26, 12, 70, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(107, 77, 255, 0.3)',
+    borderColor: 'rgba(99, 102, 241, 0.3)',
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#6B4DFF',
+    shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 8,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1F2937',
     marginBottom: 16,
   },
   actionButton: {
@@ -148,12 +245,12 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(107, 77, 255, 0.4)',
-    backgroundColor: 'rgba(107, 77, 255, 0.1)',
+    borderColor: 'rgba(99, 102, 241, 0.4)',
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
     marginBottom: 12,
   },
   actionTextOutline: {
-    color: '#A394FF',
+    color: '#6366F1',
     fontSize: 16,
     fontWeight: '600',
   },

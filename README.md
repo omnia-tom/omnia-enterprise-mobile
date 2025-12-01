@@ -487,6 +487,91 @@ useEffect(() => {
 }, []);
 ```
 
+## Running on Your Device
+
+### Prerequisites
+
+1. **Install dependencies:**
+   ```bash
+   cd omnia-mobile
+   npm install
+   ```
+
+2. **Install EAS CLI (if not already installed):**
+   ```bash
+   npm install -g eas-cli
+   ```
+
+3. **Login to Expo:**
+   ```bash
+   eas login
+   ```
+
+### Option 1: Build Development Client with EAS (Recommended)
+
+This creates a custom development build that includes all native modules.
+
+**For iOS:**
+```bash
+# Build for iOS device
+eas build --profile development --platform ios
+
+# After build completes, install on your device via:
+# - TestFlight (if configured)
+# - Direct download link from EAS
+# - Or use: eas build:run -p ios
+```
+
+**For Android:**
+```bash
+# Build for Android device
+eas build --profile development --platform android
+
+# Install the APK on your device
+```
+
+**After installing the development client:**
+```bash
+# Start the development server
+cd omnia-mobile
+npm start
+
+# The app will automatically connect to the dev server
+# Or scan the QR code shown in the terminal
+```
+
+### Option 2: Run Directly with Xcode/Android Studio
+
+**For iOS (requires Xcode and connected device):**
+```bash
+cd omnia-mobile
+npm run ios
+# Select your connected device when prompted
+```
+
+**For Android (requires Android Studio and connected device):**
+```bash
+cd omnia-mobile
+npm run android
+# Make sure your device is connected via USB with USB debugging enabled
+```
+
+### Option 3: Local Development Build
+
+If you want to build locally without EAS:
+
+**iOS:**
+```bash
+cd omnia-mobile
+npx expo run:ios --device
+```
+
+**Android:**
+```bash
+cd omnia-mobile
+npx expo run:android --device
+```
+
 ## Testing
 
 ### Local Development
@@ -502,11 +587,9 @@ useEffect(() => {
    npx expo start --android
    ```
 
-3. **Physical Device (Recommended)**
-   ```bash
-   npx expo start
-   # Scan QR code with Expo Go app
-   ```
+3. **Physical Device**
+   - Use one of the methods above in "Running on Your Device"
+   - Note: Expo Go won't work with this app due to custom native modules
 
 ### Bluetooth Testing Without Glasses
 

@@ -5,6 +5,7 @@ import LoginScreen from '../screens/LoginScreen';
 import MainScreen from '../screens/MainScreen';
 import PairingScreen from '../screens/PairingScreen';
 import AccountScreen from '../screens/AccountScreen';
+import DevicesScreen from '../screens/DevicesScreen';
 import { RootStackParamList } from '../types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -49,6 +50,10 @@ export default function Navigation({ isAuthenticated }: NavigationProps) {
         <Stack.Screen
           name="Account"
           component={AccountScreen}
+        />
+        <Stack.Screen
+          name="Devices"
+          component={DevicesScreen}
         />
       </Stack.Navigator>
     </NavigationContainer>
