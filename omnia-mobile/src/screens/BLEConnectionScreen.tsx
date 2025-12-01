@@ -1,0 +1,1690 @@
+import React, { useEffect, useState, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+  PermissionsAndroid,
+  Platform,
+  TextInput,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { BleManager, Device, State, Characteristic } from 'react-native-ble-plx';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../services/firebase';
+import {
+  getBleManager,
+  isBleAvailable,
+  getProtocolForDevice,
+  GlassesProtocol,
+  ConnectedArm,
+  EvenRealitiesG1Protocol
+} from '../services/ble';
+import { ArmConnectionState, GlassesConnectionState } from '../types';
+
+interface BLEConnectionScreenParams {
+  deviceId: string;
+  deviceName: string;
+  savedBleDeviceId?: string;
+}
+
+interface ScannedDevice {
+  id: string;
+  name: string | null;
+  rssi: number;
+  isConnectable: boolean | null;
+  device: Device;
+  estimatedDistance?: string;
+}
+
+export default function BLEConnectionScreen() {
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { deviceId, deviceName, savedBleDeviceId } = (route.params || {}) as BLEConnectionScreenParams;
+
+  const bleManagerRef = useRef<BleManager | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [scannedDevices, setScannedDevices] = useState<ScannedDevice[]>([]);
+  const [bluetoothState, setBluetoothState] = useState<State>(State.Unknown);
+  const [initialized, setInitialized] = useState(false);
+
+  // New state for dual-arm connection
+  const [protocol, setProtocol] = useState<GlassesProtocol | null>(null);
+  const [connectionState, setConnectionState] = useState<GlassesConnectionState>({
+    protocolName: '',
+    leftArm: null,
+    rightArm: null,
+    isFullyConnected: false,
+  });
+  const connectedArmsRef = useRef<{ left?: ConnectedArm; right?: ConnectedArm }>({});
+  const connectingArmsRef = useRef<Set<string>>(new Set()); // Track devices being connected
+
+  // Test message state
+  const [testMessage, setTestMessage] = useState('Hi');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [connectionLog, setConnectionLog] = useState<string[]>([]);
+
+  // Battery state
+  const [batteryStatus, setBatteryStatus] = useState<{
+    caseBattery: number | null;
+    glassesState: string | null;
+  }>({
+    caseBattery: null,
+    glassesState: null,
+  });
+
+  useEffect(() => {
+    let mounted = true;
+
+    const initializeBle = async () => {
+      try {
+        const manager = getBleManager();
+
+        if (!manager) {
+          if (mounted) {
+            Alert.alert(
+              'Development Build Required',
+              'Bluetooth requires a development build with native modules.\n\n' +
+              'Please rebuild the app:\n\n' +
+              'iOS: npx expo run:ios --device\n' +
+              'Android: npx expo run:android --device',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    if (navigation.canGoBack()) {
+                      navigation.goBack();
+                    }
+                  },
+                },
+              ]
+            );
+          }
+          return;
+        }
+
+        if (!mounted) return;
+
+        bleManagerRef.current = manager;
+        setInitialized(true);
+
+        // Check for already connected Even devices on startup
+        try {
+          const connectedDevices = await manager.connectedDevices([
+            '6E400001-B5A3-F393-E0A9-E50E24DCCA9E' // Nordic UART service UUID
+          ]);
+          const evenConnectedDevices = connectedDevices.filter(d =>
+            d.name && d.name.toLowerCase().includes('even')
+          );
+
+          if (evenConnectedDevices.length > 0) {
+            addLog(`📱 Found ${evenConnectedDevices.length} already connected Even device(s)!`);
+
+            // Automatically connect to these devices
+            const evenProtocol = new EvenRealitiesG1Protocol();
+            setProtocol(evenProtocol);
+            setConnectionState(prev => ({
+              ...prev,
+              protocolName: evenProtocol.name,
+            }));
+
+            for (const device of evenConnectedDevices) {
+              addLog(`  • ${device.name || 'Unknown'}`);
+
+              const armSide = evenProtocol.getArmFromDeviceName(device.name || '');
+              if (armSide) {
+                const scannedDevice: ScannedDevice = {
+                  id: device.id,
+                  name: device.name,
+                  rssi: 0,
+                  isConnectable: true,
+                  device: device,
+                };
+
+                // Auto-connect without delay
+                setTimeout(() => {
+                  connectToDevice(scannedDevice);
+                }, 500 * (armSide === 'left' ? 1 : 2)); // Stagger connections
+              }
+            }
+
+            addLog('🔄 Automatically connecting to paired devices...');
+          } else {
+            addLog('💡 No paired Even devices found. Tap "Start Scan" to find devices.');
+          }
+        } catch (error) {
+          console.error('Error checking for connected devices on startup:', error);
+          addLog('💡 Tap "Start Scan" to find your glasses');
+        }
+
+        const subscription = manager.onStateChange((state) => {
+          if (!mounted) return;
+          setBluetoothState(state);
+          if (state === State.PoweredOn) {
+            // Bluetooth is ready
+          } else if (state === State.PoweredOff) {
+            Alert.alert('Bluetooth Off', 'Please turn on Bluetooth to connect to your glasses');
+          }
+        }, true);
+
+        return () => {
+          subscription.remove();
+          if (bleManagerRef.current) {
+            try {
+              bleManagerRef.current.stopDeviceScan();
+            } catch (error) {
+              console.error('Error stopping scan:', error);
+            }
+          }
+        };
+      } catch (error: any) {
+        console.error('Error initializing BleManager:', error);
+        if (mounted) {
+          const errorMessage = error?.message || 'Unknown error';
+
+          if (errorMessage.includes('NativeModule') || errorMessage.includes('null')) {
+            Alert.alert(
+              'Development Build Required',
+              'Bluetooth requires a development build with native modules.\n\n' +
+              'The app needs to be rebuilt to include the Bluetooth native module.\n\n' +
+              'Run: npx expo run:ios --device',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    if (navigation.canGoBack()) {
+                      navigation.goBack();
+                    }
+                  },
+                },
+              ]
+            );
+          } else {
+            Alert.alert(
+              'Bluetooth Error',
+              `Failed to initialize Bluetooth: ${errorMessage}. Please restart the app and ensure Bluetooth permissions are granted.`
+            );
+          }
+          setInitialized(false);
+        }
+      }
+    };
+
+    initializeBle();
+
+    return () => {
+      mounted = false;
+      // Disconnect all arms on unmount
+      Object.values(connectedArmsRef.current).forEach(arm => {
+        if (arm) {
+          try {
+            arm.device.cancelConnection();
+          } catch (error) {
+            console.error('Error disconnecting arm:', error);
+          }
+        }
+      });
+
+      if (bleManagerRef.current) {
+        try {
+          bleManagerRef.current.stopDeviceScan();
+        } catch (error) {
+          console.error('Error stopping scan:', error);
+        }
+      }
+    };
+  }, [navigation]);
+
+  const requestPermissions = async (): Promise<boolean> => {
+    if (Platform.OS === 'android') {
+      if (Platform.Version >= 31) {
+        const scanPermission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          {
+            title: 'Bluetooth Scan Permission',
+            message: 'App needs Bluetooth scan permission to find your glasses',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+
+        const connectPermission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          {
+            title: 'Bluetooth Connect Permission',
+            message: 'App needs Bluetooth connect permission to pair with your glasses',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+
+        if (scanPermission !== PermissionsAndroid.RESULTS.GRANTED ||
+            connectPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert(
+            'Permissions Required',
+            'Bluetooth permissions are required to connect to your glasses. Please enable them in app settings.'
+          );
+          return false;
+        }
+      } else {
+        const fineLocationPermission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: 'Location Permission',
+            message: 'App needs location permission to scan for Bluetooth devices',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+
+        if (fineLocationPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert(
+            'Permission Required',
+            'Location permission is required to scan for Bluetooth devices. Please enable it in app settings.'
+          );
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  const addLog = (message: string) => {
+    console.log('[BLE]', message);
+    setConnectionLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+  };
+
+  const startScan = async () => {
+    if (scanning || connectionState.isFullyConnected || !initialized || !bleManagerRef.current) return;
+
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    if (bluetoothState !== State.PoweredOn) {
+      Alert.alert('Bluetooth Off', 'Please turn on Bluetooth to scan for devices');
+      return;
+    }
+
+    setScanning(true);
+    setScannedDevices([]); // Clear all previously scanned devices
+    setConnectionLog([]);
+    connectingArmsRef.current.clear(); // Clear connecting set
+    addLog('Starting scan for Even devices only...');
+
+    // Check for already connected devices
+    try {
+      const connectedDevices = await bleManagerRef.current.connectedDevices([]);
+      const evenConnectedDevices = connectedDevices.filter(d =>
+        d.name && d.name.toLowerCase().includes('even')
+      );
+
+      if (evenConnectedDevices.length > 0) {
+        addLog(`Found ${evenConnectedDevices.length} already connected Even device(s)`);
+
+        // Try to use already connected devices
+        for (const device of evenConnectedDevices) {
+          addLog(`Attempting to use connected device: ${device.name}`);
+
+          const scannedDevice: ScannedDevice = {
+            id: device.id,
+            name: device.name,
+            rssi: 0,
+            isConnectable: true,
+            device: device,
+          };
+
+          // Add to scanned devices list
+          setScannedDevices(prev => [...prev, scannedDevice]);
+
+          // Auto-connect to use the existing connection
+          const deviceProtocol = getProtocolForDevice(device.name || '');
+          if (deviceProtocol instanceof EvenRealitiesG1Protocol) {
+            const armSide = deviceProtocol.getArmFromDeviceName(device.name || '');
+            if (armSide && !connectedArmsRef.current[armSide]) {
+              addLog(`→ Queuing ${armSide} arm (already paired)...`);
+              connectingArmsRef.current.add(device.id);
+              setTimeout(() => {
+                connectToDevice(scannedDevice);
+              }, 500);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking connected devices:', error);
+      addLog('⚠️ Could not check for already connected devices');
+    }
+
+    try {
+      bleManagerRef.current.startDeviceScan(null, null, (error, device) => {
+        if (error) {
+          console.error('Scan error:', error);
+          setScanning(false);
+          Alert.alert('Scan Error', error.message || 'Failed to scan for devices');
+          return;
+        }
+
+        if (device) {
+          const deviceName = device.name || 'Unknown Device';
+
+          // Only process devices with "Even" in the name
+          const isEvenDevice = deviceName.toLowerCase().includes('even');
+          if (!isEvenDevice) {
+            return; // Skip non-Even devices
+          }
+
+          setScannedDevices((prev) => {
+            const existing = prev.find((d) => d.id === device.id);
+            if (existing) {
+              return prev.map((d) =>
+                d.id === device.id
+                  ? { ...d, rssi: device.rssi || 0, isConnectable: device.isConnectable }
+                  : d
+              );
+            } else {
+              // Add new Even device
+              const newDevice = {
+                id: device.id,
+                name: deviceName,
+                rssi: device.rssi || 0,
+                isConnectable: device.isConnectable,
+                device: device,
+              };
+
+              // Auto-connect to Even devices
+              if (isEvenDevice) {
+                addLog(`Discovered: "${deviceName}" (ID: ${device.id.substring(0, 8)}...)`);
+
+                if (!connectingArmsRef.current.has(device.id)) {
+                  const deviceProtocol = getProtocolForDevice(deviceName);
+                  if (deviceProtocol instanceof EvenRealitiesG1Protocol) {
+                    const armSide = deviceProtocol.getArmFromDeviceName(deviceName);
+
+                    if (!armSide) {
+                      addLog(`⚠️ Cannot determine arm from name: "${deviceName}"`);
+                    } else if (connectedArmsRef.current[armSide]) {
+                      addLog(`ℹ️ ${armSide} arm already connected, skipping`);
+                    } else {
+                      addLog(`→ Queuing ${armSide} arm for connection...`);
+                      connectingArmsRef.current.add(device.id);
+                      // Auto-connect after a short delay to allow other devices to be found
+                      setTimeout(() => {
+                        connectToDevice(newDevice);
+                      }, 500);
+                    }
+                  } else {
+                    addLog(`⚠️ Device protocol not recognized`);
+                  }
+                }
+              }
+
+              return [...prev, newDevice];
+            }
+          });
+        }
+      });
+    } catch (error: any) {
+      console.error('Error starting scan:', error);
+      setScanning(false);
+      Alert.alert('Scan Error', error.message || 'Failed to start scanning');
+    }
+
+    // Stop scanning after 20 seconds (longer to find both devices)
+    setTimeout(() => {
+      if (!connectionState.isFullyConnected) {
+        addLog('Scan timeout. You can scan again or tap devices manually.');
+      }
+      stopScan();
+    }, 20000);
+  };
+
+  const stopScan = () => {
+    if (scanning && bleManagerRef.current) {
+      try {
+        bleManagerRef.current.stopDeviceScan();
+      } catch (error) {
+        console.error('Error stopping scan:', error);
+      }
+      setScanning(false);
+      addLog('Scan stopped.');
+    }
+  };
+
+  const calculateDistance = (rssi: number): string => {
+    const txPower = -59;
+    const n = 2;
+
+    if (rssi === 0) {
+      return 'Unknown';
+    }
+
+    const ratio = (txPower - rssi) / (10 * n);
+    const distance = Math.pow(10, ratio);
+
+    if (distance < 1) {
+      return `${(distance * 100).toFixed(0)} cm`;
+    } else if (distance < 10) {
+      return `${distance.toFixed(1)} m`;
+    } else {
+      return `${distance.toFixed(0)} m`;
+    }
+  };
+
+  // Filter to only show Even devices and sort by signal strength
+  const sortedDevices = [...scannedDevices]
+    .filter(device => device.name?.toLowerCase().includes('even'))
+    .sort((a, b) => b.rssi - a.rssi);
+
+  const connectToDevice = async (scannedDevice: ScannedDevice, retryCount: number = 0) => {
+    const deviceProtocol = getProtocolForDevice(scannedDevice.name || '');
+
+    if (!deviceProtocol) {
+      addLog(`Unsupported device: ${scannedDevice.name}`);
+      return;
+    }
+
+    // Set protocol if not already set
+    if (!protocol) {
+      setProtocol(deviceProtocol);
+      setConnectionState(prev => ({
+        ...prev,
+        protocolName: deviceProtocol.name,
+      }));
+    }
+
+    // Determine which arm this is
+    let armSide: 'left' | 'right' | null = null;
+    if (deviceProtocol instanceof EvenRealitiesG1Protocol) {
+      armSide = deviceProtocol.getArmFromDeviceName(scannedDevice.name || '');
+    }
+
+    if (!armSide) {
+      addLog(`Cannot determine arm for: ${scannedDevice.name}`);
+      return;
+    }
+
+    // Check if already connected to this arm
+    if (connectedArmsRef.current[armSide]) {
+      addLog(`${armSide} arm already connected`);
+      return;
+    }
+
+    setConnecting(true);
+    if (retryCount > 0) {
+      addLog(`Retrying ${armSide} arm connection (attempt ${retryCount + 1})...`);
+    } else {
+      addLog(`Connecting to ${armSide} arm...`);
+    }
+
+    try {
+      const device = scannedDevice.device;
+
+      addLog(`${armSide}: Attempting BLE connection...`);
+      addLog(`${armSide}: Device ID: ${device.id}`);
+      addLog(`${armSide}: Device Name: ${device.name || 'null'}`);
+
+      // Check if device is already connected
+      const isConnected = await device.isConnected();
+      if (isConnected) {
+        addLog(`${armSide}: Device already connected, using existing connection`);
+      } else {
+        addLog(`${armSide}: Connecting to device...`);
+      }
+
+      // Connect to device with options to maintain connection
+      const connectedDevice = await device.connect({
+        autoConnect: true, // Automatically reconnect if disconnected
+        requestMTU: 512,   // Request larger MTU for better throughput
+      });
+      addLog(`${armSide}: BLE connected! Discovering services...`);
+
+      // Discover services and characteristics
+      addLog(`${armSide}: Discovering services...`);
+      await connectedDevice.discoverAllServicesAndCharacteristics();
+
+      // Get the service
+      const services = await connectedDevice.services();
+      addLog(`${armSide}: Found ${services.length} service(s)`);
+
+      const targetService = services.find(s => s.uuid.toLowerCase() === deviceProtocol.serviceUUID.toLowerCase());
+
+      if (!targetService) {
+        const serviceUUIDs = services.map(s => s.uuid).join(', ');
+        addLog(`${armSide}: Available services: ${serviceUUIDs}`);
+        throw new Error(`Service ${deviceProtocol.serviceUUID} not found. Available: ${serviceUUIDs}`);
+      }
+
+      addLog(`${armSide}: Found target service ${deviceProtocol.serviceUUID}`);
+
+      // Get characteristics
+      const characteristics = await targetService.characteristics();
+      addLog(`${armSide}: Found ${characteristics.length} characteristic(s)`);
+
+      const txChar = characteristics.find(c => c.uuid.toLowerCase() === deviceProtocol.txCharacteristicUUID.toLowerCase());
+      const rxChar = characteristics.find(c => c.uuid.toLowerCase() === deviceProtocol.rxCharacteristicUUID.toLowerCase());
+
+      if (!txChar) {
+        const charUUIDs = characteristics.map(c => c.uuid).join(', ');
+        addLog(`${armSide}: Available characteristics: ${charUUIDs}`);
+        throw new Error(`TX characteristic not found. Available: ${charUUIDs}`);
+      }
+
+      addLog(`${armSide}: Found TX/RX characteristics`);
+
+      // Enable notifications on RX if available
+      if (rxChar) {
+        rxChar.monitor((error, characteristic) => {
+          if (error) {
+            // Ignore cancellation and disconnection errors (these are normal)
+            if (error.message &&
+                (error.message.includes('cancel') ||
+                 error.message.includes('disconnected'))) {
+              return;
+            }
+            console.error('RX monitor error:', error);
+            addLog(`⚠️ RX monitor error on ${armSide}: ${error.message}`);
+            return;
+          }
+
+          if (characteristic?.value) {
+            // Decode base64 to Uint8Array
+            let uint8Data: Uint8Array;
+            if (typeof Buffer !== 'undefined') {
+              const data = Buffer.from(characteristic.value, 'base64');
+              uint8Data = new Uint8Array(data);
+            } else {
+              const binary = atob(characteristic.value);
+              uint8Data = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) {
+                uint8Data[i] = binary.charCodeAt(i);
+              }
+            }
+
+            if (deviceProtocol.parseIncomingData) {
+              const parsed = deviceProtocol.parseIncomingData(uint8Data);
+              // Only log if parsed data is not null (filter out empty/null messages)
+              if (parsed !== null) {
+                addLog(`📥 Received from ${armSide}: ${JSON.stringify(parsed)}`);
+
+                // Update battery status and handle events
+                if (parsed.type === 'case_battery' && parsed.percentage !== null) {
+                  setBatteryStatus(prev => ({
+                    ...prev,
+                    caseBattery: parsed.percentage,
+                  }));
+                  addLog(`🔋 Case battery: ${parsed.percentage}%`);
+                } else if (parsed.type === 'glasses_on') {
+                  setBatteryStatus(prev => ({
+                    ...prev,
+                    glassesState: 'on',
+                  }));
+                  addLog('👓 Glasses turned ON');
+                } else if (parsed.type === 'glasses_off') {
+                  setBatteryStatus(prev => ({
+                    ...prev,
+                    glassesState: 'off',
+                  }));
+                  addLog('👓 Glasses turned OFF');
+                } else if (parsed.type === 'charging') {
+                  addLog('🔌 Glasses charging');
+                } else if (parsed.type === 'case_charging') {
+                  addLog('🔌 Case charging');
+                } else if (parsed.type === 'ack') {
+                  addLog(`✓ ACK received from ${armSide} (seq: ${parsed.sequenceNumber || 'unknown'})`);
+                } else if (parsed.type === 'glasses_status') {
+                  addLog(`📊 Glasses status update from ${armSide}`);
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // Send init command
+      const initCommand = deviceProtocol.getInitCommand();
+      let initData: string;
+      if (typeof Buffer !== 'undefined') {
+        initData = Buffer.from(initCommand).toString('base64');
+      } else {
+        const binary = Array.from(initCommand).map(byte => String.fromCharCode(byte)).join('');
+        initData = btoa(binary);
+      }
+      await txChar.writeWithoutResponse(initData);
+      addLog(`${armSide} arm: Sent init command`);
+
+      // Store connected arm
+      const connectedArm: ConnectedArm = {
+        side: armSide,
+        device: connectedDevice,
+        txCharacteristic: txChar,
+        rxCharacteristic: rxChar || null,
+      };
+      connectedArmsRef.current[armSide] = connectedArm;
+
+      // Update connection state
+      const armState: ArmConnectionState = {
+        side: armSide,
+        connected: true,
+        deviceId: device.id,
+        deviceName: scannedDevice.name || 'Unknown',
+      };
+
+      setConnectionState(prev => {
+        const newState = {
+          ...prev,
+          [armSide === 'left' ? 'leftArm' : 'rightArm']: armState,
+        };
+        newState.isFullyConnected =
+          deviceProtocol.requiresDualArm()
+            ? (newState.leftArm?.connected && newState.rightArm?.connected) || false
+            : true;
+        return newState;
+      });
+
+      setConnecting(false);
+      connectingArmsRef.current.delete(device.id);
+
+      // Check if we need both arms
+      const needsBoth = deviceProtocol.requiresDualArm();
+      const otherArmConnected = armSide === 'left'
+        ? connectedArmsRef.current.right
+        : connectedArmsRef.current.left;
+
+      if (needsBoth && !otherArmConnected) {
+        addLog(`✓ ${armSide} arm connected! Waiting for ${armSide === 'left' ? 'right' : 'left'} arm...`);
+
+        // Only ask if we're actively scanning (not auto-connecting from paired devices)
+        // Check again after a delay to see if other arm connected
+        setTimeout(() => {
+          const stillWaiting = armSide === 'left'
+            ? !connectedArmsRef.current.right
+            : !connectedArmsRef.current.left;
+
+          if (stillWaiting && scanning) {
+            // Only show dialog if still scanning
+            Alert.alert(
+              `${armSide === 'left' ? 'Left' : 'Right'} Arm Connected`,
+              `Would you like to connect the ${armSide === 'left' ? 'right' : 'left'} arm too?\n\nYou can send messages to just one arm, or wait to connect both.`,
+              [
+                {
+                  text: 'Use Single Arm',
+                  onPress: () => {
+                    addLog(`User chose to use only ${armSide} arm`);
+                    stopScan();
+                    // Force fully connected state for single arm usage
+                    setConnectionState(prev => ({
+                      ...prev,
+                      isFullyConnected: true,
+                    }));
+                  },
+                },
+                {
+                  text: 'Wait for Other Arm',
+                  style: 'cancel',
+                  onPress: () => {
+                    addLog('Continuing to scan for other arm...');
+                  },
+                },
+              ]
+            );
+          }
+        }, 1500); // Wait longer to see if other arm connects
+      } else {
+        // Both arms connected!
+        await saveConnectionToFirebase();
+        addLog('✓✓ Both arms connected! Ready to send messages.');
+        stopScan();
+
+        // Small delay to ensure state updates
+        // setTimeout(() => {
+        //   Alert.alert(
+        //     'Success!',
+        //     `Both arms connected to ${deviceProtocol.name}. You can now send test messages.`,
+        //     [{ text: 'OK' }]
+        //   );
+        // }, 300);
+      }
+    } catch (error: any) {
+      console.error('Connection error:', error);
+      const errorMsg = error.message || error.toString();
+      addLog(`❌ Error connecting ${armSide} arm: ${errorMsg}`);
+
+      // Check if error is pairing-related
+      const isPairingError = errorMsg.toLowerCase().includes('pair') ||
+                             errorMsg.toLowerCase().includes('bond') ||
+                             errorMsg.toLowerCase().includes('authentication') ||
+                             errorMsg.toLowerCase().includes('encrypt');
+
+      // Retry more times for pairing issues
+      const maxRetries = isPairingError ? 4 : 2;
+
+      if (retryCount < maxRetries) {
+        const waitTime = isPairingError ? 3000 : 2000; // Wait longer for pairing issues
+        addLog(`Will retry ${armSide} arm in ${waitTime / 1000} seconds...`);
+
+        if (isPairingError) {
+          addLog(`💡 Tip: Accept the pairing request on your device if prompted`);
+        }
+
+        setConnecting(false);
+
+        setTimeout(() => {
+          connectToDevice(scannedDevice, retryCount + 1);
+        }, waitTime);
+      } else {
+        // Max retries reached, show error
+        addLog(`❌ Failed to connect ${armSide} arm after ${retryCount + 1} attempts`);
+
+        let errorHint = '\n\nTry scanning again or check the connection log.';
+        if (isPairingError) {
+          errorHint = '\n\nMake sure to accept the pairing request when prompted. You may need to go to your device\'s Bluetooth settings and remove the old pairing first.';
+        }
+
+        Alert.alert(
+          'Connection Error',
+          `Failed to connect to ${armSide} arm after ${retryCount + 1} attempts:\n${errorMsg}${errorHint}`,
+          [{ text: 'OK' }]
+        );
+
+        setConnecting(false);
+        connectingArmsRef.current.delete(scannedDevice.device.id);
+      }
+    }
+  };
+
+  const saveConnectionToFirebase = async () => {
+    try {
+      const deviceDocRef = doc(db, 'devices', deviceId);
+      const updateData: any = {
+        lastConnectedAt: new Date(),
+        status: 'online',
+      };
+
+      // Only add protocol if it exists
+      if (protocol?.name) {
+        updateData.protocol = protocol.name;
+      }
+
+      if (connectionState.leftArm) {
+        updateData.bleDeviceId_left = connectionState.leftArm.deviceId;
+        updateData.bleDeviceName_left = connectionState.leftArm.deviceName;
+      }
+      if (connectionState.rightArm) {
+        updateData.bleDeviceId_right = connectionState.rightArm.deviceId;
+        updateData.bleDeviceName_right = connectionState.rightArm.deviceName;
+      }
+
+      await updateDoc(deviceDocRef, updateData);
+    } catch (error) {
+      console.error('Error saving to Firebase:', error);
+    }
+  };
+
+  const disconnectArm = async (side: 'left' | 'right') => {
+    const arm = connectedArmsRef.current[side];
+    if (!arm) return;
+
+    try {
+      await arm.device.cancelConnection();
+      delete connectedArmsRef.current[side];
+
+      setConnectionState(prev => ({
+        ...prev,
+        [side === 'left' ? 'leftArm' : 'rightArm']: null,
+        isFullyConnected: false,
+      }));
+
+      Alert.alert('Disconnected', `${side === 'left' ? 'Left' : 'Right'} arm disconnected`);
+    } catch (error) {
+      console.error(`Error disconnecting ${side} arm:`, error);
+    }
+  };
+
+  const sendTestMessage = async () => {
+    if (!protocol || !testMessage.trim() || sendingMessage) return;
+
+    // Allow sending to just one arm for testing
+    if (!connectionState.leftArm?.connected && !connectionState.rightArm?.connected) {
+      Alert.alert(
+        'Not Connected',
+        'Please connect to at least one arm before sending messages.'
+      );
+      return;
+    }
+
+    // Check glasses state
+    if (batteryStatus.glassesState === 'off') {
+      addLog('⚠️ WARNING: Glasses appear to be OFF. Turn them on to see the display.');
+    }
+
+    setSendingMessage(true);
+    addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    addLog(`📤 Sending to BOTH ARMS`);
+    addLog(`📤 Message: "${testMessage}"`);
+    if (batteryStatus.caseBattery !== null) {
+      addLog(`🔋 Case battery: ${batteryStatus.caseBattery}%`);
+    }
+    if (batteryStatus.glassesState) {
+      addLog(`👓 Glasses state: ${batteryStatus.glassesState.toUpperCase()}`);
+    }
+
+    try {
+      // SIMPLIFIED: Just send text with basic 0x71 flag (no manual mode)
+      const messageData = protocol.createTextMessage(testMessage.trim(), 1, false);
+
+      // Log the complete raw message data for debugging
+      const hexString = Array.from(messageData).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ');
+      addLog(`📤 Full message packet (${messageData.length} bytes):`);
+      addLog(`   ${hexString.substring(0, 100)}${hexString.length > 100 ? '...' : ''}`);
+
+      // Decode the header for verification
+      addLog(`📋 Message header breakdown:`);
+      addLog(`   Command: 0x${messageData[0].toString(16)} (should be 0x4e)`);
+      addLog(`   Sequence: ${messageData[1]}`);
+      addLog(`   Total packages: ${messageData[2]}`);
+      addLog(`   Current package: ${messageData[3]}`);
+      addLog(`   Display flags: 0x${messageData[4].toString(16)} (should be 0x71)`);
+      addLog(`   Text: "${testMessage.trim()}"`);
+
+      // Convert Uint8Array to base64
+      let base64Data: string;
+      if (typeof Buffer !== 'undefined') {
+        base64Data = Buffer.from(messageData).toString('base64');
+      } else {
+        // Fallback for environments without Buffer
+        const binary = Array.from(messageData).map(byte => String.fromCharCode(byte)).join('');
+        base64Data = btoa(binary);
+      }
+
+      // Send to BOTH arms sequentially
+      let sentCount = 0;
+
+      // LEFT ARM FIRST
+      if (connectedArmsRef.current.left) {
+        const leftArm = connectedArmsRef.current.left;
+        addLog('▶️ LEFT ARM:');
+
+        try {
+          const services = await leftArm.device.services();
+          const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+
+          if (targetService) {
+            const characteristics = await targetService.characteristics();
+            const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+
+            if (txChar) {
+              await txChar.writeWithoutResponse(base64Data);
+              addLog('   ✅ Write completed');
+              sentCount++;
+              // Small delay before right arm
+              await new Promise(resolve => setTimeout(resolve, 50));
+            } else {
+              addLog('   ❌ TX characteristic not found');
+            }
+          } else {
+            addLog('   ❌ Service not found');
+          }
+        } catch (error: any) {
+          addLog(`   ❌ Error: ${error.message}`);
+        }
+      }
+
+      // RIGHT ARM SECOND
+      if (connectedArmsRef.current.right) {
+        const rightArm = connectedArmsRef.current.right;
+        addLog('▶️ RIGHT ARM:');
+
+        try {
+          const services = await rightArm.device.services();
+          const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+
+          if (targetService) {
+            const characteristics = await targetService.characteristics();
+            const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+
+            if (txChar) {
+              await txChar.writeWithoutResponse(base64Data);
+              addLog('   ✅ Write completed');
+              sentCount++;
+            } else {
+              addLog('   ❌ TX characteristic not found');
+            }
+          } else {
+            addLog('   ❌ Service not found');
+          }
+        } catch (error: any) {
+          addLog(`   ❌ Error: ${error.message}`);
+        }
+      }
+
+      addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      if (sentCount === 2) {
+        addLog(`✅ Message sent to BOTH arms!`);
+        addLog(`🔍 Look at your glasses displays NOW!`);
+        Alert.alert(
+          'Message Sent!',
+          `Sent to both arms.\n\nCheck your glasses displays.`,
+          [{ text: 'OK' }]
+        );
+      } else if (sentCount === 1) {
+        addLog(`⚠️ Message sent to only ONE arm`);
+        Alert.alert('Partial Success', `Sent to only one arm. Check connection log.`);
+      } else {
+        addLog(`❌ Failed to send message`);
+        Alert.alert('Error', 'Failed to send message. Check connection log.');
+      }
+
+      // Don't auto-clear for now - let user see it
+      /* setTimeout(async () => {
+        try {
+          addLog('Clearing message from displays...');
+
+          // Send empty message to clear displays
+          const clearData = protocol.createTextMessage('');
+          let clearBase64: string;
+          if (typeof Buffer !== 'undefined') {
+            clearBase64 = Buffer.from(clearData).toString('base64');
+          } else {
+            const binary = Array.from(clearData).map(byte => String.fromCharCode(byte)).join('');
+            clearBase64 = btoa(binary);
+          }
+
+          // Send clear command SEQUENTIALLY - left first, then right
+          // Clear LEFT arm first
+          if (connectedArmsRef.current.left) {
+            try {
+              const services = await connectedArmsRef.current.left.device.services();
+              const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+              if (targetService) {
+                const characteristics = await targetService.characteristics();
+                const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+                if (txChar) {
+                  await txChar.writeWithoutResponse(clearBase64);
+                  // Wait before clearing right
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                }
+              }
+            } catch (error) {
+              console.error('Error clearing left arm:', error);
+            }
+          }
+
+          // Then clear RIGHT arm
+          if (connectedArmsRef.current.right) {
+            try {
+              const services = await connectedArmsRef.current.right.device.services();
+              const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+              if (targetService) {
+                const characteristics = await targetService.characteristics();
+                const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+                if (txChar) {
+                  await txChar.writeWithoutResponse(clearBase64);
+                }
+              }
+            } catch (error) {
+              console.error('Error clearing right arm:', error);
+            }
+          }
+          addLog('✓ Message cleared from displays');
+        } catch (error: any) {
+          console.error('Error clearing message:', error);
+          addLog(`⚠️ Failed to clear message: ${error.message}`);
+        }
+      }, 5000); */
+
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      addLog(`Error: ${error.message}`);
+      Alert.alert('Send Failed', error.message || 'Failed to send message');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  return (
+    <LinearGradient
+      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.container}
+    >
+      <StatusBar style="dark" />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => {
+            stopScan();
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('Main' as never);
+            }
+          }}
+          style={styles.backButton}
+        >
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>Connect to {deviceName}</Text>
+      </View>
+
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Connection Status */}
+        {protocol && (
+          <View style={styles.statusCard}>
+            <Text style={styles.statusCardTitle}>
+              {protocol.name}
+            </Text>
+
+            <View style={styles.armsContainer}>
+              {/* Left Arm */}
+              <View style={[
+                styles.armCard,
+                connectionState.leftArm?.connected && styles.armCardConnected
+              ]}>
+                <Text style={styles.armLabel}>Left Arm</Text>
+                {connectionState.leftArm?.connected ? (
+                  <>
+                    <View style={styles.connectedIndicator}>
+                      <View style={styles.connectedDot} />
+                      <Text style={styles.connectedText}>Connected</Text>
+                    </View>
+                  </>
+                ) : (
+                  <Text style={styles.armNotConnected}>Not Connected</Text>
+                )}
+              </View>
+
+              {/* Right Arm */}
+              <View style={[
+                styles.armCard,
+                connectionState.rightArm?.connected && styles.armCardConnected
+              ]}>
+                <Text style={styles.armLabel}>Right Arm</Text>
+                {connectionState.rightArm?.connected ? (
+                  <>
+                    <View style={styles.connectedIndicator}>
+                      <View style={styles.connectedDot} />
+                      <Text style={styles.connectedText}>Connected</Text>
+                    </View>
+                  </>
+                ) : (
+                  <Text style={styles.armNotConnected}>Not Connected</Text>
+                )}
+              </View>
+            </View>
+
+            {/* Debug Info */}
+            <View style={styles.debugSection}>
+              <Text style={styles.debugText}>
+                Left: {connectionState.leftArm?.connected ? '✓' : '✗'} |
+                Right: {connectionState.rightArm?.connected ? '✓' : '✗'} |
+                Fully: {connectionState.isFullyConnected ? '✓' : '✗'}
+              </Text>
+              {connectionState.isFullyConnected && (
+                <Text style={[styles.debugText, { color: '#10B981', marginTop: 4 }]}>
+                  🎉 Both arms connected! Scroll down for test message button.
+                </Text>
+              )}
+              {/* Battery & Status Info */}
+              {(batteryStatus.caseBattery !== null || batteryStatus.glassesState) && (
+                <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(99, 102, 241, 0.2)' }}>
+                  {batteryStatus.caseBattery !== null && (
+                    <Text style={[styles.debugText, { color: '#6366F1' }]}>
+                      🔋 Case Battery: {batteryStatus.caseBattery}%
+                    </Text>
+                  )}
+                  {batteryStatus.glassesState && (
+                    <Text style={[styles.debugText, {
+                      color: batteryStatus.glassesState === 'on' ? '#10B981' : '#EF4444',
+                      marginTop: 4
+                    }]}>
+                      👓 Glasses: {batteryStatus.glassesState.toUpperCase()}
+                      {batteryStatus.glassesState === 'off' && ' (Turn on to see messages!)'}
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
+
+            {/* Test Message Section - Always show if protocol is set */}
+            {protocol && connectionState.isFullyConnected && (
+              <View style={styles.testMessageSection}>
+                <Text style={styles.testMessageLabel}>Send Test Message</Text>
+
+                {/* Show which arms will receive the message */}
+                <View style={styles.targetArmsIndicator}>
+                  <Text style={styles.targetArmsLabel}>Will send to: </Text>
+                  {connectionState.leftArm?.connected && (
+                    <View style={styles.targetArmBadge}>
+                      <Text style={styles.targetArmText}>Left</Text>
+                    </View>
+                  )}
+                  {connectionState.rightArm?.connected && (
+                    <View style={styles.targetArmBadge}>
+                      <Text style={styles.targetArmText}>Right</Text>
+                    </View>
+                  )}
+                </View>
+
+                <TextInput
+                  style={styles.testMessageInput}
+                  value={testMessage}
+                  onChangeText={setTestMessage}
+                  placeholder="Enter message..."
+                  placeholderTextColor="#9CA3AF"
+                />
+                <TouchableOpacity
+                  onPress={sendTestMessage}
+                  disabled={sendingMessage || !testMessage.trim()}
+                  style={styles.sendTestButton}
+                >
+                  <LinearGradient
+                    colors={['#6366F1', '#8B5CF6']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[
+                      styles.sendTestButtonGradient,
+                      (sendingMessage || !testMessage.trim()) && styles.sendTestButtonDisabled
+                    ]}
+                  >
+                    {sendingMessage ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.sendTestButtonText}>Send to Glasses</Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Show message even if not fully connected - for debugging */}
+            {!connectionState.isFullyConnected && (connectionState.leftArm?.connected || connectionState.rightArm?.connected) && (
+              <View style={styles.debugSection}>
+                <Text style={styles.debugText}>
+                  Waiting for both arms to connect...
+                </Text>
+              </View>
+            )}
+
+            {/* Connection Log */}
+            {connectionLog.length > 0 && (
+              <View style={styles.logSection}>
+                <Text style={styles.logTitle}>Connection Log:</Text>
+                <ScrollView style={styles.logScroll} nestedScrollEnabled>
+                  {connectionLog.map((log, index) => (
+                    <Text key={index} style={styles.logText}>{log}</Text>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        )}
+
+        {!initialized && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#6366F1" />
+            <Text style={styles.loadingText}>Initializing Bluetooth...</Text>
+          </View>
+        )}
+
+        {initialized && !connectionState.isFullyConnected && (
+          <>
+            <Text style={styles.instructions}>
+              {scanning
+                ? 'Scanning and auto-connecting to Even devices...'
+                : 'Tap "Start Scan" to find and connect to your Even Realities G1 glasses'}
+            </Text>
+
+            {!scanning && !connecting && (
+              <TouchableOpacity onPress={startScan} style={styles.scanButton}>
+                <LinearGradient
+                  colors={['#6366F1', '#8B5CF6']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.scanButtonGradient}
+                >
+                  <Text style={styles.scanButtonText}>
+                    {scannedDevices.length > 0 ? 'Scan Again' : 'Start Scan'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+
+            {(scanning || connecting) && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#6366F1" />
+                <Text style={styles.loadingText}>
+                  {scanning ? 'Scanning for devices...' : 'Connecting...'}
+                </Text>
+              </View>
+            )}
+
+            {scanning && (
+              <TouchableOpacity onPress={stopScan} style={styles.stopButton}>
+                <Text style={styles.stopButtonText}>Stop Scan</Text>
+              </TouchableOpacity>
+            )}
+
+            {scannedDevices.length > 0 && (
+              <>
+                <Text style={styles.devicesTitle}>
+                  Found Devices ({scannedDevices.length})
+                </Text>
+                <Text style={styles.devicesSubtitle}>
+                  Tap a device to manually connect
+                </Text>
+                {sortedDevices.map((device) => {
+                  const hasEven = device.name?.toLowerCase().includes('even') || false;
+                  const distance = calculateDistance(device.rssi);
+                  const deviceProtocol = hasEven ? getProtocolForDevice(device.name || '') : null;
+                  let armSide: 'left' | 'right' | null = null;
+                  if (deviceProtocol instanceof EvenRealitiesG1Protocol) {
+                    armSide = deviceProtocol.getArmFromDeviceName(device.name || '');
+                  }
+
+                  return (
+                    <TouchableOpacity
+                      key={device.id}
+                      onPress={() => connectToDevice(device)}
+                      disabled={connecting}
+                      style={[
+                        styles.deviceCard,
+                        hasEven && styles.evenDeviceCard,
+                        connecting && styles.disabledCard,
+                      ]}
+                    >
+                      <View style={styles.deviceCardContent}>
+                        <View style={styles.deviceInfo}>
+                          <View style={styles.deviceNameRow}>
+                            <Text style={styles.deviceCardName}>
+                              {device.name || 'Unknown Device'}
+                            </Text>
+                            {hasEven && (
+                              <View style={styles.evenBadge}>
+                                <Text style={styles.evenBadgeText}>Even</Text>
+                              </View>
+                            )}
+                            {armSide && (
+                              <View style={[styles.armBadge, armSide === 'left' ? styles.leftArmBadge : styles.rightArmBadge]}>
+                                <Text style={styles.armBadgeText}>{armSide === 'left' ? 'L' : 'R'}</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.deviceCardId}>ID: {device.id}</Text>
+                          <View style={styles.deviceMetrics}>
+                            {device.rssi && (
+                              <Text style={styles.deviceCardRssi}>
+                                Signal: {device.rssi} dBm
+                              </Text>
+                            )}
+                            <Text style={styles.deviceCardDistance}>
+                              Distance: ~{distance}
+                            </Text>
+                          </View>
+                        </View>
+                        {connecting && (
+                          <ActivityIndicator size="small" color="#6366F1" />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
+            )}
+          </>
+        )}
+      </ScrollView>
+    </LinearGradient>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    paddingTop: 60,
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    marginRight: 16,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#6366F1',
+    fontWeight: '600',
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 24,
+    paddingTop: 0,
+  },
+  statusCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#6366F1',
+    padding: 20,
+    marginBottom: 24,
+  },
+  statusCardTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  armsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  armCard: {
+    flex: 1,
+    backgroundColor: 'rgba(156, 163, 175, 0.1)',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(156, 163, 175, 0.3)',
+    padding: 12,
+    alignItems: 'center',
+  },
+  armCardConnected: {
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    borderColor: '#4CAF50',
+  },
+  armLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  connectedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  connectedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#4CAF50',
+    marginRight: 6,
+  },
+  connectedText: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  armDeviceName: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  armNotConnected: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+  testMessageSection: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(99, 102, 241, 0.2)',
+    paddingTop: 16,
+    marginTop: 16,
+  },
+  testMessageLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  targetArmsIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: 8,
+  },
+  targetArmsLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  targetArmBadge: {
+    backgroundColor: '#6366F1',
+    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginHorizontal: 4,
+  },
+  targetArmText: {
+    fontSize: 11,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  testMessageInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  sendTestButton: {
+    borderRadius: 8,
+  },
+  sendTestButtonGradient: {
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+  },
+  sendTestButtonDisabled: {
+    opacity: 0.5,
+  },
+  sendTestButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  logSection: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(99, 102, 241, 0.2)',
+    paddingTop: 12,
+    marginTop: 16,
+  },
+  logTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  logScroll: {
+    maxHeight: 150,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: 8,
+    padding: 8,
+  },
+  logText: {
+    fontSize: 11,
+    color: '#374151',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginBottom: 4,
+  },
+  debugSection: {
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+  },
+  debugText: {
+    fontSize: 13,
+    color: '#4B5563',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  instructions: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  scanButton: {
+    marginBottom: 16,
+  },
+  scanButtonGradient: {
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+  },
+  scanButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  stopButton: {
+    backgroundColor: 'rgba(244, 67, 54, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 67, 54, 0.3)',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  stopButtonText: {
+    color: '#F44336',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#6B7280',
+    fontSize: 14,
+    marginTop: 12,
+  },
+  devicesTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  devicesSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  armBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  leftArmBadge: {
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+  },
+  rightArmBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  armBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  deviceCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
+    padding: 16,
+    marginBottom: 12,
+  },
+  disabledCard: {
+    opacity: 0.5,
+  },
+  deviceCardContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  deviceInfo: {
+    flex: 1,
+  },
+  deviceCardName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  deviceCardId: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  deviceCardRssi: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  deviceNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  evenDeviceCard: {
+    borderColor: '#8B5CF6',
+    borderWidth: 2,
+    backgroundColor: 'rgba(145, 105, 205, 0.14)',
+  },
+  evenBadge: {
+    backgroundColor: 'rgba(255, 152, 0, 0.2)',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  evenBadgeText: {
+    fontSize: 10,
+    color: '#FF9800',
+    fontWeight: '600',
+  },
+  deviceMetrics: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  deviceCardDistance: {
+    fontSize: 12,
+    color: '#6366F1',
+    fontWeight: '600',
+  },
+});

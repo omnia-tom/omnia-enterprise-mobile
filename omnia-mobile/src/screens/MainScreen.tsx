@@ -38,6 +38,13 @@ interface Device {
     lng: number;
   };
   pairedPersonaId?: string;
+  bleDeviceId?: string;
+  bleDeviceName?: string;
+  bleDeviceId_left?: string;
+  bleDeviceName_left?: string;
+  bleDeviceId_right?: string;
+  bleDeviceName_right?: string;
+  protocol?: string;
 }
 
 export default function MainScreen() {
@@ -143,6 +150,13 @@ export default function MainScreen() {
             pairedAt: data.pairedAt || data.metadata?.pairedAt,
             location: data.location,
             pairedPersonaId: data.pairedPersonaId,
+            bleDeviceId: data.bleDeviceId,
+            bleDeviceName: data.bleDeviceName,
+            bleDeviceId_left: data.bleDeviceId_left,
+            bleDeviceName_left: data.bleDeviceName_left,
+            bleDeviceId_right: data.bleDeviceId_right,
+            bleDeviceName_right: data.bleDeviceName_right,
+            protocol: data.protocol,
           });
         });
 
@@ -188,6 +202,14 @@ export default function MainScreen() {
 
   const handleAccountPress = () => {
     navigation.navigate('Account' as never);
+  };
+
+  const handleDevicePress = (device: Device) => {
+    (navigation as any).navigate('BLEConnection', {
+      deviceId: device.id,
+      deviceName: device.deviceName,
+      savedBleDeviceId: device.bleDeviceId,
+    });
   };
 
   const formatDate = (timestamp: any) => {
@@ -323,7 +345,12 @@ export default function MainScreen() {
             {devices.map((device) => {
               const deviceImage = getDeviceImage(device.model, device.type, device.deviceType);
               return (
-                <View key={device.id} style={styles.deviceCard}>
+                <TouchableOpacity
+                  key={device.id}
+                  style={styles.deviceCard}
+                  onPress={() => handleDevicePress(device)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.deviceCardContent}>
                     {/* Device Image - Left Side */}
                     {deviceImage && (
@@ -389,7 +416,7 @@ export default function MainScreen() {
                       {device.status && (
                         <View style={styles.infoRow}>
                           <Text style={styles.infoLabel}>Status:</Text>
-                        <View style={styles.infoRow}
+                          <View
                             style={[
                               styles.statusBadge,
                               { backgroundColor: getStatusBackgroundColor(device.status) },
@@ -409,10 +436,37 @@ export default function MainScreen() {
                           </View>
                           </View>
                       )}
+
+                      {device.protocol && (
+                        <View style={styles.infoRow}>
+                          <Text style={styles.infoLabel}>Protocol:</Text>
+                          <Text style={styles.infoValue}>{device.protocol}</Text>
+                        </View>
+                      )}
+
+                      {(device.bleDeviceId_left || device.bleDeviceId_right) && (
+                        <View style={styles.bleConnectionSection}>
+                          <Text style={styles.bleConnectionTitle}>BLE Connection:</Text>
+                          <View style={styles.bleArmsRow}>
+                            {device.bleDeviceId_left && (
+                              <View style={styles.bleArmIndicator}>
+                                <View style={styles.bleArmDot} />
+                                <Text style={styles.bleArmText}>Left</Text>
+                              </View>
+                            )}
+                            {device.bleDeviceId_right && (
+                              <View style={styles.bleArmIndicator}>
+                                <View style={styles.bleArmDot} />
+                                <Text style={styles.bleArmText}>Right</Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      )}
                       </View>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </>
@@ -646,6 +700,42 @@ const styles = StyleSheet.create({
   personaText: {
     fontSize: 12,
     color: '#6366F1',
+    fontWeight: '600',
+  },
+  bleConnectionSection: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  bleConnectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 6,
+  },
+  bleArmsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  bleArmIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  bleArmDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4CAF50',
+    marginRight: 4,
+  },
+  bleArmText: {
+    fontSize: 11,
+    color: '#4CAF50',
     fontWeight: '600',
   },
 });

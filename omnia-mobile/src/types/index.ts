@@ -7,6 +7,11 @@ export type RootStackParamList = {
   Pairing: undefined;
   Account: undefined;
   Devices: undefined;
+  BLEConnection: {
+    deviceId: string;
+    deviceName: string;
+    savedBleDeviceId?: string;
+  };
 };
 
 // Auth types
@@ -26,4 +31,19 @@ export interface LoginFormData {
 export interface LoginError {
   message: string;
   code?: string;
+}
+
+// BLE Connection types
+export interface ArmConnectionState {
+  side: 'left' | 'right';
+  connected: boolean;
+  deviceId: string;
+  deviceName: string;
+}
+
+export interface GlassesConnectionState {
+  protocolName: string;
+  leftArm: ArmConnectionState | null;
+  rightArm: ArmConnectionState | null;
+  isFullyConnected: boolean;
 }

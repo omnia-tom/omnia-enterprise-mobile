@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "omnia-mobile",
+    "name": "Omnia",
     "slug": "omnia-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,7 +16,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.omniatom.omniamobile",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSBluetoothAlwaysUsageDescription": "This app needs Bluetooth to connect to your smart glasses devices.",
+        "NSBluetoothPeripheralUsageDescription": "This app needs Bluetooth to connect to your smart glasses devices."
       },
       "appleTeamId": "279PV9XKZ2"
     },
@@ -26,7 +28,15 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
