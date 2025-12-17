@@ -27,7 +27,7 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
-          <string>com.omniatom.omniamobile</string>
+          <string>com.omnia.mobileenterprise</string>
         </array>
       </dict>
       <dict>
@@ -53,9 +53,15 @@
       <true/>
     </dict>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>This app needs Bluetooth to connect to your smart glasses devices.</string>
+    <string>This app needs Bluetooth to connect to your smart glasses devices and monitor their status in the background.</string>
     <key>NSBluetoothPeripheralUsageDescription</key>
     <string>This app needs Bluetooth to connect to your smart glasses devices.</string>
+    <key>UIBackgroundModes</key>
+    <array>
+      <string>bluetooth-central</string>
+      <string>processing</string>
+      <string>fetch</string>
+    </array>
     <key>NSCameraUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your camera</string>
     <key>NSMicrophoneUsageDescription</key>

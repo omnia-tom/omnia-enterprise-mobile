@@ -5,11 +5,15 @@ let bleManagerInstance: BleManager | null = null;
 export const getBleManager = (): BleManager | null => {
   try {
     if (!bleManagerInstance) {
+      console.log('[BLE] Initializing BleManager...');
+      // Initialize with basic configuration for now
+      // State restoration will work automatically with UIBackgroundModes
       bleManagerInstance = new BleManager();
+      console.log('[BLE] BleManager initialized successfully');
     }
     return bleManagerInstance;
   } catch (error) {
-    console.error('Error creating BleManager:', error);
+    console.error('[BLE] Error creating BleManager:', error);
     return null;
   }
 };

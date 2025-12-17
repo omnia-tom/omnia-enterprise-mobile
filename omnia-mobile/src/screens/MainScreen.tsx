@@ -48,6 +48,7 @@ interface Device {
   bleDeviceId_right?: string;
   bleDeviceName_right?: string;
   protocol?: string;
+  glassesState?: 'on' | 'off';
 }
 
 export default function MainScreen() {
@@ -163,6 +164,7 @@ export default function MainScreen() {
             bleDeviceId_right: data.bleDeviceId_right,
             bleDeviceName_right: data.bleDeviceName_right,
             protocol: data.protocol,
+            glassesState: data.glassesState,
           });
         });
 
@@ -472,22 +474,60 @@ export default function MainScreen() {
                       )}
 
                       {(device.battery_left != null || device.battery_right != null) && (
-                        <View style={styles.bleConnectionSection}>
-                          <Text style={styles.bleConnectionTitle}>Battery:</Text>
-                          <View style={styles.bleArmsRow}>
-                            {device.battery_left != null && (
-                              <View style={styles.bleArmIndicator}>
-                                <View style={styles.bleArmDot} />
-                                <Text style={styles.bleArmText}>Left: {device.battery_left}%</Text>
+                        <View style={styles.batterySection}>
+                          <Text style={styles.bleConnectionTitle}>Glasses Battery:</Text>
+
+                          {/* Left Arm Battery */}
+                          {device.battery_left != null && (
+                            <View style={styles.armBatteryRow}>
+                              <Text style={styles.armBatteryLabel}>Left:</Text>
+                              <View style={styles.batteryContainer}>
+                                <View style={styles.batteryBar}>
+                                  <View
+                                    style={[
+                                      styles.batteryFill,
+                                      {
+                                        width: `${device.battery_left}%`,
+                                        backgroundColor:
+                                          device.battery_left > 50
+                                            ? '#4CAF50'
+                                            : device.battery_left > 20
+                                            ? '#FFC107'
+                                            : '#FF6B6B',
+                                      },
+                                    ]}
+                                  />
+                                </View>
+                                <Text style={styles.batteryText}>{device.battery_left}%</Text>
                               </View>
-                            )}
-                            {device.battery_right != null && (
-                              <View style={styles.bleArmIndicator}>
-                                <View style={styles.bleArmDot} />
-                                <Text style={styles.bleArmText}>Right: {device.battery_right}%</Text>
+                            </View>
+                          )}
+
+                          {/* Right Arm Battery */}
+                          {device.battery_right != null && (
+                            <View style={styles.armBatteryRow}>
+                              <Text style={styles.armBatteryLabel}>Right:</Text>
+                              <View style={styles.batteryContainer}>
+                                <View style={styles.batteryBar}>
+                                  <View
+                                    style={[
+                                      styles.batteryFill,
+                                      {
+                                        width: `${device.battery_right}%`,
+                                        backgroundColor:
+                                          device.battery_right > 50
+                                            ? '#4CAF50'
+                                            : device.battery_right > 20
+                                            ? '#FFC107'
+                                            : '#FF6B6B',
+                                      },
+                                    ]}
+                                  />
+                                </View>
+                                <Text style={styles.batteryText}>{device.battery_right}%</Text>
                               </View>
-                            )}
-                          </View>
+                            </View>
+                          )}
                         </View>
                       )}
                       </View>
@@ -764,5 +804,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#4CAF50',
     fontWeight: '600',
+  },
+  batterySection: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  armBatteryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  armBatteryLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6B7280',
+    width: 45,
+    marginRight: 8,
   },
 });

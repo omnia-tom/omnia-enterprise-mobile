@@ -44,9 +44,16 @@ interface ScannedDevice {
 }
 
 export default function BLEConnectionScreen() {
+  console.log('[BLEConnectionScreen] Component rendering...');
+
   const navigation = useNavigation();
   const route = useRoute();
+
+  console.log('[BLEConnectionScreen] Route params:', route.params);
+
   const { deviceId, deviceName, savedBleDeviceId_left, savedBleDeviceId_right } = (route.params || {}) as BLEConnectionScreenParams;
+
+  console.log('[BLEConnectionScreen] Parsed params:', { deviceId, deviceName, savedBleDeviceId_left, savedBleDeviceId_right });
 
   const bleManagerRef = useRef<BleManager | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -640,12 +647,29 @@ export default function BLEConnectionScreen() {
       if (rxChar) {
         rxChar.monitor((error, characteristic) => {
           if (error) {
-            // Ignore cancellation and disconnection errors (these are normal)
-            if (error.message &&
-                (error.message.includes('cancel') ||
-                 error.message.includes('disconnected'))) {
+            // Handle disconnection - update Firebase to offline
+            if (error.message && error.message.includes('disconnected')) {
+              console.log(`[BLE] ${armSide} arm disconnected`);
+              addLog(`⚠️ ${armSide} arm disconnected`);
+
+              // Update Firebase to offline when connection is lost
+              const deviceDocRef = doc(db, 'devices', deviceId);
+              updateDoc(deviceDocRef, {
+                status: 'offline',
+                glassesState: 'off',
+                lastSeen: new Date(),
+              }).catch(error => {
+                console.error('Error updating status on disconnect:', error);
+              });
+
               return;
             }
+
+            // Ignore cancellation errors (these are normal)
+            if (error.message && error.message.includes('cancel')) {
+              return;
+            }
+
             console.error('RX monitor error:', error);
             addLog(`⚠️ RX monitor error on ${armSide}: ${error.message}`);
             return;
@@ -732,17 +756,45 @@ export default function BLEConnectionScreen() {
                     addLog(`   Raw: [${parsed.rawData.join(', ')}]`);
                   }
                 } else if (parsed.type === 'glasses_on') {
+                  console.log('[BLE-BACKGROUND] Glasses turned ON - updating Firebase');
                   setBatteryStatus(prev => ({
                     ...prev,
                     glassesState: 'on',
                   }));
                   addLog('👓 Glasses turned ON');
+
+                  // Update Firebase status to online when glasses are put on
+                  // Using console.log to track background execution
+                  const deviceDocRef = doc(db, 'devices', deviceId);
+                  updateDoc(deviceDocRef, {
+                    status: 'online',
+                    glassesState: 'on',
+                    lastSeen: new Date(),
+                  }).then(() => {
+                    console.log('[BLE-BACKGROUND] Firebase updated: status=online');
+                  }).catch(error => {
+                    console.error('[BLE-BACKGROUND] Error updating status to online:', error);
+                  });
                 } else if (parsed.type === 'glasses_off') {
+                  console.log('[BLE-BACKGROUND] Glasses turned OFF - updating Firebase');
                   setBatteryStatus(prev => ({
                     ...prev,
                     glassesState: 'off',
                   }));
                   addLog('👓 Glasses turned OFF');
+
+                  // Update Firebase status to offline when glasses are taken off
+                  // Using console.log to track background execution
+                  const deviceDocRef = doc(db, 'devices', deviceId);
+                  updateDoc(deviceDocRef, {
+                    status: 'offline',
+                    glassesState: 'off',
+                    lastSeen: new Date(),
+                  }).then(() => {
+                    console.log('[BLE-BACKGROUND] Firebase updated: status=offline');
+                  }).catch(error => {
+                    console.error('[BLE-BACKGROUND] Error updating status to offline:', error);
+                  });
                 } else if (parsed.type === 'charging') {
                   addLog('🔌 Glasses charging');
                 } else if (parsed.type === 'case_charging') {
@@ -776,6 +828,34 @@ export default function BLEConnectionScreen() {
           }
         });
       }
+
+      // Monitor device connection state for disconnections
+      const disconnectSub = connectedDevice.onDisconnected((error, device) => {
+        console.log(`[BLE-BACKGROUND] ${armSide} arm disconnected`);
+        addLog(`❌ ${armSide} arm disconnected`);
+
+        // Update Firebase to offline when device disconnects
+        const deviceDocRef = doc(db, 'devices', deviceId);
+        updateDoc(deviceDocRef, {
+          status: 'offline',
+          glassesState: 'off',
+          lastSeen: new Date(),
+        }).then(() => {
+          console.log('[BLE-BACKGROUND] Firebase updated on disconnect: status=offline');
+        }).catch(error => {
+          console.error('[BLE-BACKGROUND] Error updating status on disconnect:', error);
+        });
+
+        // Clear the connected arm reference
+        delete connectedArmsRef.current[armSide];
+
+        // Update UI state
+        setConnectionState(prev => ({
+          ...prev,
+          [armSide === 'left' ? 'leftArm' : 'rightArm']: null,
+          isFullyConnected: false,
+        }));
+      });
 
       // Send init command
       const initCommand = deviceProtocol.getInitCommand();
@@ -870,6 +950,7 @@ export default function BLEConnectionScreen() {
         // Both arms connected!
         await saveConnectionToFirebase();
         addLog('✓✓ Both arms connected! Ready to send messages.');
+        addLog('✅ Background monitoring active - status will update even when app is backgrounded');
         stopScan();
 
         // Auto-request battery info after connection

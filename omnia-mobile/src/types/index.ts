@@ -11,6 +11,8 @@ export type RootStackParamList = {
     deviceId: string;
     deviceName: string;
     savedBleDeviceId?: string;
+    savedBleDeviceId_left?: string;
+    savedBleDeviceId_right?: string;
   };
 };
 
