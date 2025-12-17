@@ -14,6 +14,11 @@ export type RootStackParamList = {
     savedBleDeviceId_left?: string;
     savedBleDeviceId_right?: string;
   };
+  Chat: {
+    deviceId: string;
+    deviceName: string;
+    personaId: string;
+  };
 };
 
 // Auth types

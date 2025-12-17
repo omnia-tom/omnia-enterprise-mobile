@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -221,6 +222,20 @@ export default function MainScreen() {
     });
   };
 
+  const handleTestPersona = (device: Device) => {
+    if (!device.pairedPersonaId) {
+      Alert.alert('No Persona', 'This device does not have a persona assigned.');
+      return;
+    }
+
+    // Navigate to chat screen
+    (navigation as any).navigate('Chat', {
+      deviceId: device.id,
+      deviceName: device.deviceName,
+      personaId: device.pairedPersonaId,
+    });
+  };
+
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'Unknown';
     try {
@@ -420,6 +435,17 @@ export default function MainScreen() {
                               <Text style={styles.personaText}>Assigned</Text>
                             </View>
                           </View>
+                        )}
+
+                        {/* Test Persona Button */}
+                        {device.pairedPersonaId && (
+                          <TouchableOpacity
+                            style={styles.testPersonaButton}
+                            onPress={() => handleTestPersona(device)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.testPersonaButtonText}>💬 Chat with Persona</Text>
+                          </TouchableOpacity>
                         )}
 
                       {device.status && (
@@ -822,5 +848,20 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     width: 45,
     marginRight: 8,
+  },
+  testPersonaButton: {
+    marginTop: 12,
+    backgroundColor: '#6366F1',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+  },
+  testPersonaButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

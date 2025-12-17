@@ -7,6 +7,7 @@ import PairingScreen from '../screens/PairingScreen';
 import AccountScreen from '../screens/AccountScreen';
 import DevicesScreen from '../screens/DevicesScreen';
 import BLEConnectionScreen from '../screens/BLEConnectionScreen';
+import ChatScreen from '../screens/ChatScreen';
 import { RootStackParamList } from '../types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -59,6 +60,10 @@ export default function Navigation({ isAuthenticated }: NavigationProps) {
         <Stack.Screen
           name="BLEConnection"
           component={BLEConnectionScreen}
+        />
+        <Stack.Screen
+          name="Chat"
+          component={ChatScreen}
         />
       </Stack.Navigator>
     </NavigationContainer>
