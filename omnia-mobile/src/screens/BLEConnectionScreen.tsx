@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { BleManager, Device, State, Characteristic } from 'react-native-ble-plx';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import {
   getBleManager,
@@ -25,6 +25,7 @@ import {
   ConnectedArm,
   EvenRealitiesG1Protocol
 } from '../services/ble';
+import { storeConnectedDevices } from '../services/glassesMessaging';
 import { ArmConnectionState, GlassesConnectionState } from '../types';
 
 interface BLEConnectionScreenParams {
@@ -801,6 +802,9 @@ export default function BLEConnectionScreen() {
                   addLog('🔌 Case charging');
                 } else if (parsed.type === 'ack') {
                   addLog(`✓ ACK received from ${armSide} (seq: ${parsed.sequenceNumber || 'unknown'})`);
+                } else if (parsed.type === 'single_tap') {
+                  addLog('👆 Single tap detected - opening chat');
+                  handleSingleTap();
                 } else if (parsed.type === 'glasses_status') {
                   addLog(`📊 Glasses status update from ${armSide}`);
 
@@ -877,6 +881,14 @@ export default function BLEConnectionScreen() {
         rxCharacteristic: rxChar || null,
       };
       connectedArmsRef.current[armSide] = connectedArm;
+
+      // Store device ID for messaging service
+      if (armSide === 'left') {
+        storeConnectedDevices(device.id, undefined);
+      } else {
+        const leftId = connectedArmsRef.current.left?.device.id;
+        storeConnectedDevices(leftId, device.id);
+      }
 
       // Update connection state
       const armState: ArmConnectionState = {
@@ -1204,6 +1216,46 @@ export default function BLEConnectionScreen() {
       }
     } catch (error: any) {
       addLog(`❌ Failed: ${error.message}`);
+    }
+  };
+
+  const handleSingleTap = async () => {
+    try {
+      // Get device document from Firestore to check for persona
+      const deviceDocRef = doc(db, 'devices', deviceId);
+      const deviceDoc = await getDoc(deviceDocRef);
+      
+      if (!deviceDoc.exists()) {
+        addLog('⚠️ Device not found in Firestore');
+        Alert.alert('Error', 'Device not found. Please try again.');
+        return;
+      }
+      
+      const deviceData = deviceDoc.data();
+      const personaId = deviceData.pairedPersonaId;
+      
+      if (!personaId) {
+        addLog('⚠️ No persona assigned to device');
+        Alert.alert(
+          'No Persona',
+          'This device does not have a persona assigned. Please assign a persona first.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      addLog(`💬 Opening chat with persona: ${personaId}`);
+      
+      // Navigate to Chat screen
+      (navigation as any).navigate('Chat', {
+        deviceId: deviceId,
+        deviceName: deviceName,
+        personaId: personaId,
+      });
+    } catch (error: any) {
+      console.error('[BLEConnectionScreen] Error handling single tap:', error);
+      addLog(`❌ Error opening chat: ${error.message}`);
+      Alert.alert('Error', `Failed to open chat: ${error.message || 'Unknown error'}`);
     }
   };
 

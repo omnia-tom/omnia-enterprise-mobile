@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { chatAPI, ChatResponse } from '../services/chatApi';
+import { sendMessageToGlasses } from '../services/glassesMessaging';
 
 interface ChatMessage {
   id: string;
@@ -43,12 +44,18 @@ export default function ChatScreen() {
 
   useEffect(() => {
     // Add welcome message
+    const welcomeText = `You're chatting with the persona assigned to ${deviceName}. How can I help you?`;
     setMessages([{
       id: 'welcome',
-      text: `You're chatting with the persona assigned to ${deviceName}. How can I help you?`,
+      text: welcomeText,
       isUser: false,
       timestamp: new Date(),
     }]);
+
+    // Send welcome message to glasses
+    sendMessageToGlasses(welcomeText).catch(error => {
+      console.error('[ChatScreen] Error sending welcome message to glasses:', error);
+    });
   }, []);
 
   useEffect(() => {
@@ -94,6 +101,11 @@ export default function ChatScreen() {
       };
 
       setMessages(prev => [...prev, botMessage]);
+
+      // Send AI response to glasses
+      sendMessageToGlasses(response.answer).catch(error => {
+        console.error('[ChatScreen] Error sending message to glasses:', error);
+      });
     } catch (error: any) {
       console.error('[ChatScreen] Error sending message:', error);
       
