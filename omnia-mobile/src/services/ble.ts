@@ -62,6 +62,7 @@ export interface GlassesProtocol {
   getManualModeCommand?(): Uint8Array;
   getExitCommand?(): Uint8Array;
   getBatteryRequestCommand?(): Uint8Array;
+  getMicControlCommand?(enable: boolean): Uint8Array;
 
   // Event handling
   parseIncomingData?(data: Uint8Array): any;
@@ -121,6 +122,18 @@ export class EvenRealitiesG1Protocol implements GlassesProtocol {
   getExitCommand(): Uint8Array {
     // Exit to dashboard: 0xF5 0x00
     return new Uint8Array([0xF5, 0x00]);
+  }
+
+  /**
+   * Enable or disable the glasses microphone
+   * @param enable true to enable, false to disable
+   * @returns Command: 0x0E with enable byte (0 or 1)
+   * 
+   * NOTE: Mic functionality is NOT working as expected. We will come back to this.
+   */
+  getMicControlCommand(enable: boolean): Uint8Array {
+    // Command: 0x0E with enable = 1 (enable) or 0 (disable)
+    return new Uint8Array([0x0E, enable ? 1 : 0]);
   }
 
   createTextMessage(text: string, sequenceNumber: number = 1, replaceContent: boolean = true): Uint8Array {
@@ -185,6 +198,47 @@ export class EvenRealitiesG1Protocol implements GlassesProtocol {
       };
     }
 
+    // Mic data (0xF1 = 241)
+    if (data[0] === 241 || data[0] === 0xF1) {
+      // Command: 0xF1 with seq and audio data
+      if (data.length >= 2) {
+        const seq = data[1];
+        const audioData = data.slice(2); // Rest of the data is audio
+        return {
+          type: 'mic_data',
+          sequence: seq,
+          audioData: audioData,
+          rawData: Array.from(data),
+        };
+      }
+      return {
+        type: 'mic_data',
+        sequence: 0,
+        audioData: new Uint8Array(0),
+        rawData: Array.from(data),
+      };
+    }
+
+    // Mic control response (0x0E = 14)
+    if (data[0] === 14 || data[0] === 0x0E) {
+      if (data.length >= 3) {
+        const rspStatus = data[1];
+        const enable = data[2];
+        return {
+          type: 'mic_control_response',
+          success: rspStatus === 0xC9,
+          enabled: enable === 1,
+          rspStatus: rspStatus,
+        };
+      }
+      return {
+        type: 'mic_control_response',
+        success: false,
+        enabled: false,
+        rspStatus: 0,
+      };
+    }
+
     // Device events (0xF5 = 245)
     if (data[0] === 245 || data[0] === 0xF5) {
       const eventType = data[1];
@@ -193,6 +247,10 @@ export class EvenRealitiesG1Protocol implements GlassesProtocol {
           return { type: 'single_tap' };
         case 1:
           return { type: 'double_tap' };
+        case 2:
+          return { type: 'long_press' };
+        case 3:
+          return { type: 'long_press_release' };
         case 6:
           return { type: 'glasses_on' };
         case 7:

@@ -25,7 +25,8 @@ import {
   ConnectedArm,
   EvenRealitiesG1Protocol
 } from '../services/ble';
-import { storeConnectedDevices } from '../services/glassesMessaging';
+import { storeConnectedDevices, sendMessageToGlasses } from '../services/glassesMessaging';
+import { chatAPI } from '../services/chatApi';
 import { ArmConnectionState, GlassesConnectionState } from '../types';
 
 interface BLEConnectionScreenParams {
@@ -92,6 +93,16 @@ export default function BLEConnectionScreen() {
     rightBattery: null,
     glassesState: null,
   });
+
+  // Mic/audio state
+  // NOTE: Mic/audio functionality is NOT working as expected. We will come back to this.
+  // The implementation is incomplete and needs further work on:
+  // - Audio data format/deserialization
+  // - Speech-to-text conversion
+  // - Proper audio buffering and processing
+  const [isRecording, setIsRecording] = useState(false);
+  const audioBufferRef = useRef<Map<number, Uint8Array>>(new Map()); // Buffer audio by sequence number
+  const recordingStartTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -805,6 +816,21 @@ export default function BLEConnectionScreen() {
                 } else if (parsed.type === 'single_tap') {
                   addLog('👆 Single tap detected - opening chat');
                   handleSingleTap();
+                } else if (parsed.type === 'long_press') {
+                  addLog('👆 Long press detected - activating mic and sending message');
+                  handleLongPress();
+                } else if (parsed.type === 'long_press_release') {
+                  addLog('👆 Long press released - processing audio');
+                  handleLongPressRelease();
+                } else if (parsed.type === 'mic_data') {
+                  addLog(`🎤 Mic data received (seq: ${parsed.sequence}, size: ${parsed.audioData.length} bytes)`);
+                  handleMicData(parsed.audioData, parsed.sequence);
+                } else if (parsed.type === 'mic_control_response') {
+                  if (parsed.success) {
+                    addLog(`✅ Mic ${parsed.enabled ? 'enabled' : 'disabled'}`);
+                  } else {
+                    addLog(`❌ Mic control failed (status: 0x${parsed.rspStatus.toString(16)})`);
+                  }
                 } else if (parsed.type === 'glasses_status') {
                   addLog(`📊 Glasses status update from ${armSide}`);
 
@@ -1256,6 +1282,281 @@ export default function BLEConnectionScreen() {
       console.error('[BLEConnectionScreen] Error handling single tap:', error);
       addLog(`❌ Error opening chat: ${error.message}`);
       Alert.alert('Error', `Failed to open chat: ${error.message || 'Unknown error'}`);
+    }
+  };
+
+  // NOTE: Long press mic functionality is NOT working as expected. We will come back to this.
+  const handleLongPress = async () => {
+    try {
+      if (!protocol) {
+        addLog('❌ Protocol not available');
+        return;
+      }
+
+      // Get device document to check for persona
+      const deviceDocRef = doc(db, 'devices', deviceId);
+      const deviceDoc = await getDoc(deviceDocRef);
+      
+      if (!deviceDoc.exists()) {
+        addLog('⚠️ Device not found in Firestore');
+        return;
+      }
+      
+      const deviceData = deviceDoc.data();
+      const personaId = deviceData.pairedPersonaId;
+      
+      if (!personaId) {
+        addLog('⚠️ No persona assigned to device');
+        Alert.alert('No Persona', 'This device does not have a persona assigned.');
+        return;
+      }
+
+      // Open chat screen
+      addLog('💬 Opening chat...');
+      (navigation as any).navigate('Chat', {
+        deviceId: deviceId,
+        deviceName: deviceName,
+        personaId: personaId,
+      });
+
+      // Send activation message to glasses
+      await sendMessageToGlasses('AI chat activated - how can I help you');
+      addLog('✅ Activation message sent to glasses');
+
+      // Clear audio buffer and start recording
+      audioBufferRef.current.clear();
+      setIsRecording(true);
+      recordingStartTimeRef.current = Date.now();
+      addLog('🎤 Starting audio recording...');
+
+      // Enable mic on both arms
+      if (!protocol.getMicControlCommand) {
+        addLog('❌ Protocol does not support mic control');
+        return;
+      }
+      const micEnableCmd = protocol.getMicControlCommand(true);
+      
+      // Convert to base64
+      let base64Data: string;
+      if (typeof Buffer !== 'undefined') {
+        base64Data = Buffer.from(micEnableCmd).toString('base64');
+      } else {
+        const binary = Array.from(micEnableCmd).map(byte => String.fromCharCode(byte)).join('');
+        base64Data = btoa(binary);
+      }
+
+      let enabledCount = 0;
+
+      // Enable mic on left arm
+      if (connectedArmsRef.current.left) {
+        try {
+          const services = await connectedArmsRef.current.left.device.services();
+          const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+          if (targetService) {
+            const characteristics = await targetService.characteristics();
+            const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+            if (txChar) {
+              await txChar.writeWithoutResponse(base64Data);
+              addLog('✅ Mic enabled on LEFT arm');
+              enabledCount++;
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+          }
+        } catch (error: any) {
+          addLog(`❌ Error enabling mic on LEFT: ${error.message}`);
+        }
+      }
+
+      // Enable mic on right arm
+      if (connectedArmsRef.current.right) {
+        try {
+          const services = await connectedArmsRef.current.right.device.services();
+          const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+          if (targetService) {
+            const characteristics = await targetService.characteristics();
+            const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+            if (txChar) {
+              await txChar.writeWithoutResponse(base64Data);
+              addLog('✅ Mic enabled on RIGHT arm');
+              enabledCount++;
+            }
+          }
+        } catch (error: any) {
+          addLog(`❌ Error enabling mic on RIGHT: ${error.message}`);
+        }
+      }
+
+      if (enabledCount > 0) {
+        addLog('🎤 Microphone enabled - listening for audio...');
+      } else {
+        addLog('⚠️ Failed to enable microphone on any arm');
+        setIsRecording(false);
+      }
+    } catch (error: any) {
+      console.error('[BLEConnectionScreen] Error handling long press:', error);
+      addLog(`❌ Error: ${error.message}`);
+      setIsRecording(false);
+    }
+  };
+
+  const handleLongPressRelease = async () => {
+    if (!isRecording) return;
+
+    try {
+      setIsRecording(false);
+      addLog('🛑 Long press released - processing audio...');
+
+      // Disable mic
+      if (protocol && protocol.getMicControlCommand) {
+        const micDisableCmd = protocol.getMicControlCommand(false);
+        let base64Data: string;
+        if (typeof Buffer !== 'undefined') {
+          base64Data = Buffer.from(micDisableCmd).toString('base64');
+        } else {
+          const binary = Array.from(micDisableCmd).map(byte => String.fromCharCode(byte)).join('');
+          base64Data = btoa(binary);
+        }
+
+        // Disable on both arms
+        if (connectedArmsRef.current.left) {
+          try {
+            const services = await connectedArmsRef.current.left.device.services();
+            const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+            if (targetService) {
+              const characteristics = await targetService.characteristics();
+              const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+              if (txChar) {
+                await txChar.writeWithoutResponse(base64Data);
+              }
+            }
+          } catch (error) {
+            console.error('Error disabling mic on left:', error);
+          }
+        }
+
+        if (connectedArmsRef.current.right) {
+          try {
+            const services = await connectedArmsRef.current.right.device.services();
+            const targetService = services.find(s => s.uuid.toLowerCase() === protocol.serviceUUID.toLowerCase());
+            if (targetService) {
+              const characteristics = await targetService.characteristics();
+              const txChar = characteristics.find(c => c.uuid.toLowerCase() === protocol.txCharacteristicUUID.toLowerCase());
+              if (txChar) {
+                await txChar.writeWithoutResponse(base64Data);
+              }
+            }
+          } catch (error) {
+            console.error('Error disabling mic on right:', error);
+          }
+        }
+      }
+
+      // Process buffered audio
+      await processAudioBuffer();
+    } catch (error: any) {
+      console.error('[BLEConnectionScreen] Error handling long press release:', error);
+      addLog(`❌ Error processing audio: ${error.message}`);
+    }
+  };
+
+  const processAudioBuffer = async () => {
+    try {
+      // Get all audio chunks sorted by sequence number
+      const sequences = Array.from(audioBufferRef.current.keys()).sort((a, b) => a - b);
+      
+      if (sequences.length === 0) {
+        addLog('⚠️ No audio data received');
+        return;
+      }
+
+      addLog(`📦 Processing ${sequences.length} audio chunks...`);
+
+      // Combine all audio chunks in sequence order
+      const totalLength = sequences.reduce((sum, seq) => sum + audioBufferRef.current.get(seq)!.length, 0);
+      const combinedAudio = new Uint8Array(totalLength);
+      let offset = 0;
+      
+      for (const seq of sequences) {
+        const chunk = audioBufferRef.current.get(seq)!;
+        combinedAudio.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      addLog(`🎵 Combined audio: ${combinedAudio.length} bytes`);
+
+      // TODO: Convert audio to text using speech-to-text service
+      // Options: Google Speech-to-Text, Azure Speech, or local transcription
+      // The audio data is in combinedAudio (Uint8Array)
+      // You'll need to:
+      // 1. Convert Uint8Array to audio format (PCM, WAV, etc.)
+      // 2. Send to speech-to-text API
+      // 3. Get transcription text
+      
+      // Placeholder: You'll need to implement audio conversion
+      // const transcription = await convertAudioToText(combinedAudio);
+      
+      addLog('⚠️ Audio-to-text conversion not yet implemented');
+      addLog('💡 You need to integrate a speech-to-text service');
+      addLog(`📊 Audio data ready: ${combinedAudio.length} bytes`);
+      
+      // Clear buffer
+      audioBufferRef.current.clear();
+      
+      // Once transcription is ready, uncomment and implement:
+      // if (transcription && transcription.trim()) {
+      //   await sendTranscriptionToChat(transcription);
+      // }
+    } catch (error: any) {
+      console.error('[BLEConnectionScreen] Error processing audio buffer:', error);
+      addLog(`❌ Error: ${error.message}`);
+    }
+  };
+
+  const handleMicData = (audioData: Uint8Array, sequence: number) => {
+    if (!isRecording) {
+      // Ignore mic data if not recording
+      return;
+    }
+
+    // Buffer audio data by sequence number
+    // Note: Audio data comes as raw bytes - you may need to deserialize based on format
+    // The glasses send audio data in the format: 0xF1 {seq} {audio_data}
+    audioBufferRef.current.set(sequence, new Uint8Array(audioData));
+    console.log(`[BLEConnectionScreen] Buffered audio chunk: seq=${sequence}, size=${audioData.length}, total chunks=${audioBufferRef.current.size}`);
+  };
+
+  const sendTranscriptionToChat = async (transcription: string) => {
+    try {
+      // Get device document to get personaId
+      const deviceDocRef = doc(db, 'devices', deviceId);
+      const deviceDoc = await getDoc(deviceDocRef);
+      
+      if (!deviceDoc.exists()) {
+        addLog('⚠️ Device not found');
+        return;
+      }
+      
+      const deviceData = deviceDoc.data();
+      const personaId = deviceData.pairedPersonaId;
+      
+      if (!personaId) {
+        addLog('⚠️ No persona assigned');
+        return;
+      }
+
+      addLog(`💬 Sending transcription to chat: "${transcription.substring(0, 50)}..."`);
+
+      // Send to chat API
+      const response = await chatAPI.sendMessage(personaId, transcription);
+      
+      addLog(`✅ Received response from AI`);
+
+      // Send response to glasses
+      await sendMessageToGlasses(response.answer);
+      addLog('✅ Response sent to glasses display');
+    } catch (error: any) {
+      console.error('[BLEConnectionScreen] Error sending transcription to chat:', error);
+      addLog(`❌ Error: ${error.message}`);
     }
   };
 
