@@ -19,6 +19,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSBluetoothAlwaysUsageDescription": "This app needs Bluetooth to connect to your smart glasses devices and monitor their status in the background.",
         "NSBluetoothPeripheralUsageDescription": "This app needs Bluetooth to connect to your smart glasses devices.",
+        "NSPhotoLibraryAddUsageDescription": "This app needs to save debug images to help improve barcode detection.",
         "UIBackgroundModes": [
           "bluetooth-central",
           "processing",

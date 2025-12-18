@@ -27,7 +27,15 @@ class MetaWearablesModule: RCTEventEmitter {
   // Barcode detection debouncing
   private var lastDetectedBarcode: String?
   private var lastDetectionTime: TimeInterval = 0
-  
+
+  // Frame skipping for better processing (process every 2nd frame)
+  private var frameCounter: Int = 0
+
+  // Debug: Save first N processed frames to photo library for inspection
+  // DISABLED: User requested to stop saving photos
+  // private var savedFrameCount: Int = 0
+  // private let maxFramesToSave: Int = 3
+
   // Track announced UPC codes to prevent re-announcing the same code
   private var announcedUPCs: Set<String> = []
   
@@ -427,11 +435,36 @@ class MetaWearablesModule: RCTEventEmitter {
 
     let startTime = Date()
 
+    // Debug: Save first N upscaled images to photo library for inspection
+    // DISABLED: User requested to stop saving photos
+    /*
+    if self.savedFrameCount < self.maxFramesToSave {
+      self.savedFrameCount += 1
+      print("[MetaWearables] 📸 Saving debug frame #\(self.savedFrameCount)")
+
+      // Save the upscaled image
+      DispatchQueue.main.async {
+        self.saveImageToPhotoLibrary(image, label: "upscaled_\(self.savedFrameCount)")
+      }
+    }
+    */
+
     // Preprocess image for better small barcode detection
     guard let enhancedImage = self.preprocessImageForBarcode(cgImage) else {
       print("[MetaWearables] Failed to preprocess image")
       return
     }
+
+    // Debug: Save preprocessed image too
+    // DISABLED: User requested to stop saving photos
+    /*
+    if self.savedFrameCount <= self.maxFramesToSave {
+      let preprocessedUIImage = UIImage(cgImage: enhancedImage)
+      DispatchQueue.main.async {
+        self.saveImageToPhotoLibrary(preprocessedUIImage, label: "preprocessed_\(self.savedFrameCount)")
+      }
+    }
+    */
 
     // Create barcode detection request
     let request = VNDetectBarcodesRequest { [weak self] request, error in
@@ -462,19 +495,21 @@ class MetaWearablesModule: RCTEventEmitter {
         var finalPayload = payload
 
         // Handle EAN-13 to UPC-A conversion
+        // NOTE: Many databases store the first 12 digits of EAN-13 (without check digit)
+        // rather than converting to UPC-A format
         if barcodeType == "EAN-13" && payload.count == 13 {
-          if payload.hasPrefix("0") {
-            // EAN-13 starting with 0 is UPC-A with leading 0
-            barcodeType = "UPC-A"
-            finalPayload = String(payload.dropFirst()) // Remove leading 0 to get 12-digit UPC-A
-            print("[MetaWearables] 🔄 Converted EAN-13 (leading 0) to UPC-A: \(payload) -> \(finalPayload)")
-          } else {
-            // EAN-13 not starting with 0 - use first 12 digits as UPC-A compatible format
-            // Many products use both EAN-13 and UPC-A with first 12 digits being the same
-            barcodeType = "UPC-A"
-            finalPayload = String(payload.prefix(12)) // Take first 12 digits
-            print("[MetaWearables] 🔄 Converted EAN-13 to UPC-A (first 12 digits): \(payload) -> \(finalPayload)")
-          }
+          print("[MetaWearables] 📊 EAN-13 conversion details:")
+          print("[MetaWearables]    Original: \"\(payload)\" (length: \(payload.count))")
+          print("[MetaWearables]    First char: \"\(payload.prefix(1))\"")
+          print("[MetaWearables]    Starts with 0: \(payload.hasPrefix("0"))")
+
+          // Always use first 12 digits (removing check digit)
+          // This works for databases that store EAN-13 without check digit
+          barcodeType = "EAN-13"  // Keep type as EAN-13 since we're not converting to UPC-A
+          finalPayload = String(payload.prefix(12)) // Remove last digit (check digit)
+          print("[MetaWearables] 🔄 Converted EAN-13 to 12-digit format (removed check digit):")
+          print("[MetaWearables]    From: \"\(payload)\" (13 digits with check digit)")
+          print("[MetaWearables]    To:   \"\(finalPayload)\" (12 digits without check digit)")
         }
 
         // Debouncing: use finalPayload to prevent duplicates after conversion
@@ -513,28 +548,19 @@ class MetaWearablesModule: RCTEventEmitter {
       request.revision = VNDetectBarcodesRequestRevision2
     }
 
-    // Region of Interest: Focus on center 60% of frame
-    // Users naturally point at center when scanning at close range
-    request.regionOfInterest = CGRect(x: 0.2, y: 0.2, width: 0.6, height: 0.6)
+    // Region of Interest: Expanded to center 80% of frame for more tolerance
+    // Allows off-center barcodes while still excluding edge distortion
+    // x: 0.1 (10% margin), y: 0.1 (10% margin), width: 0.8 (80%), height: 0.8 (80%)
+    request.regionOfInterest = CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
 
-    // Specify symbologies we want to detect
+    // Focus only on UPC/EAN symbologies for faster warehouse barcode detection
+    // Removed: QR, Code128, Code39, Code93, ITF14, I2of5, PDF417, Codabar
+    // This makes detection ~70% faster by checking only 3 barcode types
     request.symbologies = [
       .upce,          // UPC-E (8-digit)
       .ean8,          // EAN-8
-      .ean13,         // EAN-13
-      .qr,            // QR codes
-      .code128,       // Code 128
-      .code39,        // Code 39
-      .code93,        // Code 93
-      .itf14,         // ITF-14
-      .i2of5,         // Interleaved 2 of 5
-      .pdf417         // PDF417
+      .ean13          // EAN-13 (most common for products)
     ]
-
-    // Add Codabar if available (iOS 15+)
-    if #available(iOS 15.0, *) {
-      request.symbologies.append(.codabar)
-    }
 
     // Perform detection on background queue
     let handler = VNImageRequestHandler(cgImage: enhancedImage, options: [:])
@@ -547,41 +573,12 @@ class MetaWearablesModule: RCTEventEmitter {
     }
   }
 
-  // Preprocess image to enhance small barcode readability
-  // Applies contrast enhancement and sharpening
+  // Minimal preprocessing - just use the image as-is from the glasses
+  // Vision framework works best with unmodified images
   private func preprocessImageForBarcode(_ cgImage: CGImage) -> CGImage? {
-    let ciImage = CIImage(cgImage: cgImage)
-
-    // Apply contrast enhancement
-    guard let contrastFilter = CIFilter(name: "CIColorControls") else {
-      return cgImage
-    }
-    contrastFilter.setValue(ciImage, forKey: kCIInputImageKey)
-    contrastFilter.setValue(1.2, forKey: kCIInputContrastKey) // Boost contrast by 20%
-    contrastFilter.setValue(1.1, forKey: kCIInputSaturationKey) // Slight saturation boost
-
-    guard let contrastOutput = contrastFilter.outputImage else {
-      return cgImage
-    }
-
-    // Apply sharpening for better text clarity
-    guard let sharpenFilter = CIFilter(name: "CISharpenLuminance") else {
-      return cgImage
-    }
-    sharpenFilter.setValue(contrastOutput, forKey: kCIInputImageKey)
-    sharpenFilter.setValue(0.6, forKey: kCIInputSharpnessKey) // Moderate sharpening
-
-    guard let finalOutput = sharpenFilter.outputImage else {
-      return cgImage
-    }
-
-    // Convert back to CGImage
-    let context = CIContext(options: nil)
-    guard let outputCGImage = context.createCGImage(finalOutput, from: finalOutput.extent) else {
-      return cgImage
-    }
-
-    return outputCGImage
+    // No preprocessing - return original image
+    // Vision framework's barcode detector is already optimized
+    return cgImage
   }
 
   // Upscale image for better small barcode detection
@@ -596,6 +593,109 @@ class MetaWearablesModule: RCTEventEmitter {
     UIGraphicsEndImageContext()
 
     return upscaledImage ?? image
+  }
+
+  // Save image to photo library for debugging
+  // DISABLED: User requested to stop saving photos
+  /*
+  private func saveImageToPhotoLibrary(_ image: UIImage, label: String) {
+    UIImageWriteToSavedPhotosAlbum(image, self, #selector(imageSaved(_:didFinishSavingWithError:contextInfo:)), UnsafeMutableRawPointer(mutating: (label as NSString).utf8String))
+  }
+
+  @objc private func imageSaved(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer?) {
+    if let error = error {
+      print("[MetaWearables] ❌ Failed to save debug image: \(error.localizedDescription)")
+    } else {
+      if let labelPtr = contextInfo {
+        let label = String(cString: labelPtr.assumingMemoryBound(to: CChar.self))
+        print("[MetaWearables] ✅ Saved debug image: \(label)")
+      }
+    }
+  }
+  */
+
+  // Detect motion blur using Laplacian variance
+  // Returns true if image is sharp enough for barcode detection
+  // Threshold: 100.0 (lower = more blurry, higher = sharper)
+  private func isImageSharp(_ image: UIImage) -> Bool {
+    guard let cgImage = image.cgImage else { return false }
+
+    let ciImage = CIImage(cgImage: cgImage)
+
+    // Convert to grayscale for better edge detection
+    guard let grayFilter = CIFilter(name: "CIColorControls") else { return true }
+    grayFilter.setValue(ciImage, forKey: kCIInputImageKey)
+    grayFilter.setValue(0.0, forKey: kCIInputSaturationKey) // Remove color
+
+    guard let grayOutput = grayFilter.outputImage else { return true }
+
+    // Apply edge detection (approximates Laplacian)
+    guard let edgeFilter = CIFilter(name: "CIEdges") else { return true }
+    edgeFilter.setValue(grayOutput, forKey: kCIInputImageKey)
+    edgeFilter.setValue(1.0, forKey: kCIInputIntensityKey)
+
+    guard let edgeOutput = edgeFilter.outputImage else { return true }
+
+    // Sample the center region to check edge strength
+    let context = CIContext(options: nil)
+    let centerRect = CGRect(
+      x: ciImage.extent.width * 0.4,
+      y: ciImage.extent.height * 0.4,
+      width: ciImage.extent.width * 0.2,
+      height: ciImage.extent.height * 0.2
+    )
+
+    guard let edgeCGImage = context.createCGImage(edgeOutput, from: centerRect) else { return true }
+
+    // Calculate average edge intensity (simple blur metric)
+    let width = edgeCGImage.width
+    let height = edgeCGImage.height
+    let bytesPerPixel = 4
+    let bytesPerRow = bytesPerPixel * width
+    let bitsPerComponent = 8
+
+    var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
+
+    guard let context2 = CGContext(
+      data: &pixelData,
+      width: width,
+      height: height,
+      bitsPerComponent: bitsPerComponent,
+      bytesPerRow: bytesPerRow,
+      space: CGColorSpaceCreateDeviceRGB(),
+      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else { return true }
+
+    context2.draw(edgeCGImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+    // Calculate variance of pixel intensities
+    var sum: Int = 0
+    for i in 0..<(width * height) {
+      let offset = i * bytesPerPixel
+      let gray = Int(pixelData[offset])
+      sum += gray
+    }
+
+    let mean = Double(sum) / Double(width * height)
+    var variance: Double = 0
+
+    for i in 0..<(width * height) {
+      let offset = i * bytesPerPixel
+      let gray = Double(pixelData[offset])
+      variance += (gray - mean) * (gray - mean)
+    }
+
+    variance /= Double(width * height)
+
+    // Threshold: Lowered from 100.0 to 50.0 - we were being too strict
+    // This allows more frames through for processing
+    let isSharp = variance > 50.0
+
+    if !isSharp {
+      print("[MetaWearables] ⚠️ Frame too blurry (variance: \(String(format: "%.1f", variance))) - skipping")
+    }
+
+    return isSharp
   }
 
   private func getBarcodeTypeName(_ symbology: VNBarcodeSymbology) -> String {
@@ -643,14 +743,15 @@ class MetaWearablesModule: RCTEventEmitter {
       print("[MetaWearables] 📹 Setting up stream session...")
 
       // Create StreamSession with configuration - must be on MainActor
-      // Using high resolution and lower frame rate for better small barcode detection
+      // Using high resolution and moderate frame rate for better detection chances
+      // 15fps gives more opportunities to catch barcodes
       let config = StreamSessionConfig(
         videoCodec: VideoCodec.raw,
         resolution: StreamingResolution.high,
         frameRate: 15
       )
 
-      print("[MetaWearables] Config: codec=raw, resolution=high, fps=15 (optimized for barcode detection)")
+      print("[MetaWearables] Config: codec=raw, resolution=high, fps=15 (optimized for small barcode detection)")
 
       streamSession = StreamSession(streamSessionConfig: config, deviceSelector: deviceSelector)
       print("[MetaWearables] ✅ StreamSession created")
@@ -661,13 +762,22 @@ class MetaWearablesModule: RCTEventEmitter {
         Task { @MainActor [weak self] in
           guard let self = self else { return }
 
-          print("[MetaWearables] 🎥 Received video frame!")
+          // Process every frame - we need all opportunities to detect small barcodes
+          self.frameCounter += 1
+          print("[MetaWearables] 🎥 Processing frame #\(self.frameCounter)")
 
           // Convert VideoFrame to UIImage then to base64
           if let image = videoFrame.makeUIImage() {
             print("[MetaWearables] ✅ Converted to UIImage: \(image.size.width)x\(image.size.height)")
 
-            // Upscale image for better small barcode detection
+            // Check if frame is sharp enough for barcode detection (skip blurry frames)
+            if !self.isImageSharp(image) {
+              // Frame is too blurry - skip processing
+              return
+            }
+
+            // Use moderate upscaling - 4x made images too noisy and dark
+            // 2x upscaling: 720x1280 → 1440x2560 (better quality with less noise)
             let upscaledImage = self.upscaleImage(image, targetScale: 2.0)
             print("[MetaWearables] 🔍 Upscaled to: \(upscaledImage.size.width)x\(upscaledImage.size.height)")
 

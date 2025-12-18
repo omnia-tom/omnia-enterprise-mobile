@@ -136,12 +136,19 @@ export default function PickPackScreen() {
         // If scanned code is 13 digits and expected is 12, try matching first 12 digits
         let upcToSubmit = barcode.data;
 
-        if (barcode.data.length === 13 && currentItem.upc.length === 12) {
+        console.log('[PickPackScreen] 🔍 Barcode matching logic:');
+        console.log(`[PickPackScreen]    Scanned: "${barcode.data}" (${barcode.data.length} digits)`);
+        console.log(`[PickPackScreen]    Expected: "${currentItem.upc}" (${currentItem.upc.length} digits)`);
+
+        // Try exact match first
+        if (barcode.data === currentItem.upc) {
+          console.log('[PickPackScreen] ✅ Exact match!');
+        }
+        // If scanned is 13 and expected is 12, try first 12 digits
+        else if (barcode.data.length === 13 && currentItem.upc.length === 12) {
           const first12Digits = barcode.data.substring(0, 12);
           console.log('[PickPackScreen] 🔄 EAN-13 detected, converting to UPC-A for comparison');
-          console.log(`[PickPackScreen] 🔄 Original EAN-13: "${barcode.data}"`);
           console.log(`[PickPackScreen] 🔄 First 12 digits: "${first12Digits}"`);
-          console.log(`[PickPackScreen] 🔄 Expected UPC-A: "${currentItem.upc}"`);
 
           if (first12Digits === currentItem.upc) {
             console.log('[PickPackScreen] ✅ Match found using first 12 digits!');
@@ -149,6 +156,22 @@ export default function PickPackScreen() {
           } else {
             console.log('[PickPackScreen] ❌ No match even with first 12 digits');
           }
+        }
+        // If scanned is 12 and expected is 13, try adding leading 0
+        else if (barcode.data.length === 12 && currentItem.upc.length === 13) {
+          const withLeadingZero = '0' + barcode.data;
+          console.log('[PickPackScreen] 🔄 UPC-A detected, trying with leading 0 for EAN-13');
+          console.log(`[PickPackScreen] 🔄 With leading 0: "${withLeadingZero}"`);
+
+          if (withLeadingZero === currentItem.upc) {
+            console.log('[PickPackScreen] ✅ Match found with leading 0!');
+            // Still submit the 12-digit version
+          } else {
+            console.log('[PickPackScreen] ❌ No match even with leading 0');
+          }
+        }
+        else {
+          console.log('[PickPackScreen] ❌ No match - different lengths and no conversion strategy');
         }
 
         // Submit scan to API for validation
@@ -348,14 +371,15 @@ export default function PickPackScreen() {
   const renderProgress = () => {
     if (!pickOrder) return null;
 
-    const currentStep = pickOrder.currentStep + 1; // Convert 0-indexed to 1-indexed
+    // Count how many items have been scanned
+    const scannedCount = pickOrder.items.filter(item => item.scanned).length;
     const totalSteps = pickOrder.items.length;
-    const progressPercent = (currentStep / totalSteps) * 100;
+    const progressPercent = (scannedCount / totalSteps) * 100;
 
     return (
       <View style={styles.progressContainer}>
         <Text style={styles.progressText}>
-          Progress: {currentStep} of {totalSteps} items
+          Progress: {scannedCount} of {totalSteps} items picked
         </Text>
         <View style={styles.progressBarBackground}>
           <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
@@ -365,11 +389,17 @@ export default function PickPackScreen() {
   };
 
   const renderCurrentItem = () => {
-    if (!pickOrder || pickOrder.currentStep >= pickOrder.items.length) {
+    if (!pickOrder) {
       return null;
     }
 
-    const currentItem: PickItem = pickOrder.items[pickOrder.currentStep];
+    // Find the first unscanned item
+    const currentItem = pickOrder.items.find(item => !item.scanned);
+
+    // If all items are scanned, don't render current item card
+    if (!currentItem) {
+      return null;
+    }
 
     return (
       <View style={styles.currentItemCard}>
@@ -469,12 +499,15 @@ export default function PickPackScreen() {
   const renderItemList = () => {
     if (!pickOrder) return null;
 
+    // Find the first unscanned item to mark as current
+    const currentItem = pickOrder.items.find(item => !item.scanned);
+
     return (
       <View style={styles.itemListContainer}>
         <Text style={styles.itemListTitle}>Pick List:</Text>
         {pickOrder.items.map((item, index) => {
           const isScanned = item.scanned;
-          const isCurrent = index === pickOrder.currentStep;
+          const isCurrent = currentItem?.productId === item.productId;
 
           return (
             <View
