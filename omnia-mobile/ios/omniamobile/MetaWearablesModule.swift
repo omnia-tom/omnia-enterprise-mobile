@@ -23,6 +23,10 @@ class MetaWearablesModule: RCTEventEmitter {
   private var errorListenerToken: AnyListenerToken?
   private var photoDataListenerToken: AnyListenerToken?
 
+  // Barcode detection debouncing
+  private var lastDetectedBarcode: String?
+  private var lastDetectionTime: TimeInterval = 0
+
   override static func requiresMainQueueSetup() -> Bool {
     return true
   }
@@ -408,15 +412,26 @@ class MetaWearablesModule: RCTEventEmitter {
   // MARK: - Barcode Detection
 
   // Detect barcodes from a UIImage
-  // Optimized for low quality 1280x720 video streams
+  // Optimized for small barcodes at close range (6-12 inches)
   private func detectBarcodes(in image: UIImage) {
     guard let cgImage = image.cgImage else {
+      return
+    }
+
+    let startTime = Date()
+
+    // Preprocess image for better small barcode detection
+    guard let enhancedImage = self.preprocessImageForBarcode(cgImage) else {
+      print("[MetaWearables] Failed to preprocess image")
       return
     }
 
     // Create barcode detection request
     let request = VNDetectBarcodesRequest { [weak self] request, error in
       guard let self = self else { return }
+
+      let processingTime = Date().timeIntervalSince(startTime) * 1000 // ms
+      print("[MetaWearables] 🔍 Barcode detection completed in \(String(format: "%.1f", processingTime))ms")
 
       if let error = error {
         print("[MetaWearables] Barcode detection error: \(error.localizedDescription)")
@@ -433,26 +448,42 @@ class MetaWearablesModule: RCTEventEmitter {
           continue
         }
 
+        // Debounce: Only emit if different code OR >1 second has passed
+        let currentTime = Date().timeIntervalSince1970
+        let shouldEmit = (payload != self.lastDetectedBarcode) ||
+                        (currentTime - self.lastDetectionTime > 1.0)
+
+        if !shouldEmit {
+          continue // Skip duplicate detection
+        }
+
+        // Update debounce tracking
+        self.lastDetectedBarcode = payload
+        self.lastDetectionTime = currentTime
+
         // Determine barcode type
         let barcodeType = self.getBarcodeTypeName(observation.symbology)
 
-        print("[MetaWearables] 🏷️ Barcode detected: \(barcodeType) = \(payload)")
+        print("[MetaWearables] 🏷️ Barcode detected: \(barcodeType) = \(payload) (confidence: \(String(format: "%.1f%%", observation.confidence * 100)))")
 
         // Emit barcode detection event
         self.sendEvent(withName: "onBarcodeDetected", body: [
           "type": barcodeType,
           "data": payload,
           "confidence": observation.confidence,
-          "timestamp": Date().timeIntervalSince1970 * 1000
+          "timestamp": currentTime * 1000
         ])
       }
     }
 
-    // Optimize for low quality video
-    // Use high accuracy mode to better handle 1280x720 low quality stream
+    // Use highest accuracy mode for small barcode detection
     if #available(iOS 15.0, *) {
       request.revision = VNDetectBarcodesRequestRevision2
     }
+
+    // Region of Interest: Focus on center 60% of frame
+    // Users naturally point at center when scanning at close range
+    request.regionOfInterest = CGRect(x: 0.2, y: 0.2, width: 0.6, height: 0.6)
 
     // Specify symbologies we want to detect
     request.symbologies = [
@@ -468,13 +499,13 @@ class MetaWearablesModule: RCTEventEmitter {
       .pdf417         // PDF417
     ]
 
-    // Add UPC-A if available (iOS 15+)
+    // Add Codabar if available (iOS 15+)
     if #available(iOS 15.0, *) {
       request.symbologies.append(.codabar)
     }
 
     // Perform detection on background queue
-    let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+    let handler = VNImageRequestHandler(cgImage: enhancedImage, options: [:])
     DispatchQueue.global(qos: .userInitiated).async {
       do {
         try handler.perform([request])
@@ -482,6 +513,43 @@ class MetaWearablesModule: RCTEventEmitter {
         print("[MetaWearables] Failed to perform barcode detection: \(error)")
       }
     }
+  }
+
+  // Preprocess image to enhance small barcode readability
+  // Applies contrast enhancement and sharpening
+  private func preprocessImageForBarcode(_ cgImage: CGImage) -> CGImage? {
+    let ciImage = CIImage(cgImage: cgImage)
+
+    // Apply contrast enhancement
+    guard let contrastFilter = CIFilter(name: "CIColorControls") else {
+      return cgImage
+    }
+    contrastFilter.setValue(ciImage, forKey: kCIInputImageKey)
+    contrastFilter.setValue(1.2, forKey: kCIInputContrastKey) // Boost contrast by 20%
+    contrastFilter.setValue(1.1, forKey: kCIInputSaturationKey) // Slight saturation boost
+
+    guard let contrastOutput = contrastFilter.outputImage else {
+      return cgImage
+    }
+
+    // Apply sharpening for better text clarity
+    guard let sharpenFilter = CIFilter(name: "CISharpenLuminance") else {
+      return cgImage
+    }
+    sharpenFilter.setValue(contrastOutput, forKey: kCIInputImageKey)
+    sharpenFilter.setValue(0.6, forKey: kCIInputSharpnessKey) // Moderate sharpening
+
+    guard let finalOutput = sharpenFilter.outputImage else {
+      return cgImage
+    }
+
+    // Convert back to CGImage
+    let context = CIContext(options: nil)
+    guard let outputCGImage = context.createCGImage(finalOutput, from: finalOutput.extent) else {
+      return cgImage
+    }
+
+    return outputCGImage
   }
 
   // Convert VNBarcodeSymbology to readable string
@@ -530,13 +598,14 @@ class MetaWearablesModule: RCTEventEmitter {
       print("[MetaWearables] 📹 Setting up stream session...")
 
       // Create StreamSession with configuration - must be on MainActor
+      // Using high resolution and lower frame rate for better small barcode detection
       let config = StreamSessionConfig(
         videoCodec: VideoCodec.raw,
-        resolution: StreamingResolution.low,
-        frameRate: 24
+        resolution: StreamingResolution.high,
+        frameRate: 15
       )
 
-      print("[MetaWearables] Config: codec=raw, resolution=low, fps=24")
+      print("[MetaWearables] Config: codec=raw, resolution=high, fps=15 (optimized for barcode detection)")
 
       streamSession = StreamSession(streamSessionConfig: config, deviceSelector: deviceSelector)
       print("[MetaWearables] ✅ StreamSession created")
