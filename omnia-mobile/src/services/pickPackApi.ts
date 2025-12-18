@@ -91,21 +91,32 @@ class PickPackAPI {
    */
   async submitScan(pickId: string, upc: string): Promise<ScanResponse> {
     const url = `${this.baseURL}/api/pickpack/picks/${pickId}/scan`;
-    console.log('[PickPackAPI] Submitting scan:', url, { upc });
+    console.log('[PickPackAPI] 🚀 Submitting scan request');
+    console.log('[PickPackAPI] 📍 URL:', url);
+    console.log('[PickPackAPI] 📦 UPC:', `"${upc}"`);
+    console.log('[PickPackAPI] 📏 UPC length:', upc.length);
+    console.log('[PickPackAPI] 🔢 UPC type:', typeof upc);
 
     try {
       const body: SubmitScanRequest = { upc };
+      const bodyString = JSON.stringify(body);
+
+      console.log('[PickPackAPI] 📤 Request body:', bodyString);
 
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(body),
+        body: bodyString,
       });
+
+      console.log('[PickPackAPI] 📥 Response status:', response.status);
+      console.log('[PickPackAPI] 📥 Response ok:', response.ok);
 
       const contentType = response.headers.get('content-type');
       const isJson = contentType && contentType.includes('application/json');
+      console.log('[PickPackAPI] 📥 Content-Type:', contentType);
 
       if (!response.ok) {
         let errorMessage = `Failed to submit scan (Status: ${response.status})`;
@@ -113,6 +124,7 @@ class PickPackAPI {
         if (isJson) {
           try {
             const error: PickPackError = await response.json();
+            console.log('[PickPackAPI] ❌ Error response:', JSON.stringify(error, null, 2));
             errorMessage = error.error || errorMessage;
           } catch (e) {
             // If JSON parsing fails, use default message
@@ -136,7 +148,9 @@ class PickPackAPI {
         throw new Error('API returned non-JSON response. Please check the API endpoint.');
       }
 
-      return await response.json();
+      const responseData = await response.json();
+      console.log('[PickPackAPI] ✅ Success response:', JSON.stringify(responseData, null, 2));
+      return responseData;
     } catch (error: any) {
       console.error('Error submitting scan:', error);
       if (error.message && error.message.includes('JSON')) {

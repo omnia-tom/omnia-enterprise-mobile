@@ -17,7 +17,8 @@ import { auth, db } from '../services/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { pickPackAPI } from '../services/pickPackApi';
 import { PickOrder, PickItem } from '../types/pickPack';
-import { metaWearablesService, MetaBarcode } from '../services/metaWearables';
+import { metaWearablesService, MetaBarcode, MetaVideoFrame } from '../services/metaWearables';
+import { Image } from 'react-native';
 
 export default function PickPackScreen() {
   const navigation = useNavigation();
@@ -29,6 +30,9 @@ export default function PickPackScreen() {
   const [glassesDevice, setGlassesDevice] = useState<any>(null);
   const [isProcessingScan, setIsProcessingScan] = useState(false);
   const [isCompletingOrder, setIsCompletingOrder] = useState(false);
+  const [isStreamActive, setIsStreamActive] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [videoFrame, setVideoFrame] = useState<string | null>(null);
   const [scanFeedback, setScanFeedback] = useState<{
     type: 'success' | 'error';
     message: string;
@@ -36,6 +40,15 @@ export default function PickPackScreen() {
 
   useEffect(() => {
     loadPickOrder();
+
+    // Cleanup: stop stream when component unmounts
+    return () => {
+      if (isStreamActive) {
+        metaWearablesService.stopVideoStream().catch(err =>
+          console.error('[PickPackScreen] Error stopping stream on unmount:', err)
+        );
+      }
+    };
   }, []);
 
   // Check for connected glasses
@@ -69,30 +82,83 @@ export default function PickPackScreen() {
 
   // Listen for barcode detection from Meta glasses
   useEffect(() => {
+    console.log('[PickPackScreen] 🎧 Setting up barcode listener...');
+    console.log('[PickPackScreen] 📊 State - hasOrder:', !!pickOrder, 'hasGlasses:', hasConnectedGlasses, 'isProcessing:', isProcessingScan);
+
     const handleBarcodeDetected = async (barcode: MetaBarcode) => {
+      console.log('[PickPackScreen] 🔔 BARCODE EVENT RECEIVED!');
+      console.log('[PickPackScreen] 📦 Full barcode object:', JSON.stringify(barcode, null, 2));
+      console.log('[PickPackScreen] 📊 Current state - hasOrder:', !!pickOrder, 'hasGlasses:', hasConnectedGlasses, 'isProcessing:', isProcessingScan);
+
       // Only process if we have a pick order and glasses are connected
       if (!pickOrder || !hasConnectedGlasses || isProcessingScan) {
-        console.log('[PickPackScreen] Ignoring barcode - no order, no glasses, or already processing');
+        console.log('[PickPackScreen] ⚠️ Ignoring barcode - no order, no glasses, or already processing');
+        console.log('[PickPackScreen] Details - pickOrder:', !!pickOrder, 'hasConnectedGlasses:', hasConnectedGlasses, 'isProcessingScan:', isProcessingScan);
         return;
       }
+
+      // Debug: Log all items in the pick order
+      console.log('[PickPackScreen] 📋 All items in pick order:');
+      pickOrder.items.forEach((item, index) => {
+        console.log(`  [${index}] ${item.productName} - UPC: "${item.upc}" - Scanned: ${item.scanned}`);
+      });
 
       // Find the current item (first unscanned item)
       const currentItem = pickOrder.items.find(item => !item.scanned);
       if (!currentItem) {
-        console.log('[PickPackScreen] No current item to scan');
+        console.log('[PickPackScreen] ⚠️ No current item to scan (all items scanned?)');
         return;
       }
 
-      console.log(`[PickPackScreen] Barcode detected: ${barcode.data} (type: ${barcode.type})`);
+      console.log(`[PickPackScreen] 🏷️ Barcode detected: "${barcode.data}" (type: ${barcode.type})`);
+      console.log(`[PickPackScreen] 🎯 Expected UPC: "${currentItem.upc}" for product: "${currentItem.productName}"`);
+      console.log(`[PickPackScreen] 🔍 Barcode length: ${barcode.data.length}, Expected length: ${currentItem.upc.length}`);
+      console.log(`[PickPackScreen] 🔍 String comparison - Match: ${barcode.data === currentItem.upc}`);
+
+      // Check character by character if there's a mismatch
+      if (barcode.data !== currentItem.upc) {
+        console.log('[PickPackScreen] ❌ Mismatch detected! Character comparison:');
+        console.log(`  Scanned:  "${barcode.data}"`);
+        console.log(`  Expected: "${currentItem.upc}"`);
+        for (let i = 0; i < Math.max(barcode.data.length, currentItem.upc.length); i++) {
+          const scannedChar = barcode.data[i] || '∅';
+          const expectedChar = currentItem.upc[i] || '∅';
+          if (scannedChar !== expectedChar) {
+            console.log(`  [${i}] "${scannedChar}" vs "${expectedChar}" ❌`);
+          }
+        }
+      }
+
       setIsProcessingScan(true);
 
       try {
+        // Handle EAN-13 vs UPC-A matching
+        // If scanned code is 13 digits and expected is 12, try matching first 12 digits
+        let upcToSubmit = barcode.data;
+
+        if (barcode.data.length === 13 && currentItem.upc.length === 12) {
+          const first12Digits = barcode.data.substring(0, 12);
+          console.log('[PickPackScreen] 🔄 EAN-13 detected, converting to UPC-A for comparison');
+          console.log(`[PickPackScreen] 🔄 Original EAN-13: "${barcode.data}"`);
+          console.log(`[PickPackScreen] 🔄 First 12 digits: "${first12Digits}"`);
+          console.log(`[PickPackScreen] 🔄 Expected UPC-A: "${currentItem.upc}"`);
+
+          if (first12Digits === currentItem.upc) {
+            console.log('[PickPackScreen] ✅ Match found using first 12 digits!');
+            upcToSubmit = first12Digits;
+          } else {
+            console.log('[PickPackScreen] ❌ No match even with first 12 digits');
+          }
+        }
+
         // Submit scan to API for validation
-        const response = await pickPackAPI.submitScan(pickOrder.id, barcode.data);
+        console.log(`[PickPackScreen] 📡 Submitting scan - pickOrderId: ${pickOrder.id}, upc: "${upcToSubmit}"`);
+        const response = await pickPackAPI.submitScan(pickOrder.id, upcToSubmit);
+        console.log('[PickPackScreen] 📥 API Response:', JSON.stringify(response, null, 2));
 
         if (response.success) {
           // Success - provide positive feedback
-          console.log('[PickPackScreen] Scan successful!');
+          console.log('[PickPackScreen] ✅ Scan successful!');
           Vibration.vibrate([0, 100, 50, 100]); // Double vibration for success
 
           setScanFeedback({
@@ -118,7 +184,8 @@ export default function PickPackScreen() {
 
         } else {
           // Error - wrong item or invalid UPC
-          console.log('[PickPackScreen] Scan failed:', response.message);
+          console.log('[PickPackScreen] ❌ Scan failed:', response.message);
+          console.log(`[PickPackScreen] 🔍 Scanned: "${barcode.data}" vs Expected: "${currentItem.upc}"`);
           Vibration.vibrate([0, 200, 100, 200, 100, 200]); // Triple vibration for error
 
           setScanFeedback({
@@ -148,14 +215,23 @@ export default function PickPackScreen() {
       }
     };
 
-    // Subscribe to barcode events
+    const handleVideoFrame = (frame: MetaVideoFrame) => {
+      // Only update preview if user wants to see it
+      if (showPreview) {
+        setVideoFrame(frame.data);
+      }
+    };
+
+    // Subscribe to barcode and video frame events
     metaWearablesService.addEventListener('barcodeDetected', handleBarcodeDetected);
+    metaWearablesService.addEventListener('videoFrame', handleVideoFrame);
 
     // Cleanup
     return () => {
       metaWearablesService.removeEventListener('barcodeDetected', handleBarcodeDetected);
+      metaWearablesService.removeEventListener('videoFrame', handleVideoFrame);
     };
-  }, [pickOrder, hasConnectedGlasses, isProcessingScan]);
+  }, [pickOrder, hasConnectedGlasses, isProcessingScan, showPreview]);
 
   const loadPickOrder = async () => {
     try {
@@ -193,6 +269,29 @@ export default function PickPackScreen() {
     loadPickOrder();
   };
 
+  const startScanning = async () => {
+    try {
+      console.log('[PickPackScreen] Starting background video stream for scanning');
+      await metaWearablesService.startVideoStream();
+      setIsStreamActive(true);
+      console.log('[PickPackScreen] Video stream started - barcode detection active');
+    } catch (error: any) {
+      console.error('[PickPackScreen] Failed to start video stream:', error);
+      Alert.alert('Error', 'Failed to start scanning. Please ensure your glasses are connected.');
+    }
+  };
+
+  const stopScanning = async () => {
+    try {
+      console.log('[PickPackScreen] Stopping video stream');
+      await metaWearablesService.stopVideoStream();
+      setIsStreamActive(false);
+      console.log('[PickPackScreen] Video stream stopped');
+    } catch (error: any) {
+      console.error('[PickPackScreen] Failed to stop video stream:', error);
+    }
+  };
+
   // Check if all items are scanned and trigger completion
   useEffect(() => {
     if (!pickOrder || isCompletingOrder) return;
@@ -218,6 +317,12 @@ export default function PickPackScreen() {
       if (response.success) {
         console.log('[PickPackScreen] Order completed successfully');
         Vibration.vibrate([0, 100, 50, 100, 50, 100]); // Triple vibration for completion
+
+        // Stop scanning if active
+        if (isStreamActive) {
+          await metaWearablesService.stopVideoStream();
+          setIsStreamActive(false);
+        }
 
         // Update local state to mark as completed
         setPickOrder({
@@ -268,18 +373,44 @@ export default function PickPackScreen() {
 
     return (
       <View style={styles.currentItemCard}>
-        <Text style={styles.currentItemLabel}>Current Item:</Text>
-        <Text style={styles.currentItemName}>📦 {currentItem.productName}</Text>
-        <Text style={styles.currentItemQuantity}>Quantity: {currentItem.quantity}</Text>
-        <View style={styles.locationContainer}>
-          <Text style={styles.locationLabel}>Location:</Text>
-          <Text style={styles.locationText}>
-            Aisle {currentItem.location.aisle}, Shelf {currentItem.location.shelf}
-          </Text>
-          <Text style={styles.locationText}>Bin {currentItem.location.bin}</Text>
+        {/* Large "Find" prompt */}
+        <View style={styles.findPromptContainer}>
+          <Text style={styles.findLabel}>FIND:</Text>
+          <Text style={styles.findItemName}>{currentItem.productName}</Text>
         </View>
+
+        {/* Item details */}
+        <View style={styles.itemDetailsRow}>
+          <View style={styles.itemDetailBadge}>
+            <Text style={styles.itemDetailLabel}>Qty</Text>
+            <Text style={styles.itemDetailValue}>{currentItem.quantity}</Text>
+          </View>
+          <View style={styles.itemDetailBadge}>
+            <Text style={styles.itemDetailLabel}>Aisle</Text>
+            <Text style={styles.itemDetailValue}>{currentItem.location.aisle}</Text>
+          </View>
+          <View style={styles.itemDetailBadge}>
+            <Text style={styles.itemDetailLabel}>Shelf</Text>
+            <Text style={styles.itemDetailValue}>{currentItem.location.shelf}</Text>
+          </View>
+          <View style={styles.itemDetailBadge}>
+            <Text style={styles.itemDetailLabel}>Bin</Text>
+            <Text style={styles.itemDetailValue}>{currentItem.location.bin}</Text>
+          </View>
+        </View>
+
+        {/* Scanning status and feedback */}
         <View style={styles.scanPromptContainer}>
-          {!scanFeedback && <Text style={styles.scanPromptText}>👓 Ready to scan with glasses</Text>}
+          {isStreamActive && !scanFeedback && (
+            <View style={styles.scanningIndicator}>
+              <Text style={styles.scanningDot}>🔴</Text>
+              <Text style={styles.scanningText}>Scanning active - point glasses at barcode</Text>
+            </View>
+          )}
+
+          {!isStreamActive && !scanFeedback && (
+            <Text style={styles.scanPromptText}>👓 Tap below to start scanning</Text>
+          )}
 
           {scanFeedback && (
             <View style={[
@@ -290,27 +421,47 @@ export default function PickPackScreen() {
             </View>
           )}
 
+          {/* Start/Stop Scanning Button */}
           <TouchableOpacity
             style={styles.startScanButton}
-            onPress={() => {
-              if (glassesDevice) {
-                navigation.navigate('BLEConnection' as never, {
-                  deviceId: glassesDevice.id,
-                  deviceName: glassesDevice.name || 'Smart Glasses',
-                } as never);
-              }
-            }}
+            onPress={isStreamActive ? stopScanning : startScanning}
           >
             <LinearGradient
-              colors={['#10B981', '#059669']}
+              colors={isStreamActive ? ['#EF4444', '#DC2626'] : ['#10B981', '#059669']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.startScanButtonGradient}
             >
-              <Text style={styles.startScanButtonText}>Connect & Start Scanning</Text>
+              <Text style={styles.startScanButtonText}>
+                {isStreamActive ? '⏹ Stop Scanning' : '▶ Start Scanning'}
+              </Text>
             </LinearGradient>
           </TouchableOpacity>
+
+          {/* Preview Toggle Button (only show if stream is active) */}
+          {isStreamActive && (
+            <TouchableOpacity
+              style={styles.previewToggleButton}
+              onPress={() => setShowPreview(!showPreview)}
+            >
+              <Text style={styles.previewToggleText}>
+                {showPreview ? '📱 Hide Preview' : '👁️ Show Preview'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
+
+        {/* Video Stream Preview */}
+        {showPreview && isStreamActive && videoFrame && (
+          <View style={styles.videoPreviewContainer}>
+            <Text style={styles.videoPreviewTitle}>Glasses View:</Text>
+            <Image
+              source={{ uri: `data:image/jpeg;base64,${videoFrame}` }}
+              style={styles.videoPreview}
+              resizeMode="contain"
+            />
+          </View>
+        )}
       </View>
     );
   };
@@ -599,6 +750,76 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     marginTop: 2,
   },
+  // Find Prompt (large display)
+  findPromptContainer: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  findLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  findItemName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1F2937',
+    textAlign: 'center',
+  },
+  // Item Details Row
+  itemDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 8,
+  },
+  itemDetailBadge: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  itemDetailLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+  },
+  itemDetailValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  // Scanning Indicator
+  scanningIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DBEAFE',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    width: '100%',
+    justifyContent: 'center',
+  },
+  scanningDot: {
+    fontSize: 12,
+    marginRight: 8,
+  },
+  scanningText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E40AF',
+  },
   scanPromptContainer: {
     backgroundColor: '#EEF2FF',
     padding: 12,
@@ -635,6 +856,40 @@ const styles = StyleSheet.create({
   scanPromptSubtext: {
     fontSize: 12,
     color: '#9CA3AF',
+  },
+  // Preview Toggle
+  previewToggleButton: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  previewToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4B5563',
+    textAlign: 'center',
+  },
+  // Video Preview
+  videoPreviewContainer: {
+    marginTop: 16,
+    backgroundColor: '#000000',
+    borderRadius: 12,
+    padding: 12,
+  },
+  videoPreviewTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  videoPreview: {
+    width: '100%',
+    height: 400,
+    borderRadius: 8,
   },
   // Item List
   itemListContainer: {

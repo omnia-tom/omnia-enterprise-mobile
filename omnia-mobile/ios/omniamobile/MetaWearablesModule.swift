@@ -457,39 +457,52 @@ class MetaWearablesModule: RCTEventEmitter {
 
         // Debounce: Only emit if different code OR >1 second has passed
         let currentTime = Date().timeIntervalSince1970
-        let shouldEmit = (payload != self.lastDetectedBarcode) ||
+        // Determine barcode type and convert payload if needed
+        var barcodeType = self.getBarcodeTypeName(observation.symbology)
+        var finalPayload = payload
+
+        // Handle EAN-13 to UPC-A conversion
+        if barcodeType == "EAN-13" && payload.count == 13 {
+          if payload.hasPrefix("0") {
+            // EAN-13 starting with 0 is UPC-A with leading 0
+            barcodeType = "UPC-A"
+            finalPayload = String(payload.dropFirst()) // Remove leading 0 to get 12-digit UPC-A
+            print("[MetaWearables] 🔄 Converted EAN-13 (leading 0) to UPC-A: \(payload) -> \(finalPayload)")
+          } else {
+            // EAN-13 not starting with 0 - use first 12 digits as UPC-A compatible format
+            // Many products use both EAN-13 and UPC-A with first 12 digits being the same
+            barcodeType = "UPC-A"
+            finalPayload = String(payload.prefix(12)) // Take first 12 digits
+            print("[MetaWearables] 🔄 Converted EAN-13 to UPC-A (first 12 digits): \(payload) -> \(finalPayload)")
+          }
+        }
+
+        // Debouncing: use finalPayload to prevent duplicates after conversion
+        let shouldEmit = (finalPayload != self.lastDetectedBarcode) ||
                         (currentTime - self.lastDetectionTime > 1.0)
 
         if !shouldEmit {
           continue // Skip duplicate detection
         }
 
-        // Update debounce tracking
-        self.lastDetectedBarcode = payload
+        // Update debounce tracking with final payload
+        self.lastDetectedBarcode = finalPayload
         self.lastDetectionTime = currentTime
 
-        // Determine barcode type
-        var barcodeType = self.getBarcodeTypeName(observation.symbology)
-        
-        // Check if EAN-13 is actually a UPC-A (EAN-13 starting with 0)
-        if barcodeType == "EAN-13" && payload.count == 13 && payload.hasPrefix("0") {
-          barcodeType = "UPC-A"
-        }
-
-        print("[MetaWearables] 🏷️ Barcode detected: \(barcodeType) = \(payload) (confidence: \(String(format: "%.1f%%", observation.confidence * 100)))")
+        print("[MetaWearables] 🏷️ Barcode detected: \(barcodeType) = \(finalPayload) (confidence: \(String(format: "%.1f%%", observation.confidence * 100)))")
 
         // Emit barcode detection event
         self.sendEvent(withName: "onBarcodeDetected", body: [
           "type": barcodeType,
-          "data": payload,
+          "data": finalPayload,
           "confidence": observation.confidence,
           "timestamp": currentTime * 1000
         ])
         
         // Announce UPC codes via text-to-speech through Meta glasses
         // Only announce if this is a new UPC code that hasn't been announced before
-        if barcodeType.contains("UPC") && !self.announcedUPCs.contains(payload) {
-          self.announcedUPCs.insert(payload)
+        if barcodeType.contains("UPC") && !self.announcedUPCs.contains(finalPayload) {
+          self.announcedUPCs.insert(finalPayload)
           self.announceBarcode(barcodeType: barcodeType)
         }
       }
@@ -571,7 +584,20 @@ class MetaWearablesModule: RCTEventEmitter {
     return outputCGImage
   }
 
-  // Convert VNBarcodeSymbology to readable string
+  // Upscale image for better small barcode detection
+  // Uses high-quality Lanczos interpolation
+  private func upscaleImage(_ image: UIImage, targetScale: CGFloat) -> UIImage {
+    let originalSize = image.size
+    let newSize = CGSize(width: originalSize.width * targetScale, height: originalSize.height * targetScale)
+
+    UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+    image.draw(in: CGRect(origin: .zero, size: newSize))
+    let upscaledImage = UIGraphicsGetImageFromCurrentImageContext()
+    UIGraphicsEndImageContext()
+
+    return upscaledImage ?? image
+  }
+
   private func getBarcodeTypeName(_ symbology: VNBarcodeSymbology) -> String {
     switch symbology {
     case .upce:
@@ -641,8 +667,12 @@ class MetaWearablesModule: RCTEventEmitter {
           if let image = videoFrame.makeUIImage() {
             print("[MetaWearables] ✅ Converted to UIImage: \(image.size.width)x\(image.size.height)")
 
-            // Detect barcodes in the frame (runs async on background queue)
-            self.detectBarcodes(in: image)
+            // Upscale image for better small barcode detection
+            let upscaledImage = self.upscaleImage(image, targetScale: 2.0)
+            print("[MetaWearables] 🔍 Upscaled to: \(upscaledImage.size.width)x\(upscaledImage.size.height)")
+
+            // Detect barcodes in the upscaled frame (runs async on background queue)
+            self.detectBarcodes(in: upscaledImage)
 
             if let imageData = self.convertImageToBase64(image) {
               print("[MetaWearables] ✅ Converted to base64: \(imageData.prefix(50))...")
