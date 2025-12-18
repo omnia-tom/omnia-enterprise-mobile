@@ -7,22 +7,155 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  TouchableOpacity,
+  Vibration,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { auth } from '../services/firebase';
+import { useNavigation } from '@react-navigation/native';
+import { auth, db } from '../services/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { pickPackAPI } from '../services/pickPackApi';
 import { PickOrder, PickItem } from '../types/pickPack';
+import { metaWearablesService, MetaBarcode } from '../services/metaWearables';
 
 export default function PickPackScreen() {
+  const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pickOrder, setPickOrder] = useState<PickOrder | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hasConnectedGlasses, setHasConnectedGlasses] = useState(false);
+  const [glassesDevice, setGlassesDevice] = useState<any>(null);
+  const [isProcessingScan, setIsProcessingScan] = useState(false);
+  const [isCompletingOrder, setIsCompletingOrder] = useState(false);
+  const [scanFeedback, setScanFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     loadPickOrder();
   }, []);
+
+  // Check for connected glasses
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+
+    // Listen for devices owned by this user that are online
+    const devicesQuery = query(
+      collection(db, 'devices'),
+      where('userId', '==', userId),
+      where('status', '==', 'online')
+    );
+
+    const unsubscribe = onSnapshot(devicesQuery, (snapshot) => {
+      const devices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      if (devices.length > 0) {
+        setHasConnectedGlasses(true);
+        setGlassesDevice(devices[0]); // Use first connected device
+        console.log('[PickPackScreen] Connected glasses found:', devices[0]);
+      } else {
+        setHasConnectedGlasses(false);
+        setGlassesDevice(null);
+        console.log('[PickPackScreen] No connected glasses');
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Listen for barcode detection from Meta glasses
+  useEffect(() => {
+    const handleBarcodeDetected = async (barcode: MetaBarcode) => {
+      // Only process if we have a pick order and glasses are connected
+      if (!pickOrder || !hasConnectedGlasses || isProcessingScan) {
+        console.log('[PickPackScreen] Ignoring barcode - no order, no glasses, or already processing');
+        return;
+      }
+
+      // Find the current item (first unscanned item)
+      const currentItem = pickOrder.items.find(item => !item.scanned);
+      if (!currentItem) {
+        console.log('[PickPackScreen] No current item to scan');
+        return;
+      }
+
+      console.log(`[PickPackScreen] Barcode detected: ${barcode.data} (type: ${barcode.type})`);
+      setIsProcessingScan(true);
+
+      try {
+        // Submit scan to API for validation
+        const response = await pickPackAPI.submitScan(pickOrder.id, barcode.data);
+
+        if (response.success) {
+          // Success - provide positive feedback
+          console.log('[PickPackScreen] Scan successful!');
+          Vibration.vibrate([0, 100, 50, 100]); // Double vibration for success
+
+          setScanFeedback({
+            type: 'success',
+            message: `✓ ${currentItem.productName} scanned!`,
+          });
+
+          // Update the pick order to mark item as scanned
+          setPickOrder({
+            ...pickOrder,
+            items: pickOrder.items.map(item =>
+              item.productId === currentItem.productId
+                ? { ...item, scanned: true, scannedAt: new Date() }
+                : item
+            ),
+          });
+
+          // Auto-advance to next item after 2 seconds
+          setTimeout(() => {
+            setScanFeedback(null);
+            setIsProcessingScan(false);
+          }, 2000);
+
+        } else {
+          // Error - wrong item or invalid UPC
+          console.log('[PickPackScreen] Scan failed:', response.message);
+          Vibration.vibrate([0, 200, 100, 200, 100, 200]); // Triple vibration for error
+
+          setScanFeedback({
+            type: 'error',
+            message: response.message || '✗ Wrong item scanned',
+          });
+
+          // Clear error feedback after 3 seconds
+          setTimeout(() => {
+            setScanFeedback(null);
+            setIsProcessingScan(false);
+          }, 3000);
+        }
+      } catch (error: any) {
+        console.error('[PickPackScreen] Error validating scan:', error);
+        Vibration.vibrate([0, 200, 100, 200, 100, 200]);
+
+        setScanFeedback({
+          type: 'error',
+          message: '✗ Scan validation failed',
+        });
+
+        setTimeout(() => {
+          setScanFeedback(null);
+          setIsProcessingScan(false);
+        }, 3000);
+      }
+    };
+
+    // Subscribe to barcode events
+    metaWearablesService.addEventListener('barcodeDetected', handleBarcodeDetected);
+
+    // Cleanup
+    return () => {
+      metaWearablesService.removeEventListener('barcodeDetected', handleBarcodeDetected);
+    };
+  }, [pickOrder, hasConnectedGlasses, isProcessingScan]);
 
   const loadPickOrder = async () => {
     try {
@@ -58,6 +191,53 @@ export default function PickPackScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     loadPickOrder();
+  };
+
+  // Check if all items are scanned and trigger completion
+  useEffect(() => {
+    if (!pickOrder || isCompletingOrder) return;
+
+    const allScanned = pickOrder.items.every(item => item.scanned);
+    const isComplete = pickOrder.status === 'completed';
+
+    // If all items are scanned but order is not marked complete, complete it
+    if (allScanned && !isComplete) {
+      handleOrderCompletion();
+    }
+  }, [pickOrder, isCompletingOrder]);
+
+  const handleOrderCompletion = async () => {
+    if (!pickOrder || isCompletingOrder) return;
+
+    setIsCompletingOrder(true);
+
+    try {
+      console.log('[PickPackScreen] All items scanned - completing order');
+      const response = await pickPackAPI.completePickOrder(pickOrder.id);
+
+      if (response.success) {
+        console.log('[PickPackScreen] Order completed successfully');
+        Vibration.vibrate([0, 100, 50, 100, 50, 100]); // Triple vibration for completion
+
+        // Update local state to mark as completed
+        setPickOrder({
+          ...pickOrder,
+          status: 'completed',
+          completedAt: new Date(),
+        });
+
+        Alert.alert(
+          'Order Complete! 🎉',
+          `Pick order completed successfully! Great work.`,
+          [{ text: 'OK', onPress: () => loadPickOrder() }]
+        );
+      }
+    } catch (error: any) {
+      console.error('[PickPackScreen] Error completing order:', error);
+      Alert.alert('Error', 'Failed to complete order. Please try again.');
+    } finally {
+      setIsCompletingOrder(false);
+    }
   };
 
   const renderProgress = () => {
@@ -99,8 +279,37 @@ export default function PickPackScreen() {
           <Text style={styles.locationText}>Bin {currentItem.location.bin}</Text>
         </View>
         <View style={styles.scanPromptContainer}>
-          <Text style={styles.scanPromptText}>👓 Connect glasses to scan</Text>
-          <Text style={styles.scanPromptSubtext}>Scanning will be enabled in Phase 2</Text>
+          {!scanFeedback && <Text style={styles.scanPromptText}>👓 Ready to scan with glasses</Text>}
+
+          {scanFeedback && (
+            <View style={[
+              styles.scanFeedbackBanner,
+              scanFeedback.type === 'success' ? styles.scanFeedbackSuccess : styles.scanFeedbackError
+            ]}>
+              <Text style={styles.scanFeedbackText}>{scanFeedback.message}</Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={styles.startScanButton}
+            onPress={() => {
+              if (glassesDevice) {
+                navigation.navigate('BLEConnection' as never, {
+                  deviceId: glassesDevice.id,
+                  deviceName: glassesDevice.name || 'Smart Glasses',
+                } as never);
+              }
+            }}
+          >
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.startScanButtonGradient}
+            >
+              <Text style={styles.startScanButtonText}>Connect & Start Scanning</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -201,10 +410,42 @@ export default function PickPackScreen() {
       );
     }
 
+    // Check if glasses are connected before showing pick order
+    if (!hasConnectedGlasses) {
+      return (
+        <View style={styles.centerContainer}>
+          <Text style={styles.glassesIcon}>👓</Text>
+          <Text style={styles.glassesTitle}>Connect Your Glasses</Text>
+          <Text style={styles.glassesText}>
+            To start picking, please connect your smart glasses first.
+          </Text>
+          <TouchableOpacity
+            style={styles.connectButton}
+            onPress={() => navigation.navigate('Home' as never)}
+          >
+            <LinearGradient
+              colors={['#6366F1', '#8B5CF6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.connectButtonGradient}
+            >
+              <Text style={styles.connectButtonText}>Go to Devices</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // Extract last 6 characters of pick ID for display
+    const shortId = pickOrder.id.slice(-6).toUpperCase();
+
     return (
       <View style={styles.contentContainer}>
         <View style={styles.orderHeader}>
-          <Text style={styles.orderIdText}>Pick Order #{pickOrder.id}</Text>
+          <View style={styles.orderTitleContainer}>
+            <Text style={styles.orderIdText}>Pick Order</Text>
+            <Text style={styles.orderShortId}>#{shortId}</Text>
+          </View>
           <View style={styles.statusBadge}>
             <Text style={styles.statusBadgeText}>
               {pickOrder.status.replace('_', ' ').toUpperCase()}
@@ -370,6 +611,27 @@ const styles = StyleSheet.create({
     color: '#6366F1',
     marginBottom: 4,
   },
+  scanFeedbackBanner: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    width: '100%',
+  },
+  scanFeedbackSuccess: {
+    backgroundColor: '#D1FAE5',
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  scanFeedbackError: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
+  scanFeedbackText: {
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   scanPromptSubtext: {
     fontSize: 12,
     color: '#9CA3AF',
@@ -505,5 +767,80 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     marginTop: 4,
+  },
+  // Connect Glasses
+  glassesIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  glassesTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  glassesText: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  connectButton: {
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  connectButtonGradient: {
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connectButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Order Header
+  orderTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  orderShortId: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  // Start Scanning Button
+  startScanButton: {
+    marginTop: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  startScanButtonGradient: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  startScanButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
