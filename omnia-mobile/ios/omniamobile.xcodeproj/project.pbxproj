@@ -8,6 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		1F776EFE2EF24FE50048F66C /* MWDATCamera in Frameworks */ = {isa = PBXBuildFile; productRef = 1F776EFD2EF24FE50048F66C /* MWDATCamera */; };
+		1F776F002EF24FE50048F66C /* MWDATCore in Frameworks */ = {isa = PBXBuildFile; productRef = 1F776EFF2EF24FE50048F66C /* MWDATCore */; };
+		1F776F022EF24FE50048F66C /* MWDATMockDevice in Frameworks */ = {isa = PBXBuildFile; productRef = 1F776F012EF24FE50048F66C /* MWDATMockDevice */; };
+		1F776F0D2EF25EF00048F66C /* MetaWearablesModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F776F0C2EF25EF00048F66C /* MetaWearablesModule.swift */; };
+		1F776F0E2EF25EF00048F66C /* MetaWearablesModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 1F776F0B2EF25EF00048F66C /* MetaWearablesModule.m */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		629B8CD18B98B4AAE7D7C62D /* libPods-omniamobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FB5D2DF71CCA0B62A9C2A75 /* libPods-omniamobile.a */; };
 		85B5724E8C9464124DB8A1E5 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C8D831C425A594831373957 /* ExpoModulesProvider.swift */; };
@@ -19,11 +24,13 @@
 /* Begin PBXFileReference section */
 		073AEFCC916D93769343923C /* Pods-omniamobile.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-omniamobile.release.xcconfig"; path = "Target Support Files/Pods-omniamobile/Pods-omniamobile.release.xcconfig"; sourceTree = "<group>"; };
 		0FB5D2DF71CCA0B62A9C2A75 /* libPods-omniamobile.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-omniamobile.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		13B07F961A680F5B00A75B9A /* omniamobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = omniamobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07F961A680F5B00A75B9A /* Omnia.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Omnia.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = omniamobile/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = omniamobile/Info.plist; sourceTree = "<group>"; };
+		1F776F0B2EF25EF00048F66C /* MetaWearablesModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = MetaWearablesModule.m; path = omniamobile/MetaWearablesModule.m; sourceTree = "<group>"; };
+		1F776F0C2EF25EF00048F66C /* MetaWearablesModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MetaWearablesModule.swift; path = omniamobile/MetaWearablesModule.swift; sourceTree = "<group>"; };
 		4C8D831C425A594831373957 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-omniamobile/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		61C18486CAD6D280C89C3D6C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = omniamobile/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		61C18486CAD6D280C89C3D6C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = omniamobile/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = omniamobile/SplashScreen.storyboard; sourceTree = "<group>"; };
 		B1D9DC95FAFEE0AF8CCDCD3B /* Pods-omniamobile.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-omniamobile.debug.xcconfig"; path = "Target Support Files/Pods-omniamobile/Pods-omniamobile.debug.xcconfig"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
@@ -38,6 +45,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				629B8CD18B98B4AAE7D7C62D /* libPods-omniamobile.a in Frameworks */,
+				1F776F002EF24FE50048F66C /* MWDATCore in Frameworks */,
+				1F776F022EF24FE50048F66C /* MWDATMockDevice in Frameworks */,
+				1F776EFE2EF24FE50048F66C /* MWDATCamera in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -47,6 +57,8 @@
 		13B07FAE1A68108700A75B9A /* omniamobile */ = {
 			isa = PBXGroup;
 			children = (
+				1F776F0B2EF25EF00048F66C /* MetaWearablesModule.m */,
+				1F776F0C2EF25EF00048F66C /* MetaWearablesModule.swift */,
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
 				F11748442D0722820044C1D9 /* omniamobile-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
@@ -92,7 +104,7 @@
 		83CBBA001A601CBA00E9B192 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				13B07F961A680F5B00A75B9A /* omniamobile.app */,
+				13B07F961A680F5B00A75B9A /* Omnia.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -111,7 +123,6 @@
 				B1D9DC95FAFEE0AF8CCDCD3B /* Pods-omniamobile.debug.xcconfig */,
 				073AEFCC916D93769343923C /* Pods-omniamobile.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -154,7 +165,7 @@
 			);
 			name = omniamobile;
 			productName = omniamobile;
-			productReference = 13B07F961A680F5B00A75B9A /* omniamobile.app */;
+			productReference = 13B07F961A680F5B00A75B9A /* Omnia.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -179,6 +190,9 @@
 				Base,
 			);
 			mainGroup = 83CBB9F61A601CBA00E9B192;
+			packageReferences = (
+				1F776EFC2EF24FE50048F66C /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */,
+			);
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -329,6 +343,8 @@
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
 				85B5724E8C9464124DB8A1E5 /* ExpoModulesProvider.swift in Sources */,
+				1F776F0D2EF25EF00048F66C /* MetaWearablesModule.swift in Sources */,
+				1F776F0E2EF25EF00048F66C /* MetaWearablesModule.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -543,6 +559,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		1F776EFC2EF24FE50048F66C /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/facebook/meta-wearables-dat-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.3.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1F776EFD2EF24FE50048F66C /* MWDATCamera */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1F776EFC2EF24FE50048F66C /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATCamera;
+		};
+		1F776EFF2EF24FE50048F66C /* MWDATCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1F776EFC2EF24FE50048F66C /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATCore;
+		};
+		1F776F012EF24FE50048F66C /* MWDATMockDevice */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1F776EFC2EF24FE50048F66C /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATMockDevice;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 83CBB9F71A601CBA00E9B192 /* Project object */;
 }

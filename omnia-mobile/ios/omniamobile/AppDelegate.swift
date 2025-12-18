@@ -1,6 +1,7 @@
 import Expo
 import React
 import ReactAppDependencyProvider
+import MWDATCore
 
 @UIApplicationMain
 public class AppDelegate: ExpoAppDelegate {
@@ -13,6 +14,8 @@ public class AppDelegate: ExpoAppDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
+    print("[AppDelegate] didFinishLaunchingWithOptions called")
+
     let delegate = ReactNativeDelegate()
     let factory = ExpoReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
@@ -38,6 +41,25 @@ public class AppDelegate: ExpoAppDelegate {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
+    print("[AppDelegate] Received URL: \(url.absoluteString)")
+    print("[AppDelegate] URL scheme: \(url.scheme ?? "none")")
+    print("[AppDelegate] URL host: \(url.host ?? "none")")
+
+    // Handle Meta Wearables callback URLs
+    // Check if it's our app scheme and contains Meta Wearables action
+    if url.scheme == "com.omnia.mobileenterprise" || url.absoluteString.contains("metaWearablesAction") {
+      print("[AppDelegate] Detected Meta Wearables callback URL")
+      Task {
+        do {
+          _ = try await Wearables.shared.handleUrl(url)
+          print("[AppDelegate] ✅ Successfully handled Meta Wearables URL")
+        } catch {
+          print("[AppDelegate] ❌ Failed to handle Meta Wearables URL: \(error)")
+        }
+      }
+      return true
+    }
+
     return super.application(app, open: url, options: options) || RCTLinkingManager.application(app, open: url, options: options)
   }
 
@@ -47,6 +69,12 @@ public class AppDelegate: ExpoAppDelegate {
     continue userActivity: NSUserActivity,
     restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
   ) -> Bool {
+    print("[AppDelegate] continue userActivity called")
+    print("[AppDelegate] Activity type: \(userActivity.activityType)")
+    if let url = userActivity.webpageURL {
+      print("[AppDelegate] Universal Link URL: \(url.absoluteString)")
+    }
+
     let result = RCTLinkingManager.application(application, continue: userActivity, restorationHandler: restorationHandler)
     return super.application(application, continue: userActivity, restorationHandler: restorationHandler) || result
   }
