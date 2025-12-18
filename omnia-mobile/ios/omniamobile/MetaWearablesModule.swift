@@ -409,8 +409,11 @@ class MetaWearablesModule: RCTEventEmitter {
     await MainActor.run {
       guard let wearables = self.wearables,
             let deviceSelector = self.deviceSelector else {
+        print("[MetaWearables] ❌ Cannot setup stream - wearables or deviceSelector is nil")
         return
       }
+
+      print("[MetaWearables] 📹 Setting up stream session...")
 
       // Create StreamSession with configuration - must be on MainActor
       let config = StreamSessionConfig(
@@ -418,38 +421,60 @@ class MetaWearablesModule: RCTEventEmitter {
         resolution: StreamingResolution.low,
         frameRate: 24
       )
+
+      print("[MetaWearables] Config: codec=raw, resolution=low, fps=24")
+
       streamSession = StreamSession(streamSessionConfig: config, deviceSelector: deviceSelector)
+      print("[MetaWearables] ✅ StreamSession created")
 
       // Subscribe to video frames
+      print("[MetaWearables] 📡 Subscribing to video frame publisher...")
       videoFrameListenerToken = streamSession?.videoFramePublisher.listen { [weak self] videoFrame in
         Task { @MainActor [weak self] in
           guard let self = self else { return }
 
+          print("[MetaWearables] 🎥 Received video frame!")
+
           // Convert VideoFrame to UIImage then to base64
-          if let image = videoFrame.makeUIImage(),
-             let imageData = self.convertImageToBase64(image) {
-            self.sendEvent(withName: "onVideoFrame", body: [
-              "data": imageData,
-              "timestamp": Date().timeIntervalSince1970 * 1000,
-              "width": Int(image.size.width),
-              "height": Int(image.size.height)
-            ])
+          if let image = videoFrame.makeUIImage() {
+            print("[MetaWearables] ✅ Converted to UIImage: \(image.size.width)x\(image.size.height)")
+
+            if let imageData = self.convertImageToBase64(image) {
+              print("[MetaWearables] ✅ Converted to base64: \(imageData.prefix(50))...")
+
+              self.sendEvent(withName: "onVideoFrame", body: [
+                "data": imageData,
+                "timestamp": Date().timeIntervalSince1970 * 1000,
+                "width": Int(image.size.width),
+                "height": Int(image.size.height)
+              ])
+            } else {
+              print("[MetaWearables] ❌ Failed to convert image to base64")
+            }
+          } else {
+            print("[MetaWearables] ❌ Failed to convert VideoFrame to UIImage")
           }
         }
       }
+      print("[MetaWearables] ✅ Video frame listener registered")
 
       // Subscribe to errors
+      print("[MetaWearables] 📡 Subscribing to error publisher...")
       errorListenerToken = streamSession?.errorPublisher.listen { [weak self] error in
         Task { @MainActor [weak self] in
           guard let self = self else { return }
 
+          print("[MetaWearables] ⚠️ Stream error received: \(error)")
           let errorMessage = self.formatStreamingError(error)
+          print("[MetaWearables] Formatted error: \(errorMessage)")
+
           self.sendEvent(withName: "onError", body: [
             "code": "STREAMING_ERROR",
             "message": errorMessage
           ])
         }
       }
+      print("[MetaWearables] ✅ Error listener registered")
 
       // Subscribe to photo capture results
       photoDataListenerToken = streamSession?.photoDataPublisher.listen { [weak self] photoData in
@@ -483,29 +508,60 @@ class MetaWearablesModule: RCTEventEmitter {
         return
       }
 
+      print("[MetaWearables] 🎬 startVideoStream called")
+
       // Check and request camera permission
       do {
         let permission = Permission.camera
+        print("[MetaWearables] 🔐 Checking camera permission...")
         let status = try await wearables.checkPermissionStatus(permission)
+        print("[MetaWearables] Permission status: \(status)")
 
         if status != .granted {
+          print("[MetaWearables] 📱 Requesting camera permission from Meta AI...")
           let requestStatus = try await wearables.requestPermission(permission)
+          print("[MetaWearables] Permission request result: \(requestStatus)")
+
           if requestStatus != .granted {
+            print("[MetaWearables] ❌ Camera permission denied")
             reject("PERMISSION_DENIED", "Camera permission denied", nil)
             return
           }
         }
 
+        print("[MetaWearables] ✅ Camera permission granted")
+
         // Set up stream session if not already done
         if self.streamSession == nil {
+          print("[MetaWearables] 🔧 Setting up stream session...")
           await self.setupStreamSession()
+
+          if self.streamSession == nil {
+            print("[MetaWearables] ❌ Failed to create stream session")
+            reject("SETUP_FAILED", "Failed to create stream session", nil)
+            return
+          }
+        } else {
+          print("[MetaWearables] ♻️ Using existing stream session")
         }
 
         // Start streaming
+        print("[MetaWearables] ▶️ Starting stream session...")
         await self.streamSession?.start()
+        print("[MetaWearables] ✅ Stream session start() called - waiting for frames...")
+
+        // Log device selector state
+        if let deviceSelector = self.deviceSelector {
+          print("[MetaWearables] 📱 Device selector is configured")
+        } else {
+          print("[MetaWearables] ⚠️ WARNING: Device selector is nil!")
+        }
+
         resolve(nil)
 
       } catch {
+        print("[MetaWearables] ❌ Error starting video stream: \(error)")
+        print("[MetaWearables] Error details: \(error.localizedDescription)")
         reject("VIDEO_STREAM_ERROR", error.localizedDescription, error)
       }
     }

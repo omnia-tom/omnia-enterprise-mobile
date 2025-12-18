@@ -10,6 +10,7 @@ import {
   PermissionsAndroid,
   Platform,
   TextInput,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -28,6 +29,7 @@ import {
 import { storeConnectedDevices, sendMessageToGlasses } from '../services/glassesMessaging';
 import { chatAPI } from '../services/chatApi';
 import { ArmConnectionState, GlassesConnectionState } from '../types';
+import { metaWearablesService, MetaDevice } from '../services/metaWearables';
 
 interface BLEConnectionScreenParams {
   deviceId: string;
@@ -103,6 +105,37 @@ export default function BLEConnectionScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const audioBufferRef = useRef<Map<number, Uint8Array>>(new Map()); // Buffer audio by sequence number
   const recordingStartTimeRef = useRef<number | null>(null);
+
+  // Meta Wearables state
+  const [deviceType, setDeviceType] = useState<string | null>(null);
+  const [isMetaWearable, setIsMetaWearable] = useState(false);
+  const [metaConnected, setMetaConnected] = useState(false);
+  const [metaStreaming, setMetaStreaming] = useState(false);
+  const [metaDevices, setMetaDevices] = useState<MetaDevice[]>([]);
+  const [currentVideoFrame, setCurrentVideoFrame] = useState<string | null>(null);
+
+  // Check device type from Firestore
+  useEffect(() => {
+    const checkDeviceType = async () => {
+      try {
+        const deviceDocRef = doc(db, 'devices', deviceId);
+        const deviceDoc = await getDoc(deviceDocRef);
+
+        if (deviceDoc.exists()) {
+          const data = deviceDoc.data();
+          const type = data.metadata?.type || 'even-realities-g1';
+          setDeviceType(type);
+          setIsMetaWearable(type === 'meta-wearables');
+
+          console.log('[BLEConnectionScreen] Device type:', type);
+        }
+      } catch (error) {
+        console.error('[BLEConnectionScreen] Error fetching device metadata:', error);
+      }
+    };
+
+    checkDeviceType();
+  }, [deviceId]);
 
   useEffect(() => {
     let mounted = true;
@@ -1525,6 +1558,145 @@ export default function BLEConnectionScreen() {
     console.log(`[BLEConnectionScreen] Buffered audio chunk: seq=${sequence}, size=${audioData.length}, total chunks=${audioBufferRef.current.size}`);
   };
 
+  // Meta Wearables initialization and connection
+  useEffect(() => {
+    if (!isMetaWearable || !metaWearablesService.isSDKAvailable()) return;
+
+    let autoConnectAttempted = false;
+
+    const initMeta = async () => {
+      try {
+        console.log('[BLEConnectionScreen] Initializing Meta Wearables SDK...');
+        await metaWearablesService.initializeSDK();
+        addLog('✅ Meta Wearables SDK initialized');
+
+        // Set up event listeners
+        metaWearablesService.addEventListener('deviceFound', (device: MetaDevice) => {
+          console.log('[BLEConnectionScreen] Meta device found:', device);
+          addLog(`📱 Found Meta device: ${device.name}`);
+
+          setMetaDevices(prev => {
+            const exists = prev.find(d => d.id === device.id);
+            if (exists) return prev;
+
+            // Auto-connect to first device found (like Camera Access sample)
+            if (!autoConnectAttempted && prev.length === 0) {
+              autoConnectAttempted = true;
+              addLog(`🔗 Auto-connecting to ${device.name}...`);
+              setTimeout(() => connectToMetaDevice(device), 500);
+            }
+
+            return [...prev, device];
+          });
+        });
+
+        metaWearablesService.addEventListener('deviceConnected', (device: MetaDevice) => {
+          console.log('[BLEConnectionScreen] Meta device connected:', device);
+          addLog(`✅ Connected to ${device.name}`);
+          setMetaConnected(true);
+        });
+
+        metaWearablesService.addEventListener('videoFrame', (frame: any) => {
+          // Update video frame for display
+          setCurrentVideoFrame(frame.data);
+        });
+
+        metaWearablesService.addEventListener('error', (error: any) => {
+          console.error('[BLEConnectionScreen] Meta error:', error);
+          addLog(`❌ Error: ${error.message}`);
+        });
+
+        // Auto-start discovery (like Camera Access sample)
+        addLog('🔍 Auto-discovering Meta devices...');
+        try {
+          await metaWearablesService.startPairing('');
+          addLog('✅ Discovery started - looking for paired glasses...');
+        } catch (error: any) {
+          if (error.message?.includes('NOT_REGISTERED')) {
+            addLog('⚠️ Not registered yet - tap "Register & Connect" to approve in Meta AI');
+          } else {
+            addLog(`❌ Discovery error: ${error.message}`);
+          }
+        }
+
+      } catch (error: any) {
+        console.error('[BLEConnectionScreen] Failed to initialize Meta SDK:', error);
+        addLog(`❌ Failed to initialize Meta SDK: ${error.message}`);
+      }
+    };
+
+    initMeta();
+
+    return () => {
+      metaWearablesService.removeAllListeners();
+    };
+  }, [isMetaWearable]);
+
+  const startMetaConnection = async () => {
+    try {
+      addLog('🔄 Starting Meta Wearables connection...');
+
+      // Start pairing/registration - this will redirect to Meta AI if needed
+      await metaWearablesService.startPairing('');
+      addLog('✅ Registration initiated - devices will appear when ready');
+
+    } catch (error: any) {
+      console.error('[BLEConnectionScreen] Error starting Meta connection:', error);
+      addLog(`❌ Connection error: ${error.message}`);
+      Alert.alert('Connection Error', error.message);
+    }
+  };
+
+  const connectToMetaDevice = async (device: MetaDevice) => {
+    try {
+      addLog(`🔗 Connecting to ${device.name}...`);
+      await metaWearablesService.connectToDevice(device.id);
+      setMetaConnected(true);
+      addLog(`✅ Connected to ${device.name}`);
+
+      // Update Firebase
+      const deviceDocRef = doc(db, 'devices', deviceId);
+      await updateDoc(deviceDocRef, {
+        status: 'online',
+        lastConnectedAt: new Date(),
+        metaDeviceId: device.id,
+        metaDeviceName: device.name,
+      });
+
+    } catch (error: any) {
+      console.error('[BLEConnectionScreen] Error connecting to Meta device:', error);
+      addLog(`❌ Connection failed: ${error.message}`);
+      Alert.alert('Connection Error', error.message);
+    }
+  };
+
+  const startMetaStreaming = async () => {
+    try {
+      addLog('📹 Starting video stream...');
+      setMetaStreaming(true);
+      await metaWearablesService.startVideoStream();
+      addLog('✅ Video streaming started');
+    } catch (error: any) {
+      console.error('[BLEConnectionScreen] Error starting stream:', error);
+      addLog(`❌ Streaming error: ${error.message}`);
+      setMetaStreaming(false);
+      Alert.alert('Streaming Error', error.message);
+    }
+  };
+
+  const stopMetaStreaming = async () => {
+    try {
+      addLog('⏹️ Stopping video stream...');
+      await metaWearablesService.stopVideoStream();
+      setMetaStreaming(false);
+      setCurrentVideoFrame(null);
+      addLog('✅ Video streaming stopped');
+    } catch (error: any) {
+      console.error('[BLEConnectionScreen] Error stopping stream:', error);
+      addLog(`❌ Error stopping stream: ${error.message}`);
+    }
+  };
+
   const sendTranscriptionToChat = async (transcription: string) => {
     try {
       // Get device document to get personaId
@@ -1799,6 +1971,157 @@ export default function BLEConnectionScreen() {
     }
   };
 
+  // Render Meta Wearables UI if it's a Meta device
+  if (isMetaWearable) {
+    // Fullscreen streaming mode
+    if (metaStreaming && currentVideoFrame) {
+      return (
+        <View style={styles.fullscreenContainer}>
+          <StatusBar style="light" />
+
+          {/* Fullscreen Video */}
+          <Image
+            source={{ uri: `data:image/jpeg;base64,${currentVideoFrame}` }}
+            style={styles.fullscreenVideo}
+            resizeMode="cover"
+          />
+
+          {/* Floating Controls */}
+          <View style={styles.floatingControls}>
+            <TouchableOpacity
+              onPress={stopMetaStreaming}
+              style={styles.floatingButton}
+            >
+              <LinearGradient
+                colors={['rgba(239, 68, 68, 0.9)', 'rgba(220, 38, 38, 0.9)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.floatingButtonGradient}
+              >
+                <Text style={styles.floatingButtonText}>⏹ Stop Streaming</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+
+          {/* Back Button */}
+          <TouchableOpacity
+            onPress={() => {
+              stopMetaStreaming();
+              navigation.goBack();
+            }}
+            style={styles.floatingBackButton}
+          >
+            <Text style={styles.floatingBackButtonText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // Normal connection UI
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={styles.container}
+      >
+        <StatusBar style="dark" />
+
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Meta Wearables</Text>
+        </View>
+
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          {/* Connection Status */}
+          <View style={styles.statusCard}>
+            <Text style={styles.statusCardTitle}>Meta Ray-Ban Glasses</Text>
+
+            <View style={[styles.armCard, metaConnected && styles.armCardConnected]}>
+              <Text style={styles.armLabel}>Connection Status</Text>
+              {metaConnected ? (
+                <View style={styles.connectedIndicator}>
+                  <View style={styles.connectedDot} />
+                  <Text style={styles.connectedText}>Connected</Text>
+                </View>
+              ) : (
+                <Text style={styles.armNotConnected}>Not Connected</Text>
+              )}
+            </View>
+
+            {/* Manual Connection Button - only show if auto-discovery failed */}
+            {!metaConnected && metaDevices.length === 0 && (
+              <View style={{marginTop: 12}}>
+                <Text style={styles.infoText}>
+                  Looking for glasses paired in Meta View app...
+                </Text>
+                <TouchableOpacity onPress={startMetaConnection} style={[styles.scanButton, {marginTop: 12}]}>
+                  <LinearGradient
+                    colors={['#6366F1', '#8B5CF6']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.scanButtonGradient}
+                  >
+                    <Text style={styles.scanButtonText}>Register & Connect</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Device List */}
+            {metaDevices.length > 0 && !metaConnected && (
+              <View style={{marginTop: 16}}>
+                <Text style={styles.devicesTitle}>Available Devices</Text>
+                {metaDevices.map((device) => (
+                  <TouchableOpacity
+                    key={device.id}
+                    onPress={() => connectToMetaDevice(device)}
+                    style={styles.deviceCard}
+                  >
+                    <View style={styles.deviceCardContent}>
+                      <View style={styles.deviceInfo}>
+                        <Text style={styles.deviceCardName}>{device.name}</Text>
+                        <Text style={styles.deviceCardId}>ID: {device.id.substring(0, 16)}...</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Streaming Controls */}
+            {metaConnected && (
+              <View style={styles.testMessageSection}>
+                <Text style={styles.testMessageLabel}>Camera Access</Text>
+                <Text style={[styles.infoText, {marginBottom: 16}]}>
+                  Stream live video from your glasses
+                </Text>
+
+                <TouchableOpacity onPress={startMetaStreaming} style={styles.sendTestButton}>
+                  <LinearGradient
+                    colors={['#6366F1', '#8B5CF6']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.sendTestButtonGradient}
+                  >
+                    <Text style={styles.sendTestButtonText}>📹 Start Streaming</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
+  // Render BLE UI for Even Realities G1
   return (
     <LinearGradient
       colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
@@ -2445,6 +2768,80 @@ const styles = StyleSheet.create({
   deviceCardDistance: {
     fontSize: 12,
     color: '#6366F1',
+    fontWeight: '600',
+  },
+  videoContainer: {
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(99, 102, 241, 0.2)',
+    paddingTop: 16,
+  },
+  videoFrame: {
+    width: '100%',
+    height: 300,
+    backgroundColor: '#000',
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  fullscreenContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  fullscreenVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  floatingControls: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  floatingButton: {
+    borderRadius: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  floatingButtonGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  floatingBackButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  floatingBackButtonText: {
+    color: '#FFFFFF',
+    fontSize: 24,
     fontWeight: '600',
   },
 });
