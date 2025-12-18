@@ -2,6 +2,7 @@ import Foundation
 import React
 import MWDATCore
 import MWDATCamera
+import Vision
 
 @objc(MetaWearablesModule)
 class MetaWearablesModule: RCTEventEmitter {
@@ -34,7 +35,8 @@ class MetaWearablesModule: RCTEventEmitter {
       "onPairingComplete",
       "onError",
       "onVideoFrame",
-      "onPhotoCaptured"
+      "onPhotoCaptured",
+      "onBarcodeDetected"
     ]
   }
 
@@ -403,6 +405,118 @@ class MetaWearablesModule: RCTEventEmitter {
     }
   }
   
+  // MARK: - Barcode Detection
+
+  // Detect barcodes from a UIImage
+  // Optimized for low quality 1280x720 video streams
+  private func detectBarcodes(in image: UIImage) {
+    guard let cgImage = image.cgImage else {
+      return
+    }
+
+    // Create barcode detection request
+    let request = VNDetectBarcodesRequest { [weak self] request, error in
+      guard let self = self else { return }
+
+      if let error = error {
+        print("[MetaWearables] Barcode detection error: \(error.localizedDescription)")
+        return
+      }
+
+      guard let observations = request.results as? [VNBarcodeObservation] else {
+        return
+      }
+
+      // Process detected barcodes
+      for observation in observations {
+        guard let payload = observation.payloadStringValue else {
+          continue
+        }
+
+        // Determine barcode type
+        let barcodeType = self.getBarcodeTypeName(observation.symbology)
+
+        print("[MetaWearables] 🏷️ Barcode detected: \(barcodeType) = \(payload)")
+
+        // Emit barcode detection event
+        self.sendEvent(withName: "onBarcodeDetected", body: [
+          "type": barcodeType,
+          "data": payload,
+          "confidence": observation.confidence,
+          "timestamp": Date().timeIntervalSince1970 * 1000
+        ])
+      }
+    }
+
+    // Optimize for low quality video
+    // Use high accuracy mode to better handle 1280x720 low quality stream
+    if #available(iOS 15.0, *) {
+      request.revision = VNDetectBarcodesRequestRevision2
+    }
+
+    // Specify symbologies we want to detect
+    request.symbologies = [
+      .upce,          // UPC-E (8-digit)
+      .ean8,          // EAN-8
+      .ean13,         // EAN-13
+      .qr,            // QR codes
+      .code128,       // Code 128
+      .code39,        // Code 39
+      .code93,        // Code 93
+      .itf14,         // ITF-14
+      .i2of5,         // Interleaved 2 of 5
+      .pdf417         // PDF417
+    ]
+
+    // Add UPC-A if available (iOS 15+)
+    if #available(iOS 15.0, *) {
+      request.symbologies.append(.codabar)
+    }
+
+    // Perform detection on background queue
+    let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+    DispatchQueue.global(qos: .userInitiated).async {
+      do {
+        try handler.perform([request])
+      } catch {
+        print("[MetaWearables] Failed to perform barcode detection: \(error)")
+      }
+    }
+  }
+
+  // Convert VNBarcodeSymbology to readable string
+  private func getBarcodeTypeName(_ symbology: VNBarcodeSymbology) -> String {
+    switch symbology {
+    case .upce:
+      return "UPC-E"
+    case .ean8:
+      return "EAN-8"
+    case .ean13:
+      return "EAN-13"
+    case .qr:
+      return "QR"
+    case .code128:
+      return "Code 128"
+    case .code39:
+      return "Code 39"
+    case .code93:
+      return "Code 93"
+    case .itf14:
+      return "ITF-14"
+    case .i2of5:
+      return "I2of5"
+    case .pdf417:
+      return "PDF417"
+    default:
+      if #available(iOS 15.0, *) {
+        if symbology == .codabar {
+          return "Codabar"
+        }
+      }
+      return "Unknown"
+    }
+  }
+
   // MARK: - Video Streaming
 
   private func setupStreamSession() async {
@@ -438,6 +552,9 @@ class MetaWearablesModule: RCTEventEmitter {
           // Convert VideoFrame to UIImage then to base64
           if let image = videoFrame.makeUIImage() {
             print("[MetaWearables] ✅ Converted to UIImage: \(image.size.width)x\(image.size.height)")
+
+            // Detect barcodes in the frame (runs async on background queue)
+            self.detectBarcodes(in: image)
 
             if let imageData = self.convertImageToBase64(image) {
               print("[MetaWearables] ✅ Converted to base64: \(imageData.prefix(50))...")

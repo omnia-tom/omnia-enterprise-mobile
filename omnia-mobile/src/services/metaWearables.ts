@@ -30,6 +30,13 @@ export interface MetaPhoto {
   height: number;
 }
 
+export interface MetaBarcode {
+  type: string; // Barcode type (UPC-A, UPC-E, EAN-13, QR, etc.)
+  data: string; // Barcode payload/value
+  confidence: number; // Detection confidence (0-1)
+  timestamp: number;
+}
+
 class MetaWearablesService {
   private isAvailable: boolean;
   private currentDevice: MetaDevice | null = null;
@@ -70,6 +77,10 @@ class MetaWearablesService {
 
     metaWearablesEmitter.addListener('onPhotoCaptured', (photo: MetaPhoto) => {
       this.emit('photoCaptured', photo);
+    });
+
+    metaWearablesEmitter.addListener('onBarcodeDetected', (barcode: MetaBarcode) => {
+      this.emit('barcodeDetected', barcode);
     });
 
     metaWearablesEmitter.addListener('onError', (error: { code: string; message: string }) => {

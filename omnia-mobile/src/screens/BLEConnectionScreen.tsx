@@ -113,6 +113,7 @@ export default function BLEConnectionScreen() {
   const [metaStreaming, setMetaStreaming] = useState(false);
   const [metaDevices, setMetaDevices] = useState<MetaDevice[]>([]);
   const [currentVideoFrame, setCurrentVideoFrame] = useState<string | null>(null);
+  const [lastBarcode, setLastBarcode] = useState<{ type: string; data: string; timestamp: number } | null>(null);
 
   // Check device type from Firestore
   useEffect(() => {
@@ -1601,6 +1602,21 @@ export default function BLEConnectionScreen() {
           setCurrentVideoFrame(frame.data);
         });
 
+        metaWearablesService.addEventListener('barcodeDetected', (barcode: any) => {
+          console.log('[BLEConnectionScreen] Barcode detected:', barcode);
+          addLog(`🏷️ ${barcode.type} detected: ${barcode.data} (confidence: ${(barcode.confidence * 100).toFixed(1)}%)`);
+
+          // Update state with last detected barcode
+          setLastBarcode({
+            type: barcode.type,
+            data: barcode.data,
+            timestamp: barcode.timestamp
+          });
+
+          // TODO: Handle barcode detection (e.g., lookup product, show info, etc.)
+          // You can add custom logic here to handle detected barcodes
+        });
+
         metaWearablesService.addEventListener('error', (error: any) => {
           console.error('[BLEConnectionScreen] Meta error:', error);
           addLog(`❌ Error: ${error.message}`);
@@ -1985,6 +2001,27 @@ export default function BLEConnectionScreen() {
             style={styles.fullscreenVideo}
             resizeMode="cover"
           />
+
+          {/* Barcode Detection Overlay */}
+          {lastBarcode && (
+            <View style={styles.barcodeOverlay}>
+              <LinearGradient
+                colors={['rgba(16, 185, 129, 0.95)', 'rgba(5, 150, 105, 0.95)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.barcodeCard}
+              >
+                <Text style={styles.barcodeType}>🏷️ {lastBarcode.type}</Text>
+                <Text style={styles.barcodeData}>{lastBarcode.data}</Text>
+                <TouchableOpacity
+                  onPress={() => setLastBarcode(null)}
+                  style={styles.barcodeDismiss}
+                >
+                  <Text style={styles.barcodeDismissText}>✕ Dismiss</Text>
+                </TouchableOpacity>
+              </LinearGradient>
+            </View>
+          )}
 
           {/* Floating Controls */}
           <View style={styles.floatingControls}>
@@ -2852,6 +2889,53 @@ const styles = StyleSheet.create({
   floatingBackButtonText: {
     color: '#FFFFFF',
     fontSize: 24,
+    fontWeight: '600',
+  },
+  barcodeOverlay: {
+    position: 'absolute',
+    top: 120,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  barcodeCard: {
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    minWidth: 280,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  barcodeType: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  barcodeData: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '800',
+    marginBottom: 16,
+    letterSpacing: 2,
+  },
+  barcodeDismiss: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+  },
+  barcodeDismissText: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '600',
   },
 });
