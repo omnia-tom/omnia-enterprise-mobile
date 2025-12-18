@@ -2,12 +2,10 @@ import React, { useRef, useEffect } from 'react';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/LoginScreen';
-import MainScreen from '../screens/MainScreen';
 import PairingScreen from '../screens/PairingScreen';
-import AccountScreen from '../screens/AccountScreen';
-import DevicesScreen from '../screens/DevicesScreen';
 import BLEConnectionScreen from '../screens/BLEConnectionScreen';
 import ChatScreen from '../screens/ChatScreen';
+import TabNavigator from './TabNavigator';
 import { RootStackParamList } from '../types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -23,7 +21,7 @@ export default function Navigation({ isAuthenticated }: NavigationProps) {
     // Navigate to appropriate screen when auth state changes
     if (navigationRef.current) {
       if (isAuthenticated) {
-        navigationRef.current.navigate('Main');
+        navigationRef.current.navigate('MainTabs' as any);
       } else {
         navigationRef.current.navigate('Login');
       }
@@ -42,20 +40,12 @@ export default function Navigation({ isAuthenticated }: NavigationProps) {
           component={LoginScreen}
         />
         <Stack.Screen
-          name="Main"
-          component={MainScreen}
+          name="MainTabs"
+          component={TabNavigator as any}
         />
         <Stack.Screen
           name="Pairing"
           component={PairingScreen}
-        />
-        <Stack.Screen
-          name="Account"
-          component={AccountScreen}
-        />
-        <Stack.Screen
-          name="Devices"
-          component={DevicesScreen}
         />
         <Stack.Screen
           name="BLEConnection"

@@ -23,7 +23,11 @@
           "bluetooth-central",
           "processing",
           "fetch"
-        ]
+        ],
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        }
       },
       "appleTeamId": "279PV9XKZ2"
     },

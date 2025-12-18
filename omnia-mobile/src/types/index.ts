@@ -3,10 +3,8 @@ import { User } from 'firebase/auth';
 // Navigation types
 export type RootStackParamList = {
   Login: undefined;
-  Main: undefined;
+  MainTabs: undefined;
   Pairing: undefined;
-  Account: undefined;
-  Devices: undefined;
   BLEConnection: {
     deviceId: string;
     deviceName: string;
@@ -19,6 +17,12 @@ export type RootStackParamList = {
     deviceName: string;
     personaId: string;
   };
+};
+
+// Tab Navigator types
+export type TabParamList = {
+  Home: undefined;
+  PickPack: undefined;
 };
 
 // Auth types
