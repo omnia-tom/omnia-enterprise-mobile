@@ -472,14 +472,7 @@ export default function MainScreen() {
                           </View>
                       )}
 
-                      {device.protocol && (
-                        <View style={styles.infoRow}>
-                          <Text style={styles.infoLabel}>Protocol:</Text>
-                          <Text style={styles.infoValue}>{device.protocol}</Text>
-                        </View>
-                      )}
-
-                      {(device.bleDeviceId_left || device.bleDeviceId_right) && (
+                      {(device.bleDeviceId_left || device.bleDeviceId_right) && (device.status === 'online') && (
                         <View style={styles.bleConnectionSection}>
                           <Text style={styles.bleConnectionTitle}>BLE Connection:</Text>
                           <View style={styles.bleArmsRow}>
@@ -499,7 +492,7 @@ export default function MainScreen() {
                         </View>
                       )}
 
-                      {(device.battery_left != null || device.battery_right != null) && (
+                      {(device.battery_left != null || device.battery_right != null) &&  (device.status === 'online') && (
                         <View style={styles.batterySection}>
                           <Text style={styles.bleConnectionTitle}>Glasses Battery:</Text>
 

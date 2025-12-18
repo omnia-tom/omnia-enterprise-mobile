@@ -2197,34 +2197,44 @@ export default function BLEConnectionScreen() {
 
             {/* Debug Info */}
             <View style={styles.debugSection}>
-              <Text style={styles.debugText}>
-                Left: {connectionState.leftArm?.connected ? '✓' : '✗'} |
-                Right: {connectionState.rightArm?.connected ? '✓' : '✗'} |
-                Fully: {connectionState.isFullyConnected ? '✓' : '✗'}
-              </Text>
-              {connectionState.isFullyConnected && (
-                <Text style={[styles.debugText, { color: '#10B981', marginTop: 4 }]}>
-                  🎉 Both arms connected! Scroll down for test message button.
-                </Text>
+              {/* Only show BLE connection info if glasses are not offline */}
+              {batteryStatus.glassesState !== 'off' && (
+                <>
+                  <Text style={styles.debugText}>
+                    Left: {connectionState.leftArm?.connected ? '✓' : '✗'} |
+                    Right: {connectionState.rightArm?.connected ? '✓' : '✗'} |
+                    Fully: {connectionState.isFullyConnected ? '✓' : '✗'}
+                  </Text>
+                  {connectionState.isFullyConnected && (
+                    <Text style={[styles.debugText, { color: '#10B981', marginTop: 4 }]}>
+                      🎉 Both arms connected! Scroll down for test message button.
+                    </Text>
+                  )}
+                  {/* Battery & Status Info */}
+                  {(batteryStatus.caseBattery !== null || batteryStatus.glassesState) && (
+                    <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(99, 102, 241, 0.2)' }}>
+                      {batteryStatus.caseBattery !== null && (
+                        <Text style={[styles.debugText, { color: '#6366F1' }]}>
+                          🔋 Case Battery: {batteryStatus.caseBattery}%
+                        </Text>
+                      )}
+                      {batteryStatus.glassesState && (
+                        <Text style={[styles.debugText, {
+                          color: batteryStatus.glassesState === 'on' ? '#10B981' : '#EF4444',
+                          marginTop: 4
+                        }]}>
+                          👓 Glasses: {batteryStatus.glassesState.toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                </>
               )}
-              {/* Battery & Status Info */}
-              {(batteryStatus.caseBattery !== null || batteryStatus.glassesState) && (
-                <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(99, 102, 241, 0.2)' }}>
-                  {batteryStatus.caseBattery !== null && (
-                    <Text style={[styles.debugText, { color: '#6366F1' }]}>
-                      🔋 Case Battery: {batteryStatus.caseBattery}%
-                    </Text>
-                  )}
-                  {batteryStatus.glassesState && (
-                    <Text style={[styles.debugText, {
-                      color: batteryStatus.glassesState === 'on' ? '#10B981' : '#EF4444',
-                      marginTop: 4
-                    }]}>
-                      👓 Glasses: {batteryStatus.glassesState.toUpperCase()}
-                      {batteryStatus.glassesState === 'off' && ' (Turn on to see messages!)'}
-                    </Text>
-                  )}
-                </View>
+              {/* Show offline status message when glasses are off */}
+              {batteryStatus.glassesState === 'off' && (
+                <Text style={[styles.debugText, { color: '#EF4444' }]}>
+                  👓 Status: OFFLINE (Turn on glasses to connect)
+                </Text>
               )}
             </View>
 
