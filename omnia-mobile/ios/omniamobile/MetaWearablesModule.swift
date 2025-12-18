@@ -3,6 +3,7 @@ import React
 import MWDATCore
 import MWDATCamera
 import Vision
+import AVFoundation
 
 @objc(MetaWearablesModule)
 class MetaWearablesModule: RCTEventEmitter {
@@ -26,6 +27,12 @@ class MetaWearablesModule: RCTEventEmitter {
   // Barcode detection debouncing
   private var lastDetectedBarcode: String?
   private var lastDetectionTime: TimeInterval = 0
+  
+  // Track announced UPC codes to prevent re-announcing the same code
+  private var announcedUPCs: Set<String> = []
+  
+  // Text-to-speech for barcode announcements
+  private let speechSynthesizer = AVSpeechSynthesizer()
 
   override static func requiresMainQueueSetup() -> Bool {
     return true
@@ -462,7 +469,12 @@ class MetaWearablesModule: RCTEventEmitter {
         self.lastDetectionTime = currentTime
 
         // Determine barcode type
-        let barcodeType = self.getBarcodeTypeName(observation.symbology)
+        var barcodeType = self.getBarcodeTypeName(observation.symbology)
+        
+        // Check if EAN-13 is actually a UPC-A (EAN-13 starting with 0)
+        if barcodeType == "EAN-13" && payload.count == 13 && payload.hasPrefix("0") {
+          barcodeType = "UPC-A"
+        }
 
         print("[MetaWearables] 🏷️ Barcode detected: \(barcodeType) = \(payload) (confidence: \(String(format: "%.1f%%", observation.confidence * 100)))")
 
@@ -473,6 +485,13 @@ class MetaWearablesModule: RCTEventEmitter {
           "confidence": observation.confidence,
           "timestamp": currentTime * 1000
         ])
+        
+        // Announce UPC codes via text-to-speech through Meta glasses
+        // Only announce if this is a new UPC code that hasn't been announced before
+        if barcodeType.contains("UPC") && !self.announcedUPCs.contains(payload) {
+          self.announcedUPCs.insert(payload)
+          self.announceBarcode(barcodeType: barcodeType)
+        }
       }
     }
 
@@ -823,6 +842,35 @@ class MetaWearablesModule: RCTEventEmitter {
   }
   
   // MARK: - Helper Methods
+  
+  // Announce barcode detection via text-to-speech through Meta glasses
+  private func announceBarcode(barcodeType: String) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      
+      // Configure audio session to route through Meta glasses
+      let audioSession = AVAudioSession.sharedInstance()
+      do {
+        // Use playback category to route audio through connected audio devices (Meta glasses)
+        try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+        try audioSession.setActive(true)
+      } catch {
+        print("[MetaWearables] Failed to configure audio session: \(error.localizedDescription)")
+        // Continue anyway - audio might still work
+      }
+      
+      // Create speech utterance
+      let utterance = AVSpeechUtterance(string: "UPC found")
+      utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+      utterance.rate = 0.5 // Slightly slower for clarity
+      utterance.volume = 1.0
+      utterance.pitchMultiplier = 1.0
+      
+      // Speak the announcement
+      self.speechSynthesizer.speak(utterance)
+      print("[MetaWearables] 🔊 Announced: 'UPC found'")
+    }
+  }
 
   // Convert UIImage to base64 string
   private func convertImageToBase64(_ image: UIImage) -> String? {
