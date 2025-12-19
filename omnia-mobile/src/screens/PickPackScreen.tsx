@@ -256,7 +256,7 @@ export default function PickPackScreen() {
     };
   }, [pickOrder, hasConnectedGlasses, isProcessingScan, showPreview]);
 
-  const loadPickOrder = async () => {
+  const loadPickOrder = async (): Promise<boolean> => {
     try {
       setError(null);
       const userId = auth.currentUser?.uid;
@@ -264,7 +264,7 @@ export default function PickPackScreen() {
       if (!userId) {
         setError('Not authenticated. Please log in.');
         setLoading(false);
-        return;
+        return false;
       }
 
       console.log('[PickPackScreen] Loading pick order for user:', userId);
@@ -273,14 +273,29 @@ export default function PickPackScreen() {
       if (!order) {
         console.log('[PickPackScreen] No active pick order');
         setPickOrder(null);
+        return false; // No order found
       } else {
         console.log('[PickPackScreen] Pick order loaded:', order);
         setPickOrder(order);
+        return true; // Order found
       }
     } catch (error: any) {
       console.error('[PickPackScreen] Error loading pick order:', error);
-      setError(error.message || 'Failed to load pick order');
-      Alert.alert('Error', error.message || 'Failed to load pick order');
+      
+      // Check if error is about "no active pick order" - show friendly message instead
+      const errorMessage = error.message || '';
+      if (errorMessage.toLowerCase().includes('no active pick order') || 
+          errorMessage.toLowerCase().includes('no pick order found')) {
+        // This is not really an error - just no orders available
+        setPickOrder(null);
+        setError(null); // Clear error state
+        return false; // No order found
+      } else {
+        // Real error - show error message
+        setError(error.message || 'Failed to load pick order');
+        Alert.alert('Error', error.message || 'Failed to load pick order');
+        return false;
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -357,7 +372,22 @@ export default function PickPackScreen() {
         Alert.alert(
           'Order Complete! 🎉',
           `Pick order completed successfully! Great work.`,
-          [{ text: 'OK', onPress: () => loadPickOrder() }]
+          [{ 
+            text: 'OK', 
+            onPress: async () => {
+              // Load new pick order after user dismisses completion alert
+              const hasNewOrder = await loadPickOrder();
+              
+              // If no new order found, show friendly message
+              if (!hasNewOrder) {
+                Alert.alert(
+                  'No Orders Available',
+                  'You have no orders right now. Awaiting new pick session!',
+                  [{ text: 'OK' }]
+                );
+              }
+            }
+          }]
         );
       }
     } catch (error: any) {

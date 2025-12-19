@@ -42,23 +42,35 @@ class PickPackAPI {
       const isJson = contentType && contentType.includes('application/json');
 
       if (!response.ok) {
+        // Handle 404 as "no active pick order" - this is not an error
+        if (response.status === 404) {
+          console.log('[PickPackAPI] No active pick order found (404)');
+          return null;
+        }
+
         let errorMessage = `Failed to fetch pick order for user ${userId} (Status: ${response.status})`;
 
         if (isJson) {
           try {
             const error: PickPackError = await response.json();
-            errorMessage = error.error || errorMessage;
+            const errorText = error.error || errorMessage;
+            
+            // Check if the error message indicates "no active pick order"
+            // This handles cases where API returns 200 with error message or other status codes
+            if (errorText.toLowerCase().includes('no active pick order') || 
+                errorText.toLowerCase().includes('no pick order found')) {
+              console.log('[PickPackAPI] No active pick order found (from error message)');
+              return null;
+            }
+            
+            errorMessage = errorText;
           } catch (e) {
             // If JSON parsing fails, use default message
           }
         } else {
           const text = await response.text();
           console.log('[PickPackAPI] Non-JSON response:', text.substring(0, 200));
-          if (response.status === 404) {
-            // 404 might mean no active pick order - return null
-            console.log('[PickPackAPI] No active pick order found');
-            return null;
-          } else if (response.status === 500) {
+          if (response.status === 500) {
             errorMessage = `Server error (500). Please check if the API is running.`;
           } else {
             errorMessage = `API returned non-JSON response (Status: ${response.status}). URL: ${url}`;

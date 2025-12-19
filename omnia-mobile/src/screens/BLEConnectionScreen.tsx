@@ -1605,15 +1605,21 @@ export default function BLEConnectionScreen() {
           addLog(`❌ Device disconnected`);
           setMetaConnected(false);
 
-          // Update Firestore status to offline
+          // Update Firestore status to offline (matching Even Realities format)
           try {
             const deviceDocRef = doc(db, 'devices', deviceId);
             updateDoc(deviceDocRef, {
               status: 'offline',
+              glassesState: 'off',
+              lastSeen: new Date(),
               lastDisconnectedAt: new Date(),
-            }).catch(err => console.warn('[BLEConnectionScreen] Could not update status:', err));
+            }).then(() => {
+              console.log('[BLEConnectionScreen] ✅ Firebase updated on Meta disconnect: status=offline');
+            }).catch(err => {
+              console.error('[BLEConnectionScreen] ❌ Error updating status on Meta disconnect:', err);
+            });
           } catch (error) {
-            console.warn('[BLEConnectionScreen] Error updating device status:', error);
+            console.error('[BLEConnectionScreen] ❌ Error updating device status:', error);
           }
         });
 

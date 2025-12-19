@@ -157,7 +157,11 @@ class MetaWearablesModule: RCTEventEmitter {
           print("[MetaWearables] About to setup device stream...")
           await self.setupDeviceStream()
         } else if registrationState == .unavailable {
-          print("[MetaWearables] State is .unavailable")
+          print("[MetaWearables] State is .unavailable - device disconnected")
+          self.currentDevice = nil
+          self.sendEvent(withName: "onDeviceDisconnected", body: [:])
+        } else if registrationState == .none {
+          print("[MetaWearables] State is .unregistered - device disconnected")
           self.currentDevice = nil
           self.sendEvent(withName: "onDeviceDisconnected", body: [:])
         } else {
@@ -187,10 +191,28 @@ class MetaWearablesModule: RCTEventEmitter {
       }
 
       print("[MetaWearables] Starting to listen for devices...")
+      
+      // Track previous devices to detect removals
+      var previousDevices: Set<DeviceIdentifier> = []
 
       for await devices in await wearables.devicesStream() {
         print("[MetaWearables] Received devices update: \(devices.count) devices")
+        let currentDevices = Set(devices)
         self.discoveredDevices = devices
+
+        // Detect removed devices (devices that were in previous list but not in current)
+        let removedDevices = previousDevices.subtracting(currentDevices)
+        for removedDeviceId in removedDevices {
+          print("[MetaWearables] 🔴 Device removed from stream: \(removedDeviceId)")
+          // Clear current device if it was the one that disconnected
+          if let currentDeviceId = self.currentDevice?.identifier, currentDeviceId == removedDeviceId {
+            self.currentDevice = nil
+          }
+          // Emit disconnect event
+          self.sendEvent(withName: "onDeviceDisconnected", body: [
+            "deviceId": removedDeviceId
+          ])
+        }
 
         // Emit events for newly discovered devices
         for deviceId in devices {
@@ -206,6 +228,9 @@ class MetaWearablesModule: RCTEventEmitter {
             print("[MetaWearables] Could not get device for identifier: \(deviceId)")
           }
         }
+        
+        // Update previous devices for next iteration
+        previousDevices = currentDevices
       }
     }
   }

@@ -442,7 +442,7 @@ export default function MainScreen() {
         ) : (
           <>
             <Text style={styles.devicesSectionTitle}>
-              My Devices ({devices.length})
+              My Devices({devices.length})
             </Text>
             {devices.map((device) => {
               const deviceImage = getDeviceImage(device.model, device.type, device.deviceType);
