@@ -11,6 +11,7 @@ import {
   Platform,
   TextInput,
   Image,
+  AppState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -1595,6 +1596,25 @@ export default function BLEConnectionScreen() {
           console.log('[BLEConnectionScreen] Meta device connected:', device);
           addLog(`✅ Connected to ${device.name}`);
           setMetaConnected(true);
+          // Note: Status is NOT set to online here - only when streaming starts
+          // The SDK 'connected' event reflects registration, not actual Bluetooth connectivity
+        });
+
+        metaWearablesService.addEventListener('deviceDisconnected', () => {
+          console.log('[BLEConnectionScreen] Meta device disconnected');
+          addLog(`❌ Device disconnected`);
+          setMetaConnected(false);
+
+          // Update Firestore status to offline
+          try {
+            const deviceDocRef = doc(db, 'devices', deviceId);
+            updateDoc(deviceDocRef, {
+              status: 'offline',
+              lastDisconnectedAt: new Date(),
+            }).catch(err => console.warn('[BLEConnectionScreen] Could not update status:', err));
+          } catch (error) {
+            console.warn('[BLEConnectionScreen] Error updating device status:', error);
+          }
         });
 
         metaWearablesService.addEventListener('videoFrame', (frame: any) => {
@@ -1648,6 +1668,34 @@ export default function BLEConnectionScreen() {
     };
   }, [isMetaWearable]);
 
+  // AppState monitoring for Meta devices - check status when app comes to foreground
+  useEffect(() => {
+    if (!isMetaWearable) return;
+
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (nextAppState === 'active') {
+        console.log('[BLEConnectionScreen] App came to foreground, checking Meta streaming status');
+
+        // If not streaming, ensure status is offline
+        if (!metaStreaming) {
+          try {
+            const deviceDocRef = doc(db, 'devices', deviceId);
+            await updateDoc(deviceDocRef, {
+              status: 'offline',
+            });
+            console.log('[BLEConnectionScreen] Set status to offline (not streaming)');
+          } catch (error) {
+            console.warn('[BLEConnectionScreen] Could not update status on foreground:', error);
+          }
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isMetaWearable, metaStreaming, deviceId]);
+
   const startMetaConnection = async () => {
     try {
       addLog('🔄 Starting Meta Wearables connection...');
@@ -1670,14 +1718,20 @@ export default function BLEConnectionScreen() {
       setMetaConnected(true);
       addLog(`✅ Connected to ${device.name}`);
 
-      // Update Firebase
-      const deviceDocRef = doc(db, 'devices', deviceId);
-      await updateDoc(deviceDocRef, {
-        status: 'online',
-        lastConnectedAt: new Date(),
-        metaDeviceId: device.id,
-        metaDeviceName: device.name,
-      });
+      // Update Firebase with device info (but NOT status - that's set when streaming starts)
+      try {
+        const deviceDocRef = doc(db, 'devices', deviceId);
+        await updateDoc(deviceDocRef, {
+          lastConnectedAt: new Date(),
+          metaDeviceId: device.id,
+          metaDeviceName: device.name,
+        });
+        addLog('✅ Device info updated in Firebase');
+      } catch (dbError: any) {
+        // Log but don't fail the connection if Firestore update fails
+        console.warn('[BLEConnectionScreen] Failed to update Firestore:', dbError);
+        addLog(`⚠️ Note: Could not update device info in database`);
+      }
 
     } catch (error: any) {
       console.error('[BLEConnectionScreen] Error connecting to Meta device:', error);
@@ -1692,6 +1746,18 @@ export default function BLEConnectionScreen() {
       setMetaStreaming(true);
       await metaWearablesService.startVideoStream();
       addLog('✅ Video streaming started');
+
+      // Set status to online when streaming starts (actual connectivity confirmed)
+      try {
+        const deviceDocRef = doc(db, 'devices', deviceId);
+        await updateDoc(deviceDocRef, {
+          status: 'online',
+          lastStreamStarted: new Date(),
+        });
+        console.log('[BLEConnectionScreen] Status set to online (streaming active)');
+      } catch (dbError) {
+        console.warn('[BLEConnectionScreen] Could not update status to online:', dbError);
+      }
     } catch (error: any) {
       console.error('[BLEConnectionScreen] Error starting stream:', error);
       addLog(`❌ Streaming error: ${error.message}`);
@@ -1707,6 +1773,18 @@ export default function BLEConnectionScreen() {
       setMetaStreaming(false);
       setCurrentVideoFrame(null);
       addLog('✅ Video streaming stopped');
+
+      // Set status to offline when streaming stops
+      try {
+        const deviceDocRef = doc(db, 'devices', deviceId);
+        await updateDoc(deviceDocRef, {
+          status: 'offline',
+          lastStreamStopped: new Date(),
+        });
+        console.log('[BLEConnectionScreen] Status set to offline (streaming stopped)');
+      } catch (dbError) {
+        console.warn('[BLEConnectionScreen] Could not update status to offline:', dbError);
+      }
     } catch (error: any) {
       console.error('[BLEConnectionScreen] Error stopping stream:', error);
       addLog(`❌ Error stopping stream: ${error.message}`);

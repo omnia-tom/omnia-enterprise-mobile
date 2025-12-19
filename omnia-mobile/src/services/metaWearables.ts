@@ -16,6 +16,14 @@ export interface MetaDevice {
   isConnected: boolean;
 }
 
+export interface MetaConnectionStatus {
+  isConnected: boolean;
+  registrationState: 'registered' | 'registering' | 'unavailable' | 'not_initialized' | 'unknown';
+  deviceCount: number;
+  deviceId?: string;
+  deviceName?: string;
+}
+
 export interface MetaVideoFrame {
   data: string; // Base64 encoded video frame
   timestamp: number;
@@ -165,6 +173,16 @@ class MetaWearablesService {
   }
 
   /**
+   * Get device identifier
+   */
+  async getDeviceIdentifier(): Promise<string> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.getDeviceInfo().then((device: MetaDevice) => device.id);
+  }
+
+  /**
    * Handle OAuth callback URL from Meta AI app
    * Must be called when the app receives a deep link with metaWearablesAction query parameter
    */
@@ -213,6 +231,21 @@ class MetaWearablesService {
       throw new Error('Meta Wearables SDK is not available on this platform');
     }
     return MetaWearablesModule.getDeviceInfo();
+  }
+
+  /**
+   * Get connection status
+   * Returns information about whether Meta glasses are connected
+   */
+  async getConnectionStatus(): Promise<MetaConnectionStatus> {
+    if (!this.isAvailable) {
+      return {
+        isConnected: false,
+        registrationState: 'not_initialized',
+        deviceCount: 0,
+      };
+    }
+    return MetaWearablesModule.getConnectionStatus();
   }
 
   /**

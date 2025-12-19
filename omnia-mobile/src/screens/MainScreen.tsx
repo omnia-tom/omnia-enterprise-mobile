@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { Auth } from 'firebase/auth';
 import { auth as firebaseAuth, db } from '../services/firebase';
+import { metaWearablesService } from '../services/metaWearables';
 
 // Explicitly type auth to avoid TypeScript errors
 const auth: Auth = firebaseAuth;
@@ -60,7 +61,29 @@ export default function MainScreen() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [metaDeviceNames, setMetaDeviceNames] = useState<Record<string, string>>({});
   const isManualRefreshRef = useRef(false);
+  const metaSdkInitializedRef = useRef(false);
+
+  // Initialize Meta SDK once
+  useEffect(() => {
+    const initMetaSDK = async () => {
+      if (metaSdkInitializedRef.current || !metaWearablesService.isSDKAvailable()) {
+        return;
+      }
+
+      try {
+        console.log('[MainScreen] Initializing Meta Wearables SDK...');
+        await metaWearablesService.initializeSDK();
+        metaSdkInitializedRef.current = true;
+        console.log('[MainScreen] Meta Wearables SDK initialized successfully');
+      } catch (error) {
+        console.error('[MainScreen] Failed to initialize Meta SDK:', error);
+      }
+    };
+
+    initMetaSDK();
+  }, []);
 
   // Fetch profile photo
   useEffect(() => {
@@ -188,6 +211,9 @@ export default function MainScreen() {
           setRefreshing(false);
           isManualRefreshRef.current = false;
         }
+
+        // Fetch Meta device names for Meta wearable devices
+        fetchMetaDeviceNames(devicesData);
       },
       (error) => {
         console.error('Error listening to devices:', error);
@@ -199,10 +225,62 @@ export default function MainScreen() {
     return () => unsubscribe();
   }, []);
 
-  const onRefresh = () => {
+  const fetchMetaDeviceNames = async (devicesList: Device[]) => {
+    // Filter for Meta wearable devices
+    const metaDevices = devicesList.filter(
+      (device) => device.deviceType === 'meta-wearables' || device.type === 'meta-wearables'
+    );
+
+    console.log('[MainScreen] fetchMetaDeviceNames - found', metaDevices.length, 'Meta devices');
+
+    if (metaDevices.length === 0) {
+      return;
+    }
+
+    // Check if Meta Wearables SDK is available
+    if (!metaWearablesService.isSDKAvailable()) {
+      console.log('[MainScreen] Meta SDK not available');
+      return;
+    }
+
+    // Wait a bit for SDK to be fully initialized
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Try to fetch device info for display names
+    try {
+      console.log('[MainScreen] Fetching Meta device info...');
+      const connectionStatus = await metaWearablesService.getConnectionStatus();
+      console.log('[MainScreen] Connection status:', connectionStatus);
+
+      // If we have a device name from SDK, update it
+      if (connectionStatus.deviceName) {
+        console.log('[MainScreen] Updating device name:', connectionStatus.deviceName);
+        metaDevices.forEach((device) => {
+          setMetaDeviceNames((prev) => ({
+            ...prev,
+            [device.id]: connectionStatus.deviceName || device.deviceName,
+          }));
+        });
+      }
+    } catch (error) {
+      console.error('[MainScreen] Error fetching Meta device info:', error);
+    }
+  };
+
+  const onRefresh = async () => {
     isManualRefreshRef.current = true;
     setRefreshing(true);
+
+    // Re-fetch Meta device info on refresh
+    if (devices.length > 0) {
+      await fetchMetaDeviceNames(devices);
+    }
+
     // The real-time listener will automatically update and clear refreshing state
+    // If no devices or Meta devices, manually clear refreshing
+    if (devices.length === 0) {
+      setRefreshing(false);
+    }
   };
 
   const handlePairDevice = () => {
@@ -368,6 +446,12 @@ export default function MainScreen() {
             </Text>
             {devices.map((device) => {
               const deviceImage = getDeviceImage(device.model, device.type, device.deviceType);
+              const isMetaDevice = device.deviceType === 'meta-wearables' || device.type === 'meta-wearables';
+
+              // Use Firestore status for all devices (including Meta)
+              // The SDK registration state doesn't reflect actual Bluetooth connectivity
+              const displayStatus = device.status;
+
               return (
                 <TouchableOpacity
                   key={device.id}
@@ -386,12 +470,16 @@ export default function MainScreen() {
                         />
                       </View>
                     )}
-                    
+
                     {/* Device Info - Right Side */}
                     <View style={styles.deviceInfoContainer}>
                       <View style={styles.deviceHeader}>
                         <View style={styles.deviceTitleRow}>
-                          <Text style={styles.deviceName} numberOfLines={1}>{device.deviceName}</Text>
+                          <Text style={styles.deviceName} numberOfLines={1}>
+                            {isMetaDevice && metaDeviceNames[device.id]
+                              ? metaDeviceNames[device.id]
+                              : device.deviceName}
+                          </Text>
                         </View>
                       </View>
 
@@ -448,31 +536,31 @@ export default function MainScreen() {
                           </TouchableOpacity>
                         )}
 
-                      {device.status && (
+                      {displayStatus && (
                         <View style={styles.infoRow}>
                           <Text style={styles.infoLabel}>Status:</Text>
                           <View
                             style={[
                               styles.statusBadge,
-                              { backgroundColor: getStatusBackgroundColor(device.status) },
+                              { backgroundColor: getStatusBackgroundColor(displayStatus) },
                             ]}
                           >
                             <View
-                              style={[styles.statusDot, { backgroundColor: getStatusColor(device.status) }]}
+                              style={[styles.statusDot, { backgroundColor: getStatusColor(displayStatus) }]}
                             />
                             <Text
                               style={[
                                 styles.statusText,
-                                { color: getStatusColor(device.status) },
+                                { color: getStatusColor(displayStatus) },
                               ]}
                             >
-                              {device.status.toUpperCase()}
+                              {displayStatus.toUpperCase()}
                             </Text>
                           </View>
                           </View>
                       )}
 
-                      {(device.bleDeviceId_left || device.bleDeviceId_right) && (device.status === 'online') && (
+                      {(device.bleDeviceId_left || device.bleDeviceId_right) && (displayStatus === 'online') && (
                         <View style={styles.bleConnectionSection}>
                           <Text style={styles.bleConnectionTitle}>BLE Connection:</Text>
                           <View style={styles.bleArmsRow}>
@@ -492,7 +580,7 @@ export default function MainScreen() {
                         </View>
                       )}
 
-                      {(device.battery_left != null || device.battery_right != null) &&  (device.status === 'online') && (
+                      {(device.battery_left != null || device.battery_right != null) &&  (displayStatus === 'online') && (
                         <View style={styles.batterySection}>
                           <Text style={styles.bleConnectionTitle}>Glasses Battery:</Text>
 

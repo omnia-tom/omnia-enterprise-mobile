@@ -47,5 +47,8 @@ RCT_EXTERN_METHOD(capturePhoto:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(getDeviceInfo:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(getConnectionStatus:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end
 

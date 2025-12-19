@@ -980,6 +980,59 @@ class MetaWearablesModule: RCTEventEmitter {
       resolve(deviceInfo)
     }
   }
+
+  @objc
+  func getConnectionStatus(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    Task { @MainActor [weak self] in
+      guard let self = self else {
+        reject("ERROR", "Module deallocated", nil)
+        return
+      }
+
+      guard let wearables = self.wearables else {
+        // SDK not initialized - return offline status
+        resolve([
+          "isConnected": false,
+          "registrationState": "not_initialized",
+          "deviceCount": 0
+        ])
+        return
+      }
+
+      // Get registration state
+      let registrationState = await wearables.registrationState
+      let devices = await wearables.devices
+      let isConnected = (registrationState == .registered && !devices.isEmpty)
+
+      // Map registration state to string
+      let stateString: String
+      switch registrationState {
+      case .registered:
+        stateString = "registered"
+      case .registering:
+        stateString = "registering"
+      case .unavailable:
+        stateString = "unavailable"
+      @unknown default:
+        stateString = "unknown"
+      }
+
+      // Build response
+      var response: [String: Any] = [
+        "isConnected": isConnected,
+        "registrationState": stateString,
+        "deviceCount": devices.count
+      ]
+
+      // Add device info if connected
+      if isConnected, let device = self.currentDevice {
+        response["deviceId"] = device.identifier
+        response["deviceName"] = device.nameOrId()
+      }
+
+      resolve(response)
+    }
+  }
   
   // MARK: - Helper Methods
   
