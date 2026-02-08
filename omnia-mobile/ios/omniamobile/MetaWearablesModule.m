@@ -50,5 +50,17 @@ RCT_EXTERN_METHOD(getDeviceInfo:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(getConnectionStatus:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// Video Recording
+RCT_EXTERN_METHOD(startRecording:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(stopRecording:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// Hand Pose Detection
+RCT_EXTERN_METHOD(setHandPoseEnabled:(BOOL)enabled
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end
 

@@ -4,9 +4,10 @@ import MWDATCore
 import MWDATCamera
 import Vision
 import AVFoundation
+import Photos
 
 @objc(MetaWearablesModule)
-class MetaWearablesModule: RCTEventEmitter {
+class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate {
 
   // Based on CameraAccess sample - Wearables.shared is the main SDK interface
   private var wearables: WearablesInterface?
@@ -38,9 +39,22 @@ class MetaWearablesModule: RCTEventEmitter {
 
   // Track announced UPC codes to prevent re-announcing the same code
   private var announcedUPCs: Set<String> = []
-  
+
   // Text-to-speech for barcode announcements
   private let speechSynthesizer = AVSpeechSynthesizer()
+
+  // Video recording state
+  private var isRecording: Bool = false
+  private var recordedFrames: [(image: UIImage, timestamp: TimeInterval)] = []
+  private var recordingStartTime: TimeInterval = 0
+
+  // Audio recording
+  private var audioRecorder: AVAudioRecorder?
+  private var audioFileURL: URL?
+
+  // Hand pose detection
+  private let handPoseQueue = DispatchQueue(label: "com.omnia.handPoseDetection", qos: .userInitiated)
+  private var isHandPoseEnabled: Bool = true
 
   override static func requiresMainQueueSetup() -> Bool {
     return true
@@ -55,7 +69,8 @@ class MetaWearablesModule: RCTEventEmitter {
       "onError",
       "onVideoFrame",
       "onPhotoCaptured",
-      "onBarcodeDetected"
+      "onBarcodeDetected",
+      "onHandPoseDetected"
     ]
   }
 
@@ -598,6 +613,120 @@ class MetaWearablesModule: RCTEventEmitter {
     }
   }
 
+  // MARK: - Hand Pose Detection
+
+  private func readableJointName(_ joint: VNHumanHandPoseObservation.JointName) -> String {
+    switch joint {
+    case .wrist: return "wrist"
+    case .thumbCMC: return "thumbCMC"
+    case .thumbMP: return "thumbMP"
+    case .thumbIP: return "thumbIP"
+    case .thumbTip: return "thumbTip"
+    case .indexMCP: return "indexMCP"
+    case .indexPIP: return "indexPIP"
+    case .indexDIP: return "indexDIP"
+    case .indexTip: return "indexTip"
+    case .middleMCP: return "middleMCP"
+    case .middlePIP: return "middlePIP"
+    case .middleDIP: return "middleDIP"
+    case .middleTip: return "middleTip"
+    case .ringMCP: return "ringMCP"
+    case .ringPIP: return "ringPIP"
+    case .ringDIP: return "ringDIP"
+    case .ringTip: return "ringTip"
+    case .littleMCP: return "littleMCP"
+    case .littlePIP: return "littlePIP"
+    case .littleDIP: return "littleDIP"
+    case .littleTip: return "littleTip"
+    default: return "unknown"
+    }
+  }
+
+  private func detectHandPose(in image: UIImage, timestamp: TimeInterval, width: Int, height: Int) {
+    guard let cgImage = image.cgImage else { return }
+
+    handPoseQueue.async { [weak self] in
+      guard let self = self else { return }
+
+      let request = VNDetectHumanHandPoseRequest()
+      request.maximumHandCount = 2
+
+      let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+      do {
+        try handler.perform([request])
+      } catch {
+        print("[MetaWearables] Hand pose detection error: \(error.localizedDescription)")
+        return
+      }
+
+      guard let observations = request.results, !observations.isEmpty else {
+        return
+      }
+
+      var handsArray: [[String: Any]] = []
+
+      for observation in observations {
+        // Get chirality (left/right) - iOS 15+
+        let chirality: String
+        switch observation.chirality {
+        case .left: chirality = "left"
+        case .right: chirality = "right"
+        default: chirality = "unknown"
+        }
+
+        // Get all recognized points
+        guard let allPoints = try? observation.recognizedPoints(.all) else { continue }
+
+        var jointsArray: [[String: Any]] = []
+
+        for (jointName, point) in allPoints {
+          // Filter low-confidence joints
+          guard point.confidence > 0.1 else { continue }
+
+          let name = self.readableJointName(jointName)
+          guard name != "unknown" else { continue }
+
+          // Flip Y coordinate for top-left origin (Vision uses bottom-left)
+          let flippedY = 1.0 - point.location.y
+
+          jointsArray.append([
+            "name": name,
+            "x": point.location.x,
+            "y": flippedY,
+            "confidence": point.confidence
+          ])
+        }
+
+        guard !jointsArray.isEmpty else { continue }
+
+        handsArray.append([
+          "chirality": chirality,
+          "joints": jointsArray
+        ])
+      }
+
+      guard !handsArray.isEmpty else { return }
+
+      let eventBody: [String: Any] = [
+        "hands": handsArray,
+        "timestamp": timestamp,
+        "frameWidth": width,
+        "frameHeight": height
+      ]
+
+      DispatchQueue.main.async {
+        self.sendEvent(withName: "onHandPoseDetected", body: eventBody)
+      }
+    }
+  }
+
+  @objc
+  func setHandPoseEnabled(_ enabled: Bool, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    self.isHandPoseEnabled = enabled
+    print("[MetaWearables] Hand pose detection \(enabled ? "enabled" : "disabled")")
+    resolve(["success": true, "enabled": enabled])
+  }
+
   // Minimal preprocessing - just use the image as-is from the glasses
   // Vision framework works best with unmodified images
   private func preprocessImageForBarcode(_ cgImage: CGImage) -> CGImage? {
@@ -795,6 +924,24 @@ class MetaWearablesModule: RCTEventEmitter {
           if let image = videoFrame.makeUIImage() {
             print("[MetaWearables] ✅ Converted to UIImage: \(image.size.width)x\(image.size.height)")
 
+            // If recording is active, store the frame
+            if self.isRecording {
+              let currentTime = Date().timeIntervalSince1970
+              self.recordedFrames.append((image: image, timestamp: currentTime))
+              let frameCount = self.recordedFrames.count
+
+              // Log every 100 frames
+              if frameCount % 100 == 0 {
+                let duration = currentTime - self.recordingStartTime
+                print("[MetaWearables] 🔴 Recording: \(frameCount) frames (\(String(format: "%.1f", duration))s)")
+              }
+
+              // Memory warning for very long recordings (>10 minutes at 15fps = ~9000 frames)
+              if frameCount == 9000 {
+                print("[MetaWearables] ⚠️ Long recording detected (\(frameCount) frames). Consider stopping to avoid memory issues.")
+              }
+            }
+
             // Check if frame is sharp enough for barcode detection (skip blurry frames)
             if !self.isImageSharp(image) {
               // Frame is too blurry - skip processing
@@ -808,6 +955,16 @@ class MetaWearablesModule: RCTEventEmitter {
 
             // Detect barcodes in the upscaled frame (runs async on background queue)
             self.detectBarcodes(in: upscaledImage)
+
+            // Detect hand poses in the original frame (runs async on dedicated queue)
+            if self.isHandPoseEnabled {
+              self.detectHandPose(
+                in: image,
+                timestamp: Date().timeIntervalSince1970 * 1000,
+                width: Int(image.size.width),
+                height: Int(image.size.height)
+              )
+            }
 
             if let imageData = self.convertImageToBase64(image) {
               print("[MetaWearables] ✅ Converted to base64: \(imageData.prefix(50))...")
@@ -1059,8 +1216,459 @@ class MetaWearablesModule: RCTEventEmitter {
     }
   }
   
+  // MARK: - Video Recording
+
+  @objc
+  func startRecording(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    Task { @MainActor [weak self] in
+      guard let self = self else {
+        print("[MetaWearables] ❌ startRecording: Module deallocated")
+        reject("ERROR", "Module deallocated", nil)
+        return
+      }
+
+      print("[MetaWearables] 🔴 startRecording called")
+      print("[MetaWearables] Current state - isRecording: \(self.isRecording), streamSession: \(self.streamSession != nil ? "active" : "nil")")
+
+      guard self.streamSession != nil else {
+        print("[MetaWearables] ❌ No active streaming session")
+        reject("NO_SESSION", "No active streaming session. Start video stream first.", nil)
+        return
+      }
+
+      if self.isRecording {
+        print("[MetaWearables] ❌ Already recording")
+        reject("ALREADY_RECORDING", "Recording already in progress", nil)
+        return
+      }
+
+      print("[MetaWearables] 🔴 Starting video recording with audio...")
+      self.isRecording = true
+      self.recordedFrames = []
+      self.recordingStartTime = Date().timeIntervalSince1970
+      print("[MetaWearables] Recording state set - isRecording: \(self.isRecording), startTime: \(self.recordingStartTime)")
+
+      // Start audio recording
+      do {
+        print("[MetaWearables] 🎤 Attempting to start audio recording...")
+        try self.startAudioRecording()
+        print("[MetaWearables] ✅ Audio recording started successfully")
+      } catch {
+        print("[MetaWearables] ⚠️ Failed to start audio recording: \(error.localizedDescription)")
+        print("[MetaWearables] Error details: \(error)")
+        // Continue with video-only recording - don't fail the whole recording
+      }
+
+      print("[MetaWearables] ✅ Recording started - frames will be captured from stream")
+      resolve(["success": true, "message": "Recording started"])
+    }
+  }
+
+  private func startAudioRecording() throws {
+    // Configure audio session - use playAndRecord to allow simultaneous recording and playback
+    let audioSession = AVAudioSession.sharedInstance()
+    do {
+      try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .allowBluetooth])
+      try audioSession.setActive(true, options: [])
+      print("[MetaWearables] Audio session configured successfully")
+    } catch {
+      print("[MetaWearables] ⚠️ Audio session configuration failed: \(error.localizedDescription)")
+      throw error
+    }
+
+    // Create temporary file for audio
+    let tempDir = FileManager.default.temporaryDirectory
+    let audioFileName = "meta_audio_\(Int(Date().timeIntervalSince1970)).m4a"
+    let audioURL = tempDir.appendingPathComponent(audioFileName)
+
+    // Remove any existing file
+    try? FileManager.default.removeItem(at: audioURL)
+
+    self.audioFileURL = audioURL
+
+    // Configure audio recorder settings
+    let settings: [String: Any] = [
+      AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+      AVSampleRateKey: 44100.0,
+      AVNumberOfChannelsKey: 1,
+      AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+    ]
+
+    // Create and start audio recorder
+    do {
+      let recorder = try AVAudioRecorder(url: audioURL, settings: settings)
+      recorder.delegate = self
+
+      // Prepare and start recording
+      if recorder.prepareToRecord() {
+        if recorder.record() {
+          self.audioRecorder = recorder
+          print("[MetaWearables] 🎤 Audio recording started successfully to: \(audioURL.path)")
+        } else {
+          throw NSError(domain: "MetaWearables", code: 7, userInfo: [NSLocalizedDescriptionKey: "Failed to start audio recording"])
+        }
+      } else {
+        throw NSError(domain: "MetaWearables", code: 8, userInfo: [NSLocalizedDescriptionKey: "Failed to prepare audio recorder"])
+      }
+    } catch {
+      print("[MetaWearables] ❌ Audio recorder creation failed: \(error.localizedDescription)")
+      throw error
+    }
+  }
+
+  @objc
+  func stopRecording(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    Task { @MainActor [weak self] in
+      guard let self = self else {
+        print("[MetaWearables] ❌ stopRecording: Module deallocated")
+        reject("ERROR", "Module deallocated", nil)
+        return
+      }
+
+      print("[MetaWearables] ⏹️ stopRecording called")
+      print("[MetaWearables] Current state - isRecording: \(self.isRecording), frames: \(self.recordedFrames.count), audioRecorder: \(self.audioRecorder != nil ? "active" : "nil")")
+
+      if !self.isRecording {
+        print("[MetaWearables] ❌ NOT RECORDING - isRecording is false!")
+        print("[MetaWearables] Debug info:")
+        print("[MetaWearables]   - recordedFrames.count: \(self.recordedFrames.count)")
+        print("[MetaWearables]   - audioRecorder: \(self.audioRecorder != nil ? "exists" : "nil")")
+        print("[MetaWearables]   - audioFileURL: \(self.audioFileURL?.path ?? "nil")")
+        reject("NOT_RECORDING", "No recording in progress", nil)
+        return
+      }
+
+      print("[MetaWearables] ⏹️ Stopping video recording...")
+      self.isRecording = false
+
+      // Stop audio recording
+      print("[MetaWearables] 🎤 Stopping audio recorder...")
+      self.audioRecorder?.stop()
+      let audioURL = self.audioFileURL
+      self.audioRecorder = nil
+      print("[MetaWearables] Audio recorder stopped, file at: \(audioURL?.path ?? "nil")")
+
+      let frameCount = self.recordedFrames.count
+      let duration = Date().timeIntervalSince1970 - self.recordingStartTime
+
+      guard frameCount > 0 else {
+        // Clean up audio file
+        if let audioURL = audioURL {
+          try? FileManager.default.removeItem(at: audioURL)
+        }
+        reject("NO_FRAMES", "No frames were recorded", nil)
+        return
+      }
+
+      print("[MetaWearables] 📼 Recorded \(frameCount) frames over \(String(format: "%.1f", duration))s")
+
+      // Create video from frames (with audio if available)
+      do {
+        let videoPath = try await self.createVideoFromFrames(self.recordedFrames, audioURL: audioURL)
+        print("[MetaWearables] ✅ Video saved to: \(videoPath)")
+
+        // Clear recorded frames to free memory
+        self.recordedFrames = []
+
+        // Clean up audio file (already merged into video)
+        if let audioURL = audioURL {
+          try? FileManager.default.removeItem(at: audioURL)
+        }
+        self.audioFileURL = nil
+
+        resolve([
+          "success": true,
+          "filePath": videoPath,
+          "frameCount": frameCount,
+          "duration": duration
+        ])
+      } catch {
+        print("[MetaWearables] ❌ Failed to create video: \(error.localizedDescription)")
+        // Clean up audio file on error
+        if let audioURL = audioURL {
+          try? FileManager.default.removeItem(at: audioURL)
+        }
+        self.audioFileURL = nil
+        reject("VIDEO_CREATION_ERROR", error.localizedDescription, error)
+      }
+    }
+  }
+
+  private func createVideoFromFrames(_ frames: [(image: UIImage, timestamp: TimeInterval)], audioURL: URL?) async throws -> String {
+    guard !frames.isEmpty else {
+      throw NSError(domain: "MetaWearables", code: 1, userInfo: [NSLocalizedDescriptionKey: "No frames to process"])
+    }
+
+    // Create output file path in temporary directory
+    let tempDir = FileManager.default.temporaryDirectory
+    let fileName = "meta_recording_\(Int(Date().timeIntervalSince1970)).mov"
+    let outputURL = tempDir.appendingPathComponent(fileName)
+
+    // Remove existing file if present
+    try? FileManager.default.removeItem(at: outputURL)
+
+    print("[MetaWearables] 📹 Creating video at: \(outputURL.path)")
+
+    // Get frame dimensions from first frame
+    let firstFrame = frames[0].image
+    let videoWidth = Int(firstFrame.size.width)
+    let videoHeight = Int(firstFrame.size.height)
+
+    print("[MetaWearables] Video dimensions: \(videoWidth)x\(videoHeight)")
+
+    // Create asset writer
+    let assetWriter = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
+
+    // Configure video settings - use H.264 codec
+    let videoSettings: [String: Any] = [
+      AVVideoCodecKey: AVVideoCodecType.h264,
+      AVVideoWidthKey: videoWidth,
+      AVVideoHeightKey: videoHeight,
+      AVVideoCompressionPropertiesKey: [
+        AVVideoAverageBitRateKey: 6000000, // 6 Mbps for good quality
+        AVVideoMaxKeyFrameIntervalKey: 30
+      ]
+    ]
+
+    let assetWriterInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+    assetWriterInput.expectsMediaDataInRealTime = false
+
+    // Create pixel buffer adaptor
+    let sourcePixelBufferAttributes: [String: Any] = [
+      kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB,
+      kCVPixelBufferWidthKey as String: videoWidth,
+      kCVPixelBufferHeightKey as String: videoHeight
+    ]
+
+    let pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(
+      assetWriterInput: assetWriterInput,
+      sourcePixelBufferAttributes: sourcePixelBufferAttributes
+    )
+
+    guard assetWriter.canAdd(assetWriterInput) else {
+      throw NSError(domain: "MetaWearables", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot add input to asset writer"])
+    }
+
+    assetWriter.add(assetWriterInput)
+
+    // Add audio track if available
+    var audioWriterInput: AVAssetWriterInput?
+    var audioReader: AVAssetReader?
+    var audioReaderOutput: AVAssetReaderTrackOutput?
+
+    if let audioURL = audioURL, FileManager.default.fileExists(atPath: audioURL.path) {
+      print("[MetaWearables] 🎤 Adding audio track from: \(audioURL.path)")
+
+      do {
+        // Load audio asset
+        let audioAsset = AVAsset(url: audioURL)
+        guard let audioTrack = try await audioAsset.loadTracks(withMediaType: .audio).first else {
+          print("[MetaWearables] ⚠️ No audio track found in recorded audio")
+          throw NSError(domain: "MetaWearables", code: 6, userInfo: [NSLocalizedDescriptionKey: "No audio track found"])
+        }
+
+        // Create audio reader
+        let reader = try AVAssetReader(asset: audioAsset)
+        let readerOutput = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: nil)
+        reader.add(readerOutput)
+        audioReader = reader
+        audioReaderOutput = readerOutput
+
+        // Create audio writer input
+        let audioSettings: [String: Any] = [
+          AVFormatIDKey: kAudioFormatMPEG4AAC,
+          AVSampleRateKey: 44100,
+          AVNumberOfChannelsKey: 1,
+          AVEncoderBitRateKey: 128000
+        ]
+
+        let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+        audioInput.expectsMediaDataInRealTime = false
+
+        if assetWriter.canAdd(audioInput) {
+          assetWriter.add(audioInput)
+          audioWriterInput = audioInput
+          print("[MetaWearables] ✅ Audio track added to video")
+        }
+      } catch {
+        print("[MetaWearables] ⚠️ Failed to add audio track: \(error.localizedDescription)")
+        // Continue without audio
+      }
+    }
+
+    // Start writing session
+    guard assetWriter.startWriting() else {
+      throw NSError(domain: "MetaWearables", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to start writing: \(assetWriter.error?.localizedDescription ?? "unknown error")"])
+    }
+
+    assetWriter.startSession(atSourceTime: .zero)
+
+    // Calculate frame rate based on actual timestamps
+    let fps: Int32 = 15 // Match streaming config
+    let frameDuration = CMTimeMake(value: 1, timescale: fps)
+
+    print("[MetaWearables] Writing frames at \(fps) fps...")
+
+    // Write frames
+    var frameIndex = 0
+    for (image, _) in frames {
+      // Wait until ready for more data
+      while !assetWriterInput.isReadyForMoreMediaData {
+        try await Task.sleep(nanoseconds: 10_000_000) // 10ms
+      }
+
+      // Create pixel buffer from image
+      guard let pixelBuffer = self.pixelBuffer(from: image, size: CGSize(width: videoWidth, height: videoHeight)) else {
+        print("[MetaWearables] ⚠️ Failed to create pixel buffer for frame \(frameIndex)")
+        continue
+      }
+
+      let presentationTime = CMTimeMultiply(frameDuration, multiplier: Int32(frameIndex))
+
+      if !pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: presentationTime) {
+        print("[MetaWearables] ⚠️ Failed to append frame \(frameIndex)")
+      }
+
+      frameIndex += 1
+
+      if frameIndex % 30 == 0 {
+        print("[MetaWearables] Progress: \(frameIndex)/\(frames.count) frames written")
+      }
+    }
+
+    print("[MetaWearables] All frames written, finishing video track...")
+
+    // Finish video track
+    assetWriterInput.markAsFinished()
+
+    // Write audio samples if available
+    if let audioInput = audioWriterInput,
+       let reader = audioReader,
+       let readerOutput = audioReaderOutput {
+      print("[MetaWearables] 🎤 Writing audio samples...")
+
+      // Start reading audio
+      reader.startReading()
+
+      // Copy audio samples
+      while audioInput.isReadyForMoreMediaData {
+        guard let sampleBuffer = readerOutput.copyNextSampleBuffer() else {
+          break
+        }
+        audioInput.append(sampleBuffer)
+      }
+
+      audioInput.markAsFinished()
+      print("[MetaWearables] ✅ Audio samples written")
+    }
+
+    let videoPath = try await withCheckedThrowingContinuation { continuation in
+      assetWriter.finishWriting {
+        if assetWriter.status == .completed {
+          print("[MetaWearables] ✅ Video with audio writing completed successfully")
+          continuation.resume(returning: outputURL.path)
+        } else if let error = assetWriter.error {
+          print("[MetaWearables] ❌ Video writing failed: \(error.localizedDescription)")
+          continuation.resume(throwing: error)
+        } else {
+          let error = NSError(domain: "MetaWearables", code: 4, userInfo: [NSLocalizedDescriptionKey: "Unknown error during video writing"])
+          continuation.resume(throwing: error)
+        }
+      }
+    }
+
+    // Save to Photos Library
+    print("[MetaWearables] 💾 Saving video to Photos Library...")
+    let savedPath = try await self.saveVideoToPhotosLibrary(videoURL: outputURL)
+    print("[MetaWearables] ✅ Video saved to Photos Library: \(savedPath)")
+
+    return savedPath
+  }
+
+  private func saveVideoToPhotosLibrary(videoURL: URL) async throws -> String {
+    // Request photo library permission
+    let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+
+    if status == .notDetermined {
+      let newStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+      if newStatus != .authorized {
+        throw NSError(domain: "MetaWearables", code: 5, userInfo: [NSLocalizedDescriptionKey: "Photos library permission denied"])
+      }
+    } else if status != .authorized {
+      throw NSError(domain: "MetaWearables", code: 5, userInfo: [NSLocalizedDescriptionKey: "Photos library permission denied"])
+    }
+
+    // Save video to Photos Library
+    var localIdentifier: String?
+
+    try await PHPhotoLibrary.shared().performChanges {
+      let request = PHAssetCreationRequest.forAsset()
+      request.addResource(with: .video, fileURL: videoURL, options: nil)
+      localIdentifier = request.placeholderForCreatedAsset?.localIdentifier
+    }
+
+    // Clean up temp file
+    try? FileManager.default.removeItem(at: videoURL)
+
+    return localIdentifier ?? "Photos Library"
+  }
+
+  private func pixelBuffer(from image: UIImage, size: CGSize) -> CVPixelBuffer? {
+    let attrs = [
+      kCVPixelBufferCGImageCompatibilityKey: kCFBooleanTrue!,
+      kCVPixelBufferCGBitmapContextCompatibilityKey: kCFBooleanTrue!
+    ] as CFDictionary
+
+    var pixelBuffer: CVPixelBuffer?
+    let status = CVPixelBufferCreate(
+      kCFAllocatorDefault,
+      Int(size.width),
+      Int(size.height),
+      kCVPixelFormatType_32ARGB, // Changed from BGRA to ARGB to match bitmap info
+      attrs,
+      &pixelBuffer
+    )
+
+    guard status == kCVReturnSuccess, let buffer = pixelBuffer else {
+      return nil
+    }
+
+    CVPixelBufferLockBaseAddress(buffer, [])
+    defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+
+    let pixelData = CVPixelBufferGetBaseAddress(buffer)
+
+    let rgbColorSpace = CGColorSpaceCreateDeviceRGB()
+    guard let context = CGContext(
+      data: pixelData,
+      width: Int(size.width),
+      height: Int(size.height),
+      bitsPerComponent: 8,
+      bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+      space: rgbColorSpace,
+      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue // ARGB format
+    ) else {
+      return nil
+    }
+
+    // Don't clear - preserve the image data
+    // context.clear(CGRect(x: 0, y: 0, width: size.width, height: size.height))
+
+    let rect = CGRect(x: 0, y: 0, width: size.width, height: size.height)
+    if let cgImage = image.cgImage {
+      context.draw(cgImage, in: rect)
+    } else {
+      // Fallback: render using UIImage
+      UIGraphicsPushContext(context)
+      image.draw(in: rect)
+      UIGraphicsPopContext()
+    }
+
+    return buffer
+  }
+
   // MARK: - Helper Methods
-  
+
   // Announce barcode detection via text-to-speech through Meta glasses
   private func announceBarcode(barcodeType: String) {
     DispatchQueue.main.async { [weak self] in
@@ -1099,11 +1707,35 @@ class MetaWearablesModule: RCTEventEmitter {
     return nil
   }
 
+  // MARK: - AVAudioRecorderDelegate
+
+  func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+    if flag {
+      print("[MetaWearables] 🎤 Audio recording finished successfully")
+    } else {
+      print("[MetaWearables] ⚠️ Audio recording finished unsuccessfully")
+    }
+  }
+
+  func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+    if let error = error {
+      print("[MetaWearables] ❌ Audio recording encode error: \(error.localizedDescription)")
+      // Stop recording on error
+      self.isRecording = false
+      self.audioRecorder?.stop()
+      self.audioRecorder = nil
+    }
+  }
+
   // Clean up resources
   deinit {
     // Cancel all tasks
     registrationTask?.cancel()
     deviceStreamTask?.cancel()
+
+    // Stop audio recording if active
+    audioRecorder?.stop()
+    audioRecorder = nil
 
     // Clean up stream session
     stateListenerToken = nil

@@ -45,6 +45,32 @@ export interface MetaBarcode {
   timestamp: number;
 }
 
+export interface HandJoint {
+  name: string;       // "wrist", "thumbCMC", "indexTip", etc.
+  x: number;          // 0-1 normalized, left-origin
+  y: number;          // 0-1 normalized, top-origin (pre-flipped)
+  confidence: number; // 0-1
+}
+
+export interface DetectedHand {
+  chirality: 'left' | 'right' | 'unknown';
+  joints: HandJoint[];
+}
+
+export interface HandPoseData {
+  hands: DetectedHand[];
+  timestamp: number;
+  frameWidth: number;
+  frameHeight: number;
+}
+
+export interface MetaRecordedVideo {
+  success: boolean;
+  filePath: string; // Path to the saved video file
+  frameCount: number; // Number of frames recorded
+  duration: number; // Duration in seconds
+}
+
 class MetaWearablesService {
   private isAvailable: boolean;
   private currentDevice: MetaDevice | null = null;
@@ -89,6 +115,10 @@ class MetaWearablesService {
 
     metaWearablesEmitter.addListener('onBarcodeDetected', (barcode: MetaBarcode) => {
       this.emit('barcodeDetected', barcode);
+    });
+
+    metaWearablesEmitter.addListener('onHandPoseDetected', (data: HandPoseData) => {
+      this.emit('handPoseDetected', data);
     });
 
     metaWearablesEmitter.addListener('onError', (error: { code: string; message: string }) => {
@@ -253,6 +283,38 @@ class MetaWearablesService {
    */
   getCurrentDevice(): MetaDevice | null {
     return this.currentDevice;
+  }
+
+  /**
+   * Start recording video from stream frames
+   * Must be called while video streaming is active
+   */
+  async startRecording(): Promise<void> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.startRecording();
+  }
+
+  /**
+   * Stop recording and save video file
+   * Returns information about the saved video
+   */
+  async stopRecording(): Promise<MetaRecordedVideo> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.stopRecording();
+  }
+
+  /**
+   * Enable or disable hand pose detection
+   */
+  async setHandPoseEnabled(enabled: boolean): Promise<void> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.setHandPoseEnabled(enabled);
   }
 
   /**
