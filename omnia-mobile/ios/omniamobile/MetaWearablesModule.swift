@@ -1698,6 +1698,35 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate {
     }
   }
 
+  // Speak an instruction text through the glasses speakers via TTS
+  @objc
+  func speakInstruction(_ text: String, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else {
+        reject("ERROR", "Module deallocated", nil)
+        return
+      }
+
+      let audioSession = AVAudioSession.sharedInstance()
+      do {
+        try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+        try audioSession.setActive(true)
+      } catch {
+        print("[MetaWearables] Failed to configure audio session: \(error.localizedDescription)")
+      }
+
+      let utterance = AVSpeechUtterance(string: text)
+      utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+      utterance.rate = 0.48
+      utterance.volume = 1.0
+      utterance.pitchMultiplier = 1.0
+
+      self.speechSynthesizer.speak(utterance)
+      print("[MetaWearables] 🔊 Speaking instruction: '\(text)'")
+      resolve(nil)
+    }
+  }
+
   // Convert UIImage to base64 string
   private func convertImageToBase64(_ image: UIImage) -> String? {
     // Use JPEG with 0.8 quality for reasonable size/quality balance

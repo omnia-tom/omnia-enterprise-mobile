@@ -1,9 +1,9 @@
 import React from 'react';
-import { Text, Platform } from 'react-native';
+import { Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MainScreen from '../screens/MainScreen';
-import PickPackScreen from '../screens/PickPackScreen';
+import TaskBrowserScreen from '../screens/TaskBrowserScreen';
+import SubmissionsScreen from '../screens/SubmissionsScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -32,22 +32,22 @@ export default function TabNavigator() {
       }}
     >
       <Tab.Screen
-        name="Home"
-        component={MainScreen}
+        name="Tasks"
+        component={TaskBrowserScreen}
         options={{
-          tabBarLabel: 'Home',
+          tabBarLabel: 'Tasks',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon icon="🏠" color={color} size={size} />
+            <TabIcon icon="🎯" color={color} size={size} />
           ),
         }}
       />
       <Tab.Screen
-        name="PickPack"
-        component={PickPackScreen}
+        name="Submissions"
+        component={SubmissionsScreen}
         options={{
-          tabBarLabel: 'Pick-Pack',
+          tabBarLabel: 'Earnings',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon icon="📦" color={color} size={size} />
+            <TabIcon icon="💰" color={color} size={size} />
           ),
         }}
       />

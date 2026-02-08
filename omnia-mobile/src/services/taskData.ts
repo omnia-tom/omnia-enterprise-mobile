@@ -1,0 +1,341 @@
+import { Task, Submission, TaskCategory, SubmissionStatus } from '../types/tasks';
+
+const MOCK_TASKS: Task[] = [
+  {
+    id: 'task-001',
+    title: 'Pack a Shipping Box',
+    description: 'Demonstrate packing items into a standard shipping box with proper cushioning and sealing. Focus on efficient hand movements and clear visibility of each step.',
+    category: 'warehouse',
+    difficulty: 'beginner',
+    payoutCents: 150,
+    estimatedMinutes: 8,
+    requirements: ['Both hands visible', 'Well-lit area', 'Shipping box and packing materials'],
+    instructions: [
+      'Place the open box on a flat surface in front of you',
+      'Add a layer of cushioning material to the bottom',
+      'Place the item in the center of the box',
+      'Fill remaining space with packing material',
+      'Close the box flaps and seal with tape',
+    ],
+    maxSubmissions: 50,
+    currentSubmissions: 38,
+    requiredDuration: { minSeconds: 120, maxSeconds: 600 },
+    handTrackingRequired: true,
+  },
+  {
+    id: 'task-002',
+    title: 'Pour and Stir Coffee',
+    description: 'Prepare a cup of coffee by pouring hot water and stirring. Show natural hand coordination with kitchen items.',
+    category: 'kitchen',
+    difficulty: 'beginner',
+    payoutCents: 75,
+    estimatedMinutes: 5,
+    requirements: ['Both hands visible', 'Kitchen or counter area', 'Mug, kettle, and spoon'],
+    instructions: [
+      'Place the mug on the counter',
+      'Pick up the kettle with your dominant hand',
+      'Pour water steadily into the mug',
+      'Set the kettle down',
+      'Pick up the spoon and stir for 5 seconds',
+      'Place the spoon on the counter',
+    ],
+    maxSubmissions: 80,
+    currentSubmissions: 52,
+    requiredDuration: { minSeconds: 60, maxSeconds: 300 },
+    handTrackingRequired: true,
+  },
+  {
+    id: 'task-003',
+    title: 'Fold a T-Shirt',
+    description: 'Demonstrate a clean, efficient t-shirt folding technique. The fold should be retail-quality.',
+    category: 'household',
+    difficulty: 'beginner',
+    payoutCents: 50,
+    estimatedMinutes: 3,
+    requirements: ['Both hands visible', 'Flat surface', 'Clean t-shirt'],
+    instructions: [
+      'Lay the t-shirt flat, face up',
+      'Fold one side to the center',
+      'Fold the sleeve back',
+      'Repeat on the other side',
+      'Fold the bottom up to the collar',
+    ],
+    maxSubmissions: 100,
+    currentSubmissions: 67,
+    requiredDuration: { minSeconds: 30, maxSeconds: 180 },
+    handTrackingRequired: true,
+  },
+  {
+    id: 'task-004',
+    title: 'Sort and Stack Documents',
+    description: 'Sort a stack of papers into categories and create neat, aligned piles. Show precise hand movements for paper handling.',
+    category: 'office',
+    difficulty: 'beginner',
+    payoutCents: 100,
+    estimatedMinutes: 6,
+    requirements: ['Both hands visible', 'Desk or flat surface', 'Stack of papers or documents'],
+    instructions: [
+      'Start with a messy pile of documents',
+      'Pick up the first document and examine it',
+      'Place it in a new pile',
+      'Continue sorting each document into piles',
+      'Tap each pile on the desk to align the edges',
+    ],
+    maxSubmissions: 60,
+    currentSubmissions: 22,
+    requiredDuration: { minSeconds: 90, maxSeconds: 360 },
+    handTrackingRequired: true,
+  },
+  {
+    id: 'task-005',
+    title: 'Assemble a Small Kit',
+    description: 'Put together a small hardware kit by placing items into compartments. Demonstrate fine motor skills with small objects.',
+    category: 'workshop',
+    difficulty: 'intermediate',
+    payoutCents: 200,
+    estimatedMinutes: 10,
+    requirements: ['Both hands visible', 'Well-lit workspace', 'Small items (screws, bolts, etc.) and compartment tray'],
+    instructions: [
+      'Lay out the empty compartment tray',
+      'Spread the loose items on the table',
+      'Pick up items one by one and place in correct compartments',
+      'Ensure each compartment has the right items',
+      'Close or organize the completed tray',
+    ],
+    maxSubmissions: 40,
+    currentSubmissions: 12,
+    requiredDuration: { minSeconds: 180, maxSeconds: 600 },
+    handTrackingRequired: true,
+  },
+  {
+    id: 'task-006',
+    title: 'Chop Vegetables',
+    description: 'Demonstrate safe vegetable chopping technique. Show proper knife handling and consistent cuts.',
+    category: 'kitchen',
+    difficulty: 'intermediate',
+    payoutCents: 175,
+    estimatedMinutes: 8,
+    requirements: ['Both hands visible', 'Cutting board and knife', 'Vegetables (carrots, celery, etc.)'],
+    instructions: [
+      'Place the cutting board on a stable surface',
+      'Position the vegetable on the board',
+      'Hold the vegetable with your non-dominant hand in claw grip',
+      'Make steady, even cuts with the knife',
+      'Move the cut pieces aside and continue',
+    ],
+    maxSubmissions: 45,
+    currentSubmissions: 18,
+    requiredDuration: { minSeconds: 120, maxSeconds: 480 },
+    handTrackingRequired: true,
+  },
+  {
+    id: 'task-007',
+    title: 'Sweep a Floor Area',
+    description: 'Sweep a small floor area with a broom. Demonstrate proper sweeping form and gathering debris.',
+    category: 'outdoor',
+    difficulty: 'beginner',
+    payoutCents: 100,
+    estimatedMinutes: 7,
+    requirements: ['Both hands visible', 'Broom and dustpan', 'Floor area with some debris'],
+    instructions: [
+      'Hold the broom with both hands',
+      'Sweep in long, even strokes toward a central area',
+      'Gather the debris into a pile',
+      'Hold the dustpan at the edge of the pile',
+      'Sweep debris into the dustpan',
+      'Dispose of the debris',
+    ],
+    maxSubmissions: 55,
+    currentSubmissions: 31,
+    requiredDuration: { minSeconds: 90, maxSeconds: 420 },
+    handTrackingRequired: false,
+  },
+  {
+    id: 'task-008',
+    title: 'Organize a Shelf',
+    description: 'Arrange items on a shelf neatly. Show how to pick up, position, and align objects for a tidy display.',
+    category: 'household',
+    difficulty: 'beginner',
+    payoutCents: 100,
+    estimatedMinutes: 6,
+    requirements: ['Both hands visible', 'Shelf or bookcase', 'Various items to organize'],
+    instructions: [
+      'Remove all items from the shelf',
+      'Group similar items together on the surface',
+      'Place the tallest items at the back',
+      'Arrange remaining items from large to small',
+      'Adjust spacing so items are evenly distributed',
+    ],
+    maxSubmissions: 70,
+    currentSubmissions: 45,
+    requiredDuration: { minSeconds: 90, maxSeconds: 360 },
+    handTrackingRequired: true,
+  },
+  {
+    id: 'task-009',
+    title: 'Measure and Mark Wood',
+    description: 'Use a tape measure and pencil to measure and mark a piece of wood. Show precise measurement technique.',
+    category: 'workshop',
+    difficulty: 'intermediate',
+    payoutCents: 175,
+    estimatedMinutes: 7,
+    requirements: ['Both hands visible', 'Tape measure and pencil', 'Piece of wood or board'],
+    instructions: [
+      'Place the wood on a stable surface',
+      'Extend the tape measure along the edge',
+      'Find the desired measurement',
+      'Mark the spot clearly with the pencil',
+      'Double-check the measurement',
+      'Draw a straight line across the mark',
+    ],
+    maxSubmissions: 35,
+    currentSubmissions: 8,
+    requiredDuration: { minSeconds: 90, maxSeconds: 420 },
+    handTrackingRequired: true,
+  },
+  {
+    id: 'task-010',
+    title: 'Plant a Seedling',
+    description: 'Demonstrate transplanting a seedling into a pot. Show careful handling of soil and the plant.',
+    category: 'outdoor',
+    difficulty: 'beginner',
+    payoutCents: 125,
+    estimatedMinutes: 8,
+    requirements: ['Both hands visible', 'Pot, soil, and seedling', 'Outdoor or covered area'],
+    instructions: [
+      'Fill the pot halfway with soil',
+      'Create a small hole in the center',
+      'Gently remove the seedling from its container',
+      'Place the seedling in the hole',
+      'Fill around the seedling with soil and press gently',
+      'Water the seedling lightly',
+    ],
+    maxSubmissions: 50,
+    currentSubmissions: 19,
+    requiredDuration: { minSeconds: 120, maxSeconds: 480 },
+    handTrackingRequired: true,
+  },
+  {
+    id: 'task-011',
+    title: 'Label Packages',
+    description: 'Apply shipping labels to packages. Show precise label placement and smoothing technique.',
+    category: 'warehouse',
+    difficulty: 'beginner',
+    payoutCents: 75,
+    estimatedMinutes: 5,
+    requirements: ['Both hands visible', 'Packages and adhesive labels', 'Flat surface'],
+    instructions: [
+      'Place the package on the surface',
+      'Peel the label from its backing',
+      'Align the label on the top of the package',
+      'Press the label down from center outward',
+      'Smooth out any bubbles or wrinkles',
+    ],
+    maxSubmissions: 75,
+    currentSubmissions: 41,
+    requiredDuration: { minSeconds: 60, maxSeconds: 300 },
+    handTrackingRequired: true,
+  },
+  {
+    id: 'task-012',
+    title: 'Roll Towels',
+    description: 'Roll bath towels into neat spa-style cylinders. Demonstrate a consistent, tight rolling technique.',
+    category: 'personal_care',
+    difficulty: 'beginner',
+    payoutCents: 50,
+    estimatedMinutes: 4,
+    requirements: ['Both hands visible', 'Flat surface', 'Bath towels'],
+    instructions: [
+      'Lay the towel flat on the surface',
+      'Fold the towel in half lengthwise',
+      'Start rolling tightly from one end',
+      'Keep the roll tight and even as you go',
+      'Tuck the end to secure the roll',
+    ],
+    maxSubmissions: 90,
+    currentSubmissions: 72,
+    requiredDuration: { minSeconds: 45, maxSeconds: 240 },
+    handTrackingRequired: true,
+  },
+  {
+    id: 'task-013',
+    title: 'Plate a Dish',
+    description: 'Arrange food items on a plate in an appealing presentation. Show controlled placement and garnishing.',
+    category: 'kitchen',
+    difficulty: 'advanced',
+    payoutCents: 300,
+    estimatedMinutes: 12,
+    requirements: ['Both hands visible', 'Plate and food items', 'Clean kitchen area', 'Garnish items'],
+    instructions: [
+      'Place the clean plate on the counter',
+      'Add the main item to the center of the plate',
+      'Arrange side items around the main piece',
+      'Add sauce or drizzle with controlled movements',
+      'Place garnish delicately on top',
+      'Clean any drips from the plate rim',
+    ],
+    maxSubmissions: 30,
+    currentSubmissions: 5,
+    requiredDuration: { minSeconds: 180, maxSeconds: 720 },
+    handTrackingRequired: true,
+  },
+  {
+    id: 'task-014',
+    title: 'Type a Document',
+    description: 'Record natural typing on a keyboard. Show fluid hand movements and proper key striking.',
+    category: 'office',
+    difficulty: 'beginner',
+    payoutCents: 75,
+    estimatedMinutes: 5,
+    requirements: ['Both hands visible', 'Computer keyboard', 'Desk or table'],
+    instructions: [
+      'Position your hands on the home row',
+      'Begin typing naturally',
+      'Type at a steady pace for at least 30 seconds',
+      'Use backspace to correct any errors',
+      'Finish and rest hands on the desk',
+    ],
+    maxSubmissions: 100,
+    currentSubmissions: 88,
+    requiredDuration: { minSeconds: 60, maxSeconds: 300 },
+    handTrackingRequired: true,
+  },
+];
+
+// In-memory submissions store (session only)
+let submissions: Submission[] = [];
+
+export async function getAvailableTasks(): Promise<Task[]> {
+  return [...MOCK_TASKS];
+}
+
+export async function getTaskById(id: string): Promise<Task | undefined> {
+  return MOCK_TASKS.find(t => t.id === id);
+}
+
+export async function getTasksByCategory(category: TaskCategory): Promise<Task[]> {
+  return MOCK_TASKS.filter(t => t.category === category);
+}
+
+export async function getUserSubmissions(userId: string): Promise<Submission[]> {
+  return submissions.filter(s => s.userId === userId);
+}
+
+export async function addSubmission(submission: Submission): Promise<void> {
+  submissions.push(submission);
+  // Also increment the task's currentSubmissions count
+  const task = MOCK_TASKS.find(t => t.id === submission.taskId);
+  if (task) {
+    task.currentSubmissions += 1;
+  }
+}
+
+export function getTotalEarnings(userSubmissions: Submission[]): number {
+  return userSubmissions
+    .filter(s => s.status === 'approved')
+    .reduce((sum, s) => sum + s.payoutCents, 0);
+}
+
+export function formatCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}

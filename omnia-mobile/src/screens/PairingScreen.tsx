@@ -1,636 +1,374 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Linking } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  Linking,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import QRScanner from '../components/QRScanner';
-import { auth } from '../services/firebase';
 import { metaWearablesService, MetaDevice } from '../services/metaWearables';
-
-const API_URL = process.env.API_URL || 'https://omnia-api-447424955509.us-central1.run.app';
-
-type DeviceType = 'even-realities-g1' | 'meta-wearables';
+import { colors, typography, cardStyle, spacing } from '../theme';
 
 export default function PairingScreen() {
-  const [loading, setLoading] = useState(false);
-  const [pairingCode, setPairingCode] = useState<string | null>(null);
-  const [deviceType, setDeviceType] = useState<DeviceType>('even-realities-g1');
-  const [discoveringMeta, setDiscoveringMeta] = useState(false);
-  const [metaDevices, setMetaDevices] = useState<MetaDevice[]>([]);
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const [discovering, setDiscovering] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [devices, setDevices] = useState<MetaDevice[]>([]);
+  const [sdkReady, setSdkReady] = useState(false);
 
   useEffect(() => {
-    // Initialize SDK once when component mounts
-    const initializeMetaSDK = async () => {
-      if (metaWearablesService.isSDKAvailable()) {
-        try {
-          await metaWearablesService.initializeSDK();
-          console.log('[PairingScreen] Meta Wearables SDK initialized');
-        } catch (error: any) {
-          // SDK might already be initialized, which is fine
-          if (!error.message?.includes('already configured')) {
-            console.error('[PairingScreen] Failed to initialize Meta SDK:', error);
-          }
-        }
+    initSDK();
+
+    metaWearablesService.addEventListener('deviceFound', handleDeviceFound);
+    metaWearablesService.addEventListener('pairingComplete', handlePairingComplete);
+    metaWearablesService.addEventListener('error', handleError);
+
+    return () => {
+      metaWearablesService.removeEventListener('deviceFound', handleDeviceFound);
+      metaWearablesService.removeEventListener('pairingComplete', handlePairingComplete);
+      metaWearablesService.removeEventListener('error', handleError);
+      if (discovering) {
+        metaWearablesService.stopDiscovery().catch(() => {});
       }
     };
-
-    initializeMetaSDK();
-
-    // Set up event listeners when switching to Meta Wearables
-    if (deviceType === 'meta-wearables' && metaWearablesService.isSDKAvailable()) {
-      metaWearablesService.addEventListener('deviceFound', handleMetaDeviceFound);
-      metaWearablesService.addEventListener('pairingComplete', handleMetaPairingComplete);
-      metaWearablesService.addEventListener('error', handleMetaError);
-
-      return () => {
-        metaWearablesService.removeAllListeners();
-      };
-    }
-  }, [deviceType]);
+  }, []);
 
   // Handle deep links from Meta AI app OAuth callback
   useEffect(() => {
     const handleDeepLink = async (event: { url: string }) => {
-      const url = event.url;
-      console.log('[PairingScreen] Received deep link:', url);
-
-      // Check if this is a Meta Wearables callback URL
-      // Meta Wearables callbacks contain metaWearablesAction query parameter
-      if (url.includes('metaWearablesAction')) {
-        console.log('[PairingScreen] Detected Meta Wearables callback, processing...');
-
-        if (metaWearablesService.isSDKAvailable()) {
-          try {
-            const result = await metaWearablesService.handleUrl(url);
-            console.log('[PairingScreen] ✅ Successfully processed Meta Wearables callback:', result);
-          } catch (error: any) {
-            console.error('[PairingScreen] ❌ Failed to process Meta Wearables callback:', error);
-            Alert.alert('Registration Error', error.message || 'Failed to complete registration');
-          }
+      if (event.url.includes('metaWearablesAction') && metaWearablesService.isSDKAvailable()) {
+        try {
+          await metaWearablesService.handleUrl(event.url);
+        } catch (error: any) {
+          Alert.alert('Registration Error', error.message || 'Failed to complete registration');
         }
       }
     };
 
-    // Add listener for incoming deep links (when app is already open)
     const subscription = Linking.addEventListener('url', handleDeepLink);
-
-    // Check if app was launched with a deep link (when app was closed)
     Linking.getInitialURL().then((url) => {
-      if (url) {
-        handleDeepLink({ url });
-      }
+      if (url) handleDeepLink({ url });
     });
 
-    return () => {
-      subscription.remove();
-    };
+    return () => subscription.remove();
   }, []);
 
-  const handleMetaDeviceFound = (device: MetaDevice) => {
-    console.log('[PairingScreen] Device found:', device);
-    setMetaDevices(prev => {
-      // Avoid duplicates
-      if (prev.find(d => d.id === device.id)) {
-        return prev;
+  const initSDK = async () => {
+    if (!metaWearablesService.isSDKAvailable()) return;
+    try {
+      await metaWearablesService.initializeSDK();
+      setSdkReady(true);
+    } catch (error: any) {
+      if (error.message?.includes('already configured')) {
+        setSdkReady(true);
       }
+    }
+  };
+
+  const handleDeviceFound = (device: MetaDevice) => {
+    setDevices(prev => {
+      if (prev.find(d => d.id === device.id)) return prev;
       return [...prev, device];
     });
   };
 
-  const handleMetaPairingComplete = async (data: { success: boolean; deviceId?: string }) => {
-    console.log('[PairingScreen] Pairing complete:', data);
-
-    // Registration is complete - devices will now appear via onDeviceFound events
-    if (data.success) {
-      console.log('[PairingScreen] Registration successful, waiting for devices...');
-      // Keep discovering state active so user can see the list populate
-    } else {
-      setLoading(false);
-      setDiscoveringMeta(false);
-      Alert.alert('Registration Failed', 'Failed to register with Meta wearable device');
+  const handlePairingComplete = (data: { success: boolean }) => {
+    if (!data.success) {
+      setDiscovering(false);
+      Alert.alert('Registration Failed', 'Failed to register with Meta glasses');
     }
   };
 
-  const handleMetaError = (error: { code: string; message: string }) => {
-    console.error('[PairingScreen] Meta Wearables error:', error);
-    setLoading(false);
-    setDiscoveringMeta(false);
-    Alert.alert('Error', error.message || 'An error occurred with Meta Wearables');
+  const handleError = (error: { code: string; message: string }) => {
+    setDiscovering(false);
+    setConnecting(false);
   };
 
-  const startMetaDiscovery = async () => {
+  const startScan = async () => {
     if (!metaWearablesService.isSDKAvailable()) {
-      Alert.alert(
-        'Not Available',
-        'Meta Wearables SDK is not available. Please ensure the SDK is integrated in Xcode.'
-      );
+      Alert.alert('Not Available', 'Meta Wearables SDK is not available on this device.');
       return;
     }
 
     try {
-      setDiscoveringMeta(true);
-      setMetaDevices([]);
-
-      // For Meta glasses, we need to start pairing/registration first
-      // This will open the Meta AI app for confirmation
-      console.log('[PairingScreen] Starting Meta registration...');
+      setDiscovering(true);
+      setDevices([]);
       await metaWearablesService.startPairing('');
-
-      // Once registered, devices will be discovered automatically via devicesStream
-      // The onDeviceFound event will populate the metaDevices list
-
     } catch (error: any) {
-      console.error('Error starting Meta discovery:', error);
-
-      // Check if the error is about already being registered
       if (error.message?.includes('NOT_REGISTERED')) {
-        Alert.alert(
-          'Registration Required',
-          'Please complete the pairing process in the Meta AI app, then try again.'
-        );
+        Alert.alert('Registration Required', 'Complete the pairing in the Meta AI app, then try again.');
       } else {
-        Alert.alert('Error', error.message || 'Failed to start device discovery');
+        Alert.alert('Error', error.message || 'Failed to scan for devices');
       }
-      setDiscoveringMeta(false);
+      setDiscovering(false);
     }
   };
 
-  const stopMetaDiscovery = async () => {
+  const stopScan = async () => {
     try {
       await metaWearablesService.stopDiscovery();
-      setDiscoveringMeta(false);
-    } catch (error: any) {
-      console.error('Error stopping Meta discovery:', error);
-    }
+    } catch {}
+    setDiscovering(false);
   };
 
-  const handleMetaDeviceSelect = async (device: MetaDevice) => {
-    console.log('[PairingScreen] handleMetaDeviceSelect called for device:', device);
-    setLoading(true);
+  const selectDevice = async (device: MetaDevice) => {
+    setConnecting(true);
     try {
-      // Connect to the device
-      console.log('[PairingScreen] Connecting to device:', device.id);
       await metaWearablesService.connectToDevice(device.id);
-      console.log('[PairingScreen] ✅ Successfully connected to device');
+      await metaWearablesService.stopDiscovery().catch(() => {});
+      setDiscovering(false);
 
-      // Pair the device to the backend
-      console.log('[PairingScreen] Starting backend pairing...');
-      await pairMetaDeviceToBackend(device.id);
-    } catch (error: any) {
-      console.error('[PairingScreen] ❌ Error in handleMetaDeviceSelect:', error);
-      setLoading(false);
-      Alert.alert('Error', error.message || 'Failed to connect to device');
-    }
-  };
-
-  const pairMetaDeviceToBackend = async (deviceId: string) => {
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        Alert.alert('Error', 'You must be logged in to pair a device');
-        setLoading(false);
-        return;
-      }
-
-      const device = metaDevices.find(d => d.id === deviceId);
-      console.log('[PairingScreen] Found device for pairing:', device);
-
-      const idToken = await user.getIdToken();
-
-      const requestBody = {
-        pairingCode: deviceId, // Use device ID as pairing code for Meta devices
-        userId: user.uid,
-        deviceName: device?.name || 'Meta Wearable',
-        metadata: {
-          type: 'meta-wearables',
-          model: device?.model,
-          firmware: device?.firmware,
-          pairedAt: new Date().toISOString(),
-        },
-      };
-
-      console.log('[PairingScreen] Sending pairing request to backend:', {
-        url: `${API_URL}/api/devices/pair`,
-        body: requestBody
-      });
-
-      const response = await fetch(`${API_URL}/api/devices/pair`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      console.log('[PairingScreen] Backend response status:', response.status);
-
-      const result = await response.json();
-      console.log('[PairingScreen] Backend response body:', result);
-
-      if (response.ok && result.success) {
-        await metaWearablesService.stopDiscovery();
-        Alert.alert(
-          'Success!',
-          'Meta wearable paired successfully',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                if (navigation.canGoBack()) {
-                  navigation.goBack();
-                } else {
-                  navigation.navigate('Main' as never);
-                }
-              },
-            },
-          ]
-        );
-      } else {
-        Alert.alert('Pairing Failed', result.message || 'Failed to pair device');
+      // Go back — TaskDetailScreen will re-check connection status
+      if (navigation.canGoBack()) {
+        navigation.goBack();
       }
     } catch (error: any) {
-      console.error('Error pairing Meta device to backend:', error);
-      Alert.alert('Error', error.message || 'An error occurred during pairing');
+      Alert.alert('Connection Failed', error.message || 'Could not connect to glasses');
     } finally {
-      setLoading(false);
-      setDiscoveringMeta(false);
+      setConnecting(false);
     }
   };
 
-  const handleQRCodeScanned = async (data: string) => {
-    setPairingCode(data);
-    setLoading(true);
-
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        Alert.alert('Error', 'You must be logged in to pair a device');
-        setLoading(false);
-        return;
-      }
-
-      // Get Firebase ID token for authentication
-      const idToken = await user.getIdToken();
-
-      // Determine device name and metadata based on selected device type
-      const deviceName = deviceType === 'even-realities-g1'
-        ? 'Even Realities G1'
-        : 'Meta Wearable';
-
-      const metadata = deviceType === 'even-realities-g1'
-        ? {
-            type: 'even-realities-g1',
-            model: 'G1',
-            pairedAt: new Date().toISOString(),
-          }
-        : {
-            type: 'meta-wearables',
-            pairedAt: new Date().toISOString(),
-          };
-
-      console.log('[PairingScreen] Pairing with code:', data);
-      console.log('[PairingScreen] Device type:', deviceType);
-      console.log('[PairingScreen] Device name:', deviceName);
-
-      // Call pairing API
-      const response = await fetch(`${API_URL}/api/devices/pair`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          pairingCode: data,
-          userId: user.uid,
-          deviceName: deviceName,
-          metadata: metadata,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        Alert.alert(
-          'Success!',
-          `${deviceName} paired successfully`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                if (navigation.canGoBack()) {
-                  navigation.goBack();
-                } else {
-                  navigation.navigate('Main' as never);
-                }
-              },
-            },
-          ]
-        );
-      } else {
-        Alert.alert('Pairing Failed', result.message || result.error || 'Failed to pair device');
-      }
-    } catch (error: any) {
-      console.error('[PairingScreen] Pairing error:', error);
-      Alert.alert('Error', error.message || 'An error occurred during pairing');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const sdkAvailable = metaWearablesService.isSDKAvailable();
 
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.container}
-    >
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
 
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => {
-            if (navigation.canGoBack()) {
-              navigation.goBack();
-            } else {
-              navigation.navigate('Main' as never);
-            }
-          }}
-          style={styles.backButton}
-        >
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <Text style={styles.backArrow}>{'‹'}</Text>
+      </TouchableOpacity>
 
-        <Text style={styles.title}>Pair Device</Text>
-        <Text style={styles.subtitle}>
-          Scan the QR code from your web portal
-        </Text>
-      </View>
+      <Text style={styles.title}>Connect Glasses</Text>
+      <Text style={styles.subtitle}>
+        Scan for nearby Meta Ray-Ban glasses and select yours
+      </Text>
 
-      {/* Device Type Selector */}
-      <View style={styles.deviceTypeSelector}>
-        <TouchableOpacity
-          style={[
-            styles.deviceTypeButton,
-            deviceType === 'even-realities-g1' && styles.deviceTypeButtonActive
-          ]}
-          onPress={() => setDeviceType('even-realities-g1')}
-        >
-          <Text style={[
-            styles.deviceTypeButtonText,
-            deviceType === 'even-realities-g1' && styles.deviceTypeButtonTextActive
-          ]}>
-            Even Realities G1
+      {!sdkAvailable ? (
+        <View style={styles.center}>
+          <Text style={styles.unavailableText}>
+            Meta Wearables SDK is not available on this device.
           </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.deviceTypeButton,
-            deviceType === 'meta-wearables' && styles.deviceTypeButtonActive
-          ]}
-          onPress={() => setDeviceType('meta-wearables')}
-        >
-          <Text style={[
-            styles.deviceTypeButtonText,
-            deviceType === 'meta-wearables' && styles.deviceTypeButtonTextActive
-          ]}>
-            Meta Wearables
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* QR Scanner (for both device types) */}
-      <View style={styles.scannerContainer}>
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6366F1" />
-            <Text style={styles.loadingText}>Pairing device...</Text>
-            {pairingCode && (
-              <Text style={styles.codeText}>Code: {pairingCode}</Text>
-            )}
-          </View>
-        ) : (
-          <QRScanner onScan={handleQRCodeScanned} />
-        )}
-      </View>
-
-      {/* Info Card */}
-      {deviceType === 'even-realities-g1' && (
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>How to pair Even Realities G1:</Text>
-          <Text style={styles.infoText}>1. Log into the Omnia web portal</Text>
-          <Text style={styles.infoText}>2. Generate a pairing code for your device</Text>
-          <Text style={styles.infoText}>3. Scan the QR code shown on the portal</Text>
-          <Text style={styles.infoText}>4. Your device will be paired automatically</Text>
         </View>
-      )}
-
-      {deviceType === 'meta-wearables' && (
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>How to pair Meta Wearables:</Text>
-          <Text style={styles.infoText}>
-            <Text style={styles.boldText}>Step 1:</Text> Pair with Meta View app first
-          </Text>
-          <Text style={styles.infoText}>1. Download and open the Meta View app</Text>
-          <Text style={styles.infoText}>2. Pair your Meta glasses with Meta View</Text>
-          <Text style={styles.infoText}>
-            <Text style={styles.boldText}>Step 2:</Text> Pair with Omnia
-          </Text>
-          <Text style={styles.infoText}>3. Log into the Omnia web portal</Text>
-          <Text style={styles.infoText}>4. Generate a pairing code for your device</Text>
-          <Text style={styles.infoText}>5. Scan the QR code shown on the portal</Text>
-          {!metaWearablesService.isSDKAvailable() && (
-            <Text style={styles.warningText}>
-              ⚠️ Meta Wearables SDK not available. Please integrate the SDK in Xcode.
-            </Text>
+      ) : (
+        <>
+          {/* Scan button */}
+          {!discovering ? (
+            <TouchableOpacity
+              style={styles.scanButton}
+              onPress={startScan}
+              activeOpacity={0.8}
+              disabled={connecting}
+            >
+              <Text style={styles.scanButtonText}>Scan for Glasses</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.scanningRow}>
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Text style={styles.scanningText}>Scanning...</Text>
+              <TouchableOpacity style={styles.stopButton} onPress={stopScan}>
+                <Text style={styles.stopButtonText}>Stop</Text>
+              </TouchableOpacity>
+            </View>
           )}
-        </View>
+
+          {/* Device list */}
+          <ScrollView style={styles.deviceList} contentContainerStyle={styles.deviceListContent}>
+            {devices.length === 0 && discovering && (
+              <Text style={styles.hintText}>
+                Make sure your Meta glasses are nearby, charged, and paired with the Meta View app.
+              </Text>
+            )}
+            {devices.length === 0 && !discovering && (
+              <Text style={styles.hintText}>
+                Tap "Scan for Glasses" to find nearby devices.
+              </Text>
+            )}
+
+            {devices.map((device) => (
+              <TouchableOpacity
+                key={device.id}
+                style={styles.deviceCard}
+                onPress={() => selectDevice(device)}
+                activeOpacity={0.7}
+                disabled={connecting}
+              >
+                <View style={styles.deviceIcon}>
+                  <Text style={styles.deviceEmoji}>🕶️</Text>
+                </View>
+                <View style={styles.deviceInfo}>
+                  <Text style={styles.deviceName}>{device.name || 'Meta Glasses'}</Text>
+                  {device.model && <Text style={styles.deviceModel}>{device.model}</Text>}
+                </View>
+                {connecting ? (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                ) : (
+                  <Text style={styles.connectLabel}>Connect</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* How-to card */}
+          <View style={styles.helpCard}>
+            <Text style={styles.helpTitle}>First time?</Text>
+            <Text style={styles.helpStep}>1. Pair your glasses with the Meta View app first</Text>
+            <Text style={styles.helpStep}>2. Make sure Bluetooth is on</Text>
+            <Text style={styles.helpStep}>3. Tap "Scan for Glasses" above</Text>
+            <Text style={styles.helpStep}>4. Select your glasses from the list</Text>
+          </View>
+        </>
       )}
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    padding: 24,
-    paddingTop: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    backgroundColor: colors.background,
   },
   backButton: {
-    marginBottom: 16,
+    paddingHorizontal: spacing.screenPadding,
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
   },
-  backButtonText: {
-    color: '#6366F1',
-    fontSize: 16,
-    fontWeight: '600',
+  backArrow: {
+    fontSize: 36,
+    fontWeight: '300',
+    color: colors.accent,
+    lineHeight: 36,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1F2937',
+    ...typography.display,
+    paddingHorizontal: spacing.screenPadding,
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
+    ...typography.callout,
+    color: colors.textSecondary,
+    paddingHorizontal: spacing.screenPadding,
+    marginBottom: 24,
   },
-  scannerContainer: {
+  center: {
     flex: 1,
-    margin: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
     justifyContent: 'center',
+    padding: spacing.screenPadding,
+  },
+  unavailableText: {
+    ...typography.body,
+    color: colors.textTertiary,
+    textAlign: 'center',
+  },
+  scanButton: {
+    backgroundColor: colors.accent,
+    borderRadius: 14,
+    paddingVertical: 16,
+    marginHorizontal: spacing.screenPadding,
     alignItems: 'center',
+    marginBottom: 20,
   },
-  loadingText: {
-    color: '#1F2937',
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-  },
-  codeText: {
-    color: '#6B7280',
-    fontSize: 14,
-    marginTop: 8,
-    fontFamily: 'monospace',
-  },
-  infoCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
-    padding: 20,
-    margin: 16,
-    marginBottom: 32,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 12,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 8,
-  },
-  warningText: {
-    fontSize: 12,
-    color: '#EF4444',
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  deviceTypeSelector: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    gap: 12,
-  },
-  deviceTypeButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
-    alignItems: 'center',
-  },
-  deviceTypeButtonActive: {
-    backgroundColor: '#6366F1',
-    borderColor: '#6366F1',
-  },
-  deviceTypeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  deviceTypeButtonTextActive: {
+  scanButtonText: {
     color: '#FFFFFF',
-  },
-  metaDiscoverySection: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  discoverButton: {
-    backgroundColor: '#6366F1',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-  },
-  discoverButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
   },
-  discoveringContainer: {
+  scanningRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+    marginHorizontal: spacing.screenPadding,
+    marginBottom: 20,
     paddingVertical: 12,
   },
-  discoveringText: {
-    fontSize: 14,
-    color: '#6B7280',
+  scanningText: {
+    ...typography.callout,
+    color: colors.textSecondary,
+    flex: 1,
   },
   stopButton: {
     paddingVertical: 6,
     paddingHorizontal: 16,
-    borderRadius: 6,
-    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    backgroundColor: colors.destructive,
   },
   stopButtonText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
   },
-  devicesList: {
-    maxHeight: 200,
-    marginTop: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
+  deviceList: {
+    flex: 1,
+    paddingHorizontal: spacing.screenPadding,
   },
-  deviceItem: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(99, 102, 241, 0.2)',
+  deviceListContent: {
+    gap: 10,
+    paddingBottom: 16,
   },
-  deviceItemName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  deviceItemModel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  noDevicesContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  noDevicesText: {
-    fontSize: 14,
-    color: '#6B7280',
+  hintText: {
+    ...typography.callout,
+    color: colors.textTertiary,
     textAlign: 'center',
+    marginTop: 40,
+    paddingHorizontal: 20,
   },
-  boldText: {
-    fontWeight: '700',
-    color: '#1F2937',
+  deviceCard: {
+    ...cardStyle,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  deviceIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.accentMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  deviceEmoji: {
+    fontSize: 24,
+  },
+  deviceInfo: {
+    flex: 1,
+  },
+  deviceName: {
+    ...typography.title2,
+    marginBottom: 2,
+  },
+  deviceModel: {
+    ...typography.caption1,
+    color: colors.textTertiary,
+  },
+  connectLabel: {
+    ...typography.caption1,
+    color: colors.accent,
+    fontWeight: '600',
+  },
+  helpCard: {
+    ...cardStyle,
+    margin: spacing.screenPadding,
+    padding: spacing.cardPadding,
+  },
+  helpTitle: {
+    ...typography.title2,
+    marginBottom: 10,
+  },
+  helpStep: {
+    ...typography.callout,
+    color: colors.textSecondary,
+    marginBottom: 6,
+    lineHeight: 20,
   },
 });

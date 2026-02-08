@@ -93,16 +93,16 @@ export default function LoginScreen() {
               end={{ x: 1, y: 1 }}
               style={styles.logoGradient}
             >
-              <Text style={styles.logo}>OMNIA</Text>
+              <Text style={styles.logo}>SpecTask</Text>
             </LinearGradient>
-            <Text style={styles.subtitle}>Enterprise Mobile</Text>
+            <Text style={styles.subtitle}>Earn by doing tasks</Text>
           </View>
 
           {/* Login Card */}
           <View style={styles.card}>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.description}>
-              Sign in with your Omnia Enterprise credentials
+              Sign in to start earning
             </Text>
 
             {/* Email Input */}

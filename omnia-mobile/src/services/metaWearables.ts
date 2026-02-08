@@ -308,6 +308,16 @@ class MetaWearablesService {
   }
 
   /**
+   * Speak an instruction through the glasses speakers via TTS
+   */
+  async speakInstruction(text: string): Promise<void> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.speakInstruction(text);
+  }
+
+  /**
    * Enable or disable hand pose detection
    */
   async setHandPoseEnabled(enabled: boolean): Promise<void> {

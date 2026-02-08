@@ -5,6 +5,9 @@ import LoginScreen from '../screens/LoginScreen';
 import PairingScreen from '../screens/PairingScreen';
 import BLEConnectionScreen from '../screens/BLEConnectionScreen';
 import ChatScreen from '../screens/ChatScreen';
+import TaskDetailScreen from '../screens/TaskDetailScreen';
+import RecordingScreen from '../screens/RecordingScreen';
+import MainScreen from '../screens/MainScreen';
 import TabNavigator from './TabNavigator';
 import { RootStackParamList } from '../types';
 
@@ -42,6 +45,18 @@ export default function Navigation({ isAuthenticated }: NavigationProps) {
         <Stack.Screen
           name="MainTabs"
           component={TabNavigator as any}
+        />
+        <Stack.Screen
+          name="TaskDetail"
+          component={TaskDetailScreen}
+        />
+        <Stack.Screen
+          name="Recording"
+          component={RecordingScreen}
+        />
+        <Stack.Screen
+          name="Account"
+          component={MainScreen}
         />
         <Stack.Screen
           name="Pairing"

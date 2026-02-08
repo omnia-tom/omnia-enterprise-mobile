@@ -62,5 +62,10 @@ RCT_EXTERN_METHOD(setHandPoseEnabled:(BOOL)enabled
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// Text-to-Speech (Audio Guidance)
+RCT_EXTERN_METHOD(speakInstruction:(NSString *)text
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end
 
