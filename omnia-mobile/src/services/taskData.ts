@@ -300,6 +300,28 @@ const MOCK_TASKS: Task[] = [
     requiredDuration: { minSeconds: 60, maxSeconds: 300 },
     handTrackingRequired: true,
   },
+  {
+    id: 'task-015',
+    title: 'Pack a Pickleball Paddle Set',
+    description: 'Pack pickleball paddles and balls into a shipping box with dividers and padding. Demonstrate careful placement and protective packing technique.',
+    category: 'warehouse',
+    difficulty: 'beginner',
+    payoutCents: 125,
+    estimatedMinutes: 6,
+    requirements: ['Both hands visible', 'Well-lit area', 'Pickleball paddles, balls, and shipping box'],
+    instructions: [
+      'Open the shipping box and lay it flat',
+      'Place the bottom layer of padding material',
+      'Position the paddles side by side with a divider between them',
+      'Add the pickleball balls in the remaining space',
+      'Fill any gaps with additional padding',
+      'Seal the box with tape',
+    ],
+    maxSubmissions: 60,
+    currentSubmissions: 4,
+    requiredDuration: { minSeconds: 120, maxSeconds: 480 },
+    handTrackingRequired: true,
+  },
 ];
 
 // In-memory submissions store (session only)

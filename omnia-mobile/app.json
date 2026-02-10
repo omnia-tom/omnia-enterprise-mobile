@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -19,6 +19,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSBluetoothAlwaysUsageDescription": "This app needs Bluetooth to connect to your smart glasses devices and monitor their status in the background.",
         "NSBluetoothPeripheralUsageDescription": "This app needs Bluetooth to connect to your smart glasses devices.",
+        "NSSpeechRecognitionUsageDescription": "SpecTask uses speech recognition to let you control recording hands-free with voice commands like \"start\", \"next\", and \"done\".",
         "NSPhotoLibraryAddUsageDescription": "This app needs to save debug images to help improve barcode detection.",
         "UIBackgroundModes": [
           "bluetooth-central",

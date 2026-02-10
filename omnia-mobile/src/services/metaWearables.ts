@@ -1,4 +1,5 @@
 import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
+import { elevenLabsTTS } from './elevenLabsTTS';
 
 const { MetaWearablesModule } = NativeModules;
 
@@ -71,6 +72,11 @@ export interface MetaRecordedVideo {
   duration: number; // Duration in seconds
 }
 
+export interface VoiceCommand {
+  command: 'next' | 'repeat' | 'done' | 'start';
+  transcript: string;
+}
+
 class MetaWearablesService {
   private isAvailable: boolean;
   private currentDevice: MetaDevice | null = null;
@@ -119,6 +125,10 @@ class MetaWearablesService {
 
     metaWearablesEmitter.addListener('onHandPoseDetected', (data: HandPoseData) => {
       this.emit('handPoseDetected', data);
+    });
+
+    metaWearablesEmitter.addListener('onVoiceCommand', (command: VoiceCommand) => {
+      this.emit('voiceCommand', command);
     });
 
     metaWearablesEmitter.addListener('onError', (error: { code: string; message: string }) => {
@@ -308,13 +318,30 @@ class MetaWearablesService {
   }
 
   /**
-   * Speak an instruction through the glasses speakers via TTS
+   * Speak an instruction via ElevenLabs TTS
    */
   async speakInstruction(text: string): Promise<void> {
+    return elevenLabsTTS.speak(text);
+  }
+
+  /**
+   * Start voice recognition for voice commands (next, repeat, done, start)
+   */
+  async startVoiceRecognition(): Promise<void> {
     if (!this.isAvailable) {
       throw new Error('Meta Wearables SDK is not available on this platform');
     }
-    return MetaWearablesModule.speakInstruction(text);
+    return MetaWearablesModule.startVoiceRecognition();
+  }
+
+  /**
+   * Stop voice recognition
+   */
+  async stopVoiceRecognition(): Promise<void> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.stopVoiceRecognition();
   }
 
   /**

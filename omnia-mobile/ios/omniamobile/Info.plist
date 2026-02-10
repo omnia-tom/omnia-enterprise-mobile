@@ -75,6 +75,8 @@
     <string>Allow $(PRODUCT_NAME) to access your camera</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>SpecTask uses speech recognition to let you control recording hands-free with voice commands like "start", "next", and "done".</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>This app needs to save debug images to help improve barcode detection.</string>
     <key>RCTNewArchEnabled</key>
@@ -111,8 +113,6 @@
       <string>UIInterfaceOrientationLandscapeLeft</string>
       <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
-    <key>UIUserInterfaceStyle</key>
-    <string>Light</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
   </dict>

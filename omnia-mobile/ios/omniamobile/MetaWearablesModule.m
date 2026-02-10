@@ -67,5 +67,17 @@ RCT_EXTERN_METHOD(speakInstruction:(NSString *)text
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// Audio Data Playback (ElevenLabs TTS)
+RCT_EXTERN_METHOD(playAudioData:(NSString *)base64String
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// Voice Recognition
+RCT_EXTERN_METHOD(startVoiceRecognition:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(stopVoiceRecognition:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end
 

@@ -14,10 +14,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { auth } from '../services/firebase';
-import { colors, typography, spacing } from '../theme';
+import { typography, spacing, useThemeColors } from '../theme';
 import { RootStackParamList, Task, Submission } from '../types';
 import { getTaskById, addSubmission } from '../services/taskData';
-import { metaWearablesService, MetaVideoFrame, HandPoseData } from '../services/metaWearables';
+import { metaWearablesService, MetaVideoFrame, HandPoseData, VoiceCommand } from '../services/metaWearables';
 import HandPoseOverlay from '../components/HandPoseOverlay';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Recording'>;
@@ -32,6 +32,8 @@ export default function RecordingScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { taskId } = route.params;
+  const theme = useThemeColors();
+  const { colors } = theme;
 
   const [task, setTask] = useState<Task | null>(null);
   const [phase, setPhase] = useState<RecordingPhase>('preview');
@@ -39,12 +41,16 @@ export default function RecordingScreen() {
   const [handPoseData, setHandPoseData] = useState<HandPoseData | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [recordedVideo, setRecordedVideo] = useState<{ filePath: string; frameCount: number; duration: number } | null>(null);
+  const [currentStep, setCurrentStep] = useState(-1);
+  const [voiceReady, setVoiceReady] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const instructionFade = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const audioStepRef = useRef(0);
   const isRecordingRef = useRef(false);
+  const voiceActiveRef = useRef(false);
+  const waitingForCommandRef = useRef<((cmd: string) => void) | null>(null);
 
   useEffect(() => {
     loadTask();
@@ -67,6 +73,7 @@ export default function RecordingScreen() {
 
       metaWearablesService.addEventListener('videoFrame', handleVideoFrame);
       metaWearablesService.addEventListener('handPoseDetected', handleHandPose);
+      metaWearablesService.addEventListener('voiceCommand', handleVoiceCommand);
 
       // Show instruction overlay briefly
       setTimeout(() => {
@@ -77,12 +84,44 @@ export default function RecordingScreen() {
           Animated.timing(instructionFade, { toValue: 0, duration: 400, useNativeDriver: true }),
         ]).start(() => {
           setPhase('preview');
+          startVoiceListening();
         });
       }, 500);
     } catch (e) {
       console.error('[RecordingScreen] Failed to start stream:', e);
     }
   };
+
+  const startVoiceListening = async () => {
+    try {
+      await metaWearablesService.speakInstruction("Say 'start' when you're ready to begin recording.");
+      await metaWearablesService.startVoiceRecognition();
+      voiceActiveRef.current = true;
+      setVoiceReady(true);
+    } catch {
+      // Voice recognition not available — user can still tap to record
+      setVoiceReady(false);
+    }
+  };
+
+  const handleVoiceCommand = useCallback((cmd: VoiceCommand) => {
+    // If we're waiting for a specific command during guidance, resolve it
+    if (waitingForCommandRef.current) {
+      waitingForCommandRef.current(cmd.command);
+      return;
+    }
+
+    // Handle "start" command during preview
+    if (cmd.command === 'start' && !isRecordingRef.current) {
+      startRecording();
+      return;
+    }
+
+    // Handle "done" command during recording
+    if (cmd.command === 'done' && isRecordingRef.current) {
+      stopRecording();
+    }
+  }, []);
 
   const handleVideoFrame = useCallback((frame: MetaVideoFrame) => {
     setCurrentFrame(frame.data);
@@ -94,9 +133,15 @@ export default function RecordingScreen() {
 
   const stopEverything = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    waitingForCommandRef.current = null;
     metaWearablesService.removeEventListener('videoFrame', handleVideoFrame);
     metaWearablesService.removeEventListener('handPoseDetected', handleHandPose);
+    metaWearablesService.removeEventListener('voiceCommand', handleVoiceCommand);
     try {
+      if (voiceActiveRef.current) {
+        await metaWearablesService.stopVoiceRecognition();
+        voiceActiveRef.current = false;
+      }
       if (isRecordingRef.current) {
         await metaWearablesService.stopRecording();
         isRecordingRef.current = false;
@@ -106,12 +151,19 @@ export default function RecordingScreen() {
     } catch {}
   };
 
+  const waitForVoiceCommand = (): Promise<string> => {
+    return new Promise((resolve) => {
+      waitingForCommandRef.current = resolve;
+    });
+  };
+
   const startRecording = async () => {
     try {
       await metaWearablesService.startRecording();
       isRecordingRef.current = true;
       setPhase('recording');
       setElapsedSeconds(0);
+      setCurrentStep(0);
 
       // Start timer
       timerRef.current = setInterval(() => {
@@ -138,16 +190,55 @@ export default function RecordingScreen() {
     if (!task) return;
     audioStepRef.current = 0;
 
+    // Speak intro
+    try {
+      await metaWearablesService.speakInstruction(
+        "We'll guide you through the steps. Say 'next' for the next step, 'repeat' to hear again, or 'done' when complete."
+      );
+    } catch {}
+
+    // Step-by-step with voice commands
     for (let i = 0; i < task.instructions.length; i++) {
       if (!isRecordingRef.current) break;
       audioStepRef.current = i;
+      setCurrentStep(i);
 
       try {
         await metaWearablesService.speakInstruction(task.instructions[i]);
       } catch {}
 
-      // Pause between instructions
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      if (!isRecordingRef.current) break;
+
+      // Wait for voice command or auto-advance after 5s
+      if (voiceActiveRef.current) {
+        const cmd = await Promise.race([
+          waitForVoiceCommand(),
+          new Promise<string>(resolve => setTimeout(() => resolve('timeout'), 5000)),
+        ]);
+
+        if (cmd === 'repeat') {
+          i--; // Re-speak current step
+          continue;
+        }
+        if (cmd === 'done') {
+          stopRecording();
+          return;
+        }
+        // 'next' or 'timeout' → proceed to next step
+      } else {
+        // Fallback: auto-advance with pause
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+
+    // All steps done — notify
+    if (isRecordingRef.current) {
+      try {
+        await metaWearablesService.speakInstruction(
+          "All steps complete. Say 'done' or tap stop when you're finished."
+        );
+      } catch {}
+      setCurrentStep(task.instructions.length);
     }
   };
 
@@ -155,6 +246,7 @@ export default function RecordingScreen() {
     if (timerRef.current) clearInterval(timerRef.current);
     pulseAnim.stopAnimation();
     pulseAnim.setValue(1);
+    waitingForCommandRef.current = null;
 
     try {
       const result = await metaWearablesService.stopRecording();
@@ -197,6 +289,7 @@ export default function RecordingScreen() {
   const handleReRecord = () => {
     setRecordedVideo(null);
     setElapsedSeconds(0);
+    setCurrentStep(-1);
     setPhase('preview');
   };
 
@@ -213,8 +306,8 @@ export default function RecordingScreen() {
   if (phase === 'review' && recordedVideo) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <StatusBar style="light" />
-        <View style={styles.reviewContainer}>
+        <StatusBar style={theme.statusBarStyle} />
+        <View style={[styles.reviewContainer, { backgroundColor: colors.background }]}>
           <View style={styles.reviewThumbnail}>
             {currentFrame && (
               <Image
@@ -229,14 +322,14 @@ export default function RecordingScreen() {
             </View>
           </View>
 
-          <Text style={styles.reviewTitle}>Recording Complete</Text>
-          <Text style={styles.reviewSubtitle}>{task?.title}</Text>
+          <Text style={[styles.reviewTitle, { color: colors.textPrimary }]}>Recording Complete</Text>
+          <Text style={[styles.reviewSubtitle, { color: colors.textSecondary }]}>{task?.title}</Text>
 
           <View style={styles.reviewActions}>
-            <TouchableOpacity style={styles.reRecordButton} onPress={handleReRecord}>
-              <Text style={styles.reRecordText}>Re-record</Text>
+            <TouchableOpacity style={[styles.reRecordButton, { borderColor: colors.accent }]} onPress={handleReRecord}>
+              <Text style={[styles.reRecordText, { color: colors.accent }]}>Re-record</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.submitButton} onPress={handleSubmit} activeOpacity={0.8}>
+            <TouchableOpacity style={[styles.submitButton, { backgroundColor: colors.accent }]} onPress={handleSubmit} activeOpacity={0.8}>
               <Text style={styles.submitText}>Submit</Text>
             </TouchableOpacity>
           </View>
@@ -290,6 +383,18 @@ export default function RecordingScreen() {
         <View style={styles.topSpacer} />
       </View>
 
+      {/* Step indicator during recording */}
+      {phase === 'recording' && task && currentStep >= 0 && currentStep < task.instructions.length && (
+        <View style={styles.stepIndicator}>
+          <Text style={styles.stepIndicatorText}>Step {currentStep + 1} of {task.instructions.length}</Text>
+        </View>
+      )}
+      {phase === 'recording' && task && currentStep >= task.instructions.length && (
+        <View style={styles.stepIndicator}>
+          <Text style={styles.stepIndicatorText}>All steps complete</Text>
+        </View>
+      )}
+
       {/* Instructions overlay (fades in/out) */}
       {phase === 'instructions' && task && (
         <Animated.View style={[styles.instructionOverlay, { opacity: instructionFade }]}>
@@ -306,11 +411,16 @@ export default function RecordingScreen() {
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         {/* Hand detection status */}
         <View style={styles.handStatus}>
-          <View style={[styles.handDot, { backgroundColor: handsDetected ? colors.success : colors.destructive }]} />
+          <View style={[styles.handDot, { backgroundColor: handsDetected ? '#34C759' : '#FF3B30' }]} />
           <Text style={styles.handText}>
             {handsDetected ? 'Hands visible' : 'Hands not detected'}
           </Text>
         </View>
+
+        {/* Voice hint during preview */}
+        {phase === 'preview' && voiceReady && (
+          <Text style={styles.voiceHint}>Say "Start" to begin</Text>
+        )}
 
         {/* Record / Stop button */}
         {phase === 'recording' ? (
@@ -402,6 +512,22 @@ const styles = StyleSheet.create({
     width: 44,
   },
 
+  // Step indicator
+  stepIndicator: {
+    position: 'absolute',
+    top: 120,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  stepIndicatorText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
   // Instructions overlay
   instructionOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -424,7 +550,7 @@ const styles = StyleSheet.create({
   },
   instructionStep: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: '#636366',
     marginBottom: 10,
     lineHeight: 22,
   },
@@ -454,6 +580,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '500',
+  },
+  voiceHint: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 12,
   },
 
   // Record button
@@ -501,7 +633,6 @@ const styles = StyleSheet.create({
   // Review
   reviewContainer: {
     flex: 1,
-    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.screenPadding,
@@ -537,7 +668,6 @@ const styles = StyleSheet.create({
   },
   reviewSubtitle: {
     ...typography.callout,
-    color: colors.textSecondary,
     marginBottom: 32,
   },
   reviewActions: {
@@ -549,11 +679,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: colors.accent,
     alignItems: 'center',
   },
   reRecordText: {
-    color: colors.accent,
     fontSize: 17,
     fontWeight: '600',
   },
@@ -561,7 +689,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 16,
     borderRadius: 14,
-    backgroundColor: colors.accent,
     alignItems: 'center',
   },
   submitText: {

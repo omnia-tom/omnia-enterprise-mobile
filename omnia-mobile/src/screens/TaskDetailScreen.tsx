@@ -11,7 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, typography, cardStyle, spacing, categoryConfig, difficultyConfig } from '../theme';
+import { typography, spacing, useThemeColors } from '../theme';
 import { RootStackParamList, Task } from '../types';
 import { getTaskById, formatCents } from '../services/taskData';
 import { metaWearablesService } from '../services/metaWearables';
@@ -24,6 +24,8 @@ export default function TaskDetailScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { taskId } = route.params;
+  const theme = useThemeColors();
+  const { colors, categoryConfig, difficultyConfig } = theme;
 
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,8 +35,6 @@ export default function TaskDetailScreen() {
     loadTask();
   }, []);
 
-  // Re-check glasses connection every time this screen gains focus
-  // (e.g. after returning from PairingScreen)
   useFocusEffect(
     useCallback(() => {
       const checkGlasses = async () => {
@@ -65,7 +65,7 @@ export default function TaskDetailScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
+      <View style={[styles.container, styles.center, { paddingTop: insets.top, backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
@@ -73,8 +73,8 @@ export default function TaskDetailScreen() {
 
   if (!task) {
     return (
-      <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
-        <Text style={styles.errorText}>Task not found</Text>
+      <View style={[styles.container, styles.center, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+        <Text style={[styles.errorText, { color: colors.textTertiary }]}>Task not found</Text>
       </View>
     );
   }
@@ -84,12 +84,12 @@ export default function TaskDetailScreen() {
   const progress = task.maxSubmissions > 0 ? task.currentSubmissions / task.maxSubmissions : 0;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <StatusBar style={theme.statusBarStyle} />
 
       {/* Back button */}
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-        <Text style={styles.backArrow}>{'‹'}</Text>
+        <Text style={[styles.backArrow, { color: colors.accent }]}>{'‹'}</Text>
       </TouchableOpacity>
 
       <ScrollView
@@ -100,69 +100,69 @@ export default function TaskDetailScreen() {
         {/* Hero */}
         <View style={styles.hero}>
           <Text style={styles.heroEmoji}>{category.emoji}</Text>
-          <Text style={styles.heroCategory}>{category.label}</Text>
-          <Text style={styles.heroTitle}>{task.title}</Text>
+          <Text style={[styles.heroCategory, { color: colors.textTertiary }]}>{category.label}</Text>
+          <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>{task.title}</Text>
         </View>
 
         {/* Info row */}
-        <View style={styles.infoRow}>
+        <View style={[styles.infoRow, { backgroundColor: colors.surface, shadowOpacity: theme.isDark ? 0.3 : 0.04 }]}>
           <View style={styles.infoCol}>
-            <Text style={styles.infoValue}>{formatCents(task.payoutCents)}</Text>
-            <Text style={styles.infoLabel}>Payout</Text>
+            <Text style={[styles.infoValue, { color: colors.earning }]}>{formatCents(task.payoutCents)}</Text>
+            <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Payout</Text>
           </View>
-          <View style={styles.infoDivider} />
+          <View style={[styles.infoDivider, { backgroundColor: colors.separator }]} />
           <View style={styles.infoCol}>
-            <Text style={styles.infoValue}>{task.requiredDuration.minSeconds / 60}-{task.requiredDuration.maxSeconds / 60} min</Text>
-            <Text style={styles.infoLabel}>Duration</Text>
+            <Text style={[styles.infoValue, { color: colors.earning }]}>{task.requiredDuration.minSeconds / 60}-{task.requiredDuration.maxSeconds / 60} min</Text>
+            <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Duration</Text>
           </View>
-          <View style={styles.infoDivider} />
+          <View style={[styles.infoDivider, { backgroundColor: colors.separator }]} />
           <View style={styles.infoCol}>
             <View style={[styles.difficultyPill, { backgroundColor: difficulty.bg }]}>
               <Text style={[styles.difficultyText, { color: difficulty.color }]}>
                 {task.difficulty.charAt(0).toUpperCase() + task.difficulty.slice(1)}
               </Text>
             </View>
-            <Text style={styles.infoLabel}>Difficulty</Text>
+            <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Difficulty</Text>
           </View>
         </View>
 
         {/* Description */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Description</Text>
-          <Text style={styles.bodyText}>{task.description}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Description</Text>
+          <Text style={[styles.bodyText, { color: colors.textSecondary }]}>{task.description}</Text>
         </View>
 
         {/* Requirements */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Requirements</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Requirements</Text>
           {task.requirements.map((req, i) => (
             <View key={i} style={styles.checkItem}>
-              <Text style={styles.checkIcon}>{'✓'}</Text>
-              <Text style={styles.checkText}>{req}</Text>
+              <Text style={[styles.checkIcon, { color: colors.success }]}>{'✓'}</Text>
+              <Text style={[styles.checkText, { color: colors.textPrimary }]}>{req}</Text>
             </View>
           ))}
         </View>
 
         {/* Instructions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recording Instructions</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recording Instructions</Text>
           {task.instructions.map((step, i) => (
             <View key={i} style={styles.stepItem}>
-              <View style={styles.stepNumber}>
-                <Text style={styles.stepNumberText}>{i + 1}</Text>
+              <View style={[styles.stepNumber, { backgroundColor: colors.accentMuted }]}>
+                <Text style={[styles.stepNumberText, { color: colors.accent }]}>{i + 1}</Text>
               </View>
-              <Text style={styles.stepText}>{step}</Text>
+              <Text style={[styles.stepText, { color: colors.textPrimary }]}>{step}</Text>
             </View>
           ))}
         </View>
 
         {/* Progress */}
         <View style={styles.section}>
-          <Text style={styles.progressLabel}>
+          <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
             {task.currentSubmissions} of {task.maxSubmissions} recordings collected
           </Text>
-          <View style={styles.progressBarBg}>
-            <View style={[styles.progressBarFill, { width: `${Math.min(progress * 100, 100)}%` }]} />
+          <View style={[styles.progressBarBg, { backgroundColor: colors.separator }]}>
+            <View style={[styles.progressBarFill, { width: `${Math.min(progress * 100, 100)}%`, backgroundColor: colors.accent }]} />
           </View>
         </View>
 
@@ -171,8 +171,8 @@ export default function TaskDetailScreen() {
       </ScrollView>
 
       {/* Sticky CTA */}
-      <View style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity style={styles.ctaButton} onPress={handleStartRecording} activeOpacity={0.8}>
+      <View style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: colors.background, borderTopColor: colors.separator }]}>
+        <TouchableOpacity style={[styles.ctaButton, { backgroundColor: colors.accent }]} onPress={handleStartRecording} activeOpacity={0.8}>
           <Text style={styles.ctaText}>
             {glassesConnected ? 'Start Recording' : 'Connect Glasses First'}
           </Text>
@@ -185,7 +185,6 @@ export default function TaskDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   center: {
     alignItems: 'center',
@@ -193,7 +192,6 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...typography.body,
-    color: colors.textTertiary,
   },
   backButton: {
     paddingHorizontal: spacing.screenPadding,
@@ -203,7 +201,6 @@ const styles = StyleSheet.create({
   backArrow: {
     fontSize: 36,
     fontWeight: '300',
-    color: colors.accent,
     lineHeight: 36,
   },
   scroll: {
@@ -223,7 +220,6 @@ const styles = StyleSheet.create({
   },
   heroCategory: {
     ...typography.caption1,
-    color: colors.textTertiary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 8,
@@ -234,13 +230,11 @@ const styles = StyleSheet.create({
   },
   infoRow: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: spacing.sectionGap,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
@@ -251,15 +245,12 @@ const styles = StyleSheet.create({
   },
   infoValue: {
     ...typography.title1,
-    color: colors.earning,
   },
   infoLabel: {
     ...typography.caption1,
-    color: colors.textTertiary,
   },
   infoDivider: {
     width: 1,
-    backgroundColor: colors.separator,
     marginHorizontal: 4,
   },
   difficultyPill: {
@@ -280,7 +271,6 @@ const styles = StyleSheet.create({
   },
   bodyText: {
     ...typography.body,
-    color: colors.textSecondary,
     lineHeight: 24,
   },
   checkItem: {
@@ -290,7 +280,6 @@ const styles = StyleSheet.create({
   },
   checkIcon: {
     fontSize: 16,
-    color: colors.success,
     fontWeight: '700',
     marginRight: 12,
     width: 20,
@@ -298,7 +287,6 @@ const styles = StyleSheet.create({
   },
   checkText: {
     ...typography.body,
-    color: colors.textPrimary,
     flex: 1,
   },
   stepItem: {
@@ -310,7 +298,6 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.accentMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -318,29 +305,24 @@ const styles = StyleSheet.create({
   },
   stepNumberText: {
     ...typography.caption1,
-    color: colors.accent,
     fontWeight: '700',
   },
   stepText: {
     ...typography.body,
-    color: colors.textPrimary,
     flex: 1,
     paddingTop: 3,
   },
   progressLabel: {
     ...typography.callout,
-    color: colors.textSecondary,
     marginBottom: 8,
   },
   progressBarBg: {
     height: 6,
-    backgroundColor: colors.separator,
     borderRadius: 3,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: 6,
-    backgroundColor: colors.accent,
     borderRadius: 3,
   },
   ctaContainer: {
@@ -350,12 +332,9 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: spacing.screenPadding,
     paddingTop: 12,
-    backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.separator,
   },
   ctaButton: {
-    backgroundColor: colors.accent,
     borderRadius: 14,
     paddingVertical: 18,
     alignItems: 'center',

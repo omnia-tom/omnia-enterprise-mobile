@@ -10,7 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { auth } from '../services/firebase';
-import { colors, typography, cardStyle, spacing } from '../theme';
+import { typography, spacing, useThemeColors } from '../theme';
 import { Submission, SubmissionStatus } from '../types';
 import { getUserSubmissions, getTotalEarnings, formatCents } from '../services/taskData';
 
@@ -31,6 +31,8 @@ const FILTERS: { key: 'all' | SubmissionStatus; label: string }[] = [
 
 export default function SubmissionsScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useThemeColors();
+  const { colors } = theme;
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [filter, setFilter] = useState<'all' | SubmissionStatus>('all');
 
@@ -67,46 +69,46 @@ export default function SubmissionsScreen() {
   const renderSubmission = ({ item }: { item: Submission }) => {
     const statusConf = STATUS_CONFIG[item.status];
     return (
-      <View style={styles.subCard}>
+      <View style={[styles.subCard, theme.cardStyle]}>
         <View style={styles.subTopRow}>
-          <Text style={styles.subTitle} numberOfLines={1}>{item.taskTitle}</Text>
-          <Text style={styles.subPayout}>{formatCents(item.payoutCents)}</Text>
+          <Text style={[styles.subTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.taskTitle}</Text>
+          <Text style={[styles.subPayout, { color: colors.earning }]}>{formatCents(item.payoutCents)}</Text>
         </View>
         <View style={styles.subMeta}>
-          <Text style={styles.subDate}>{formatDate(item.submittedAt)}</Text>
-          <Text style={styles.subDuration}>{formatDuration(item.duration)}</Text>
+          <Text style={[styles.subDate, { color: colors.textTertiary }]}>{formatDate(item.submittedAt)}</Text>
+          <Text style={[styles.subDuration, { color: colors.textTertiary }]}>{formatDuration(item.duration)}</Text>
           <View style={[styles.statusBadge, { backgroundColor: statusConf.bg }]}>
             <Text style={[styles.statusText, { color: statusConf.color }]}>{statusConf.label}</Text>
           </View>
         </View>
         {item.status === 'rejected' && item.rejectionReason && (
-          <Text style={styles.rejectionText}>{item.rejectionReason}</Text>
+          <Text style={[styles.rejectionText, { color: colors.destructive }]}>{item.rejectionReason}</Text>
         )}
       </View>
     );
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <StatusBar style={theme.statusBarStyle} />
 
-      <Text style={styles.headerTitle}>Submissions</Text>
+      <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Submissions</Text>
 
       {/* Summary card */}
-      <View style={styles.summaryCard}>
+      <View style={[styles.summaryCard, theme.cardStyle]}>
         <View style={styles.summaryCol}>
-          <Text style={styles.summaryValue}>{formatCents(totalEarned)}</Text>
-          <Text style={styles.summaryLabel}>Total Earned</Text>
+          <Text style={[styles.summaryValue, { color: colors.earning }]}>{formatCents(totalEarned)}</Text>
+          <Text style={[styles.summaryLabel, { color: colors.textTertiary }]}>Total Earned</Text>
         </View>
-        <View style={styles.summaryDivider} />
+        <View style={[styles.summaryDivider, { backgroundColor: colors.separator }]} />
         <View style={styles.summaryCol}>
-          <Text style={styles.summaryValueDefault}>{submissions.length}</Text>
-          <Text style={styles.summaryLabel}>Submitted</Text>
+          <Text style={[styles.summaryValueDefault, { color: colors.textPrimary }]}>{submissions.length}</Text>
+          <Text style={[styles.summaryLabel, { color: colors.textTertiary }]}>Submitted</Text>
         </View>
-        <View style={styles.summaryDivider} />
+        <View style={[styles.summaryDivider, { backgroundColor: colors.separator }]} />
         <View style={styles.summaryCol}>
-          <Text style={styles.summaryValueDefault}>{approvalRate}%</Text>
-          <Text style={styles.summaryLabel}>Approval</Text>
+          <Text style={[styles.summaryValueDefault, { color: colors.textPrimary }]}>{approvalRate}%</Text>
+          <Text style={[styles.summaryLabel, { color: colors.textTertiary }]}>Approval</Text>
         </View>
       </View>
 
@@ -118,10 +120,10 @@ export default function SubmissionsScreen() {
         keyExtractor={(item) => item.key}
         renderItem={({ item: f }) => (
           <TouchableOpacity
-            style={[styles.filterPill, filter === f.key && styles.filterPillActive]}
+            style={[styles.filterPill, { backgroundColor: colors.accentMuted }, filter === f.key && { backgroundColor: colors.accent }]}
             onPress={() => setFilter(f.key)}
           >
-            <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>
+            <Text style={[styles.filterText, { color: colors.accent }, filter === f.key && styles.filterTextActive]}>
               {f.label}
             </Text>
           </TouchableOpacity>
@@ -133,7 +135,7 @@ export default function SubmissionsScreen() {
       {/* List */}
       {filtered.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
             {submissions.length === 0
               ? 'No submissions yet. Browse tasks to get started.'
               : 'No submissions match this filter.'}
@@ -155,7 +157,6 @@ export default function SubmissionsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   headerTitle: {
     ...typography.display,
@@ -165,7 +166,6 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flexDirection: 'row',
-    ...cardStyle,
     marginHorizontal: spacing.screenPadding,
     padding: 20,
     marginBottom: 20,
@@ -180,19 +180,16 @@ const styles = StyleSheet.create({
   },
   summaryValueDefault: {
     ...typography.title1,
-    color: colors.textPrimary,
   },
   summaryLabel: {
     ...typography.caption1,
-    color: colors.textTertiary,
   },
   summaryDivider: {
     width: 1,
-    backgroundColor: colors.separator,
     marginHorizontal: 4,
   },
   filterList: {
-    flexGrow: 0,
+    flexShrink: 0,
     marginBottom: 16,
   },
   filterRow: {
@@ -203,14 +200,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: colors.accentMuted,
-  },
-  filterPillActive: {
-    backgroundColor: colors.accent,
   },
   filterText: {
     ...typography.caption1,
-    color: colors.accent,
   },
   filterTextActive: {
     color: '#FFFFFF',
@@ -220,7 +212,6 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   subCard: {
-    ...cardStyle,
     padding: spacing.cardPadding,
     marginBottom: spacing.cardGap,
   },
@@ -237,7 +228,6 @@ const styles = StyleSheet.create({
   },
   subPayout: {
     ...typography.title1,
-    color: colors.earning,
   },
   subMeta: {
     flexDirection: 'row',
@@ -246,11 +236,9 @@ const styles = StyleSheet.create({
   },
   subDate: {
     ...typography.caption2,
-    color: colors.textTertiary,
   },
   subDuration: {
     ...typography.caption2,
-    color: colors.textTertiary,
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -263,7 +251,6 @@ const styles = StyleSheet.create({
   },
   rejectionText: {
     ...typography.caption1,
-    color: colors.destructive,
     marginTop: 8,
   },
   center: {
@@ -274,7 +261,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...typography.body,
-    color: colors.textTertiary,
     textAlign: 'center',
   },
 });

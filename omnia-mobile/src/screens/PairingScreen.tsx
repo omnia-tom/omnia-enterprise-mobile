@@ -13,11 +13,13 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { metaWearablesService, MetaDevice } from '../services/metaWearables';
-import { colors, typography, cardStyle, spacing } from '../theme';
+import { typography, spacing, useThemeColors } from '../theme';
 
 export default function PairingScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const theme = useThemeColors();
+  const { colors } = theme;
   const [discovering, setDiscovering] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [devices, setDevices] = useState<MetaDevice[]>([]);
@@ -40,7 +42,6 @@ export default function PairingScreen() {
     };
   }, []);
 
-  // Handle deep links from Meta AI app OAuth callback
   useEffect(() => {
     const handleDeepLink = async (event: { url: string }) => {
       if (event.url.includes('metaWearablesAction') && metaWearablesService.isSDKAvailable()) {
@@ -125,7 +126,6 @@ export default function PairingScreen() {
       await metaWearablesService.stopDiscovery().catch(() => {});
       setDiscovering(false);
 
-      // Go back — TaskDetailScreen will re-check connection status
       if (navigation.canGoBack()) {
         navigation.goBack();
       }
@@ -139,22 +139,22 @@ export default function PairingScreen() {
   const sdkAvailable = metaWearablesService.isSDKAvailable();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <StatusBar style={theme.statusBarStyle} />
 
       {/* Header */}
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-        <Text style={styles.backArrow}>{'‹'}</Text>
+        <Text style={[styles.backArrow, { color: colors.accent }]}>{'‹'}</Text>
       </TouchableOpacity>
 
-      <Text style={styles.title}>Connect Glasses</Text>
-      <Text style={styles.subtitle}>
+      <Text style={[styles.title, { color: colors.textPrimary }]}>Connect Glasses</Text>
+      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
         Scan for nearby Meta Ray-Ban glasses and select yours
       </Text>
 
       {!sdkAvailable ? (
         <View style={styles.center}>
-          <Text style={styles.unavailableText}>
+          <Text style={[styles.unavailableText, { color: colors.textTertiary }]}>
             Meta Wearables SDK is not available on this device.
           </Text>
         </View>
@@ -163,7 +163,7 @@ export default function PairingScreen() {
           {/* Scan button */}
           {!discovering ? (
             <TouchableOpacity
-              style={styles.scanButton}
+              style={[styles.scanButton, { backgroundColor: colors.accent }]}
               onPress={startScan}
               activeOpacity={0.8}
               disabled={connecting}
@@ -173,8 +173,8 @@ export default function PairingScreen() {
           ) : (
             <View style={styles.scanningRow}>
               <ActivityIndicator size="small" color={colors.accent} />
-              <Text style={styles.scanningText}>Scanning...</Text>
-              <TouchableOpacity style={styles.stopButton} onPress={stopScan}>
+              <Text style={[styles.scanningText, { color: colors.textSecondary }]}>Scanning...</Text>
+              <TouchableOpacity style={[styles.stopButton, { backgroundColor: colors.destructive }]} onPress={stopScan}>
                 <Text style={styles.stopButtonText}>Stop</Text>
               </TouchableOpacity>
             </View>
@@ -183,12 +183,12 @@ export default function PairingScreen() {
           {/* Device list */}
           <ScrollView style={styles.deviceList} contentContainerStyle={styles.deviceListContent}>
             {devices.length === 0 && discovering && (
-              <Text style={styles.hintText}>
+              <Text style={[styles.hintText, { color: colors.textTertiary }]}>
                 Make sure your Meta glasses are nearby, charged, and paired with the Meta View app.
               </Text>
             )}
             {devices.length === 0 && !discovering && (
-              <Text style={styles.hintText}>
+              <Text style={[styles.hintText, { color: colors.textTertiary }]}>
                 Tap "Scan for Glasses" to find nearby devices.
               </Text>
             )}
@@ -196,34 +196,34 @@ export default function PairingScreen() {
             {devices.map((device) => (
               <TouchableOpacity
                 key={device.id}
-                style={styles.deviceCard}
+                style={[styles.deviceCard, theme.cardStyle]}
                 onPress={() => selectDevice(device)}
                 activeOpacity={0.7}
                 disabled={connecting}
               >
-                <View style={styles.deviceIcon}>
+                <View style={[styles.deviceIcon, { backgroundColor: colors.accentMuted }]}>
                   <Text style={styles.deviceEmoji}>🕶️</Text>
                 </View>
                 <View style={styles.deviceInfo}>
-                  <Text style={styles.deviceName}>{device.name || 'Meta Glasses'}</Text>
-                  {device.model && <Text style={styles.deviceModel}>{device.model}</Text>}
+                  <Text style={[styles.deviceName, { color: colors.textPrimary }]}>{device.name || 'Meta Glasses'}</Text>
+                  {device.model && <Text style={[styles.deviceModel, { color: colors.textTertiary }]}>{device.model}</Text>}
                 </View>
                 {connecting ? (
                   <ActivityIndicator size="small" color={colors.accent} />
                 ) : (
-                  <Text style={styles.connectLabel}>Connect</Text>
+                  <Text style={[styles.connectLabel, { color: colors.accent }]}>Connect</Text>
                 )}
               </TouchableOpacity>
             ))}
           </ScrollView>
 
           {/* How-to card */}
-          <View style={styles.helpCard}>
-            <Text style={styles.helpTitle}>First time?</Text>
-            <Text style={styles.helpStep}>1. Pair your glasses with the Meta View app first</Text>
-            <Text style={styles.helpStep}>2. Make sure Bluetooth is on</Text>
-            <Text style={styles.helpStep}>3. Tap "Scan for Glasses" above</Text>
-            <Text style={styles.helpStep}>4. Select your glasses from the list</Text>
+          <View style={[styles.helpCard, theme.cardStyle]}>
+            <Text style={[styles.helpTitle, { color: colors.textPrimary }]}>First time?</Text>
+            <Text style={[styles.helpStep, { color: colors.textSecondary }]}>1. Pair your glasses with the Meta View app first</Text>
+            <Text style={[styles.helpStep, { color: colors.textSecondary }]}>2. Make sure Bluetooth is on</Text>
+            <Text style={[styles.helpStep, { color: colors.textSecondary }]}>3. Tap "Scan for Glasses" above</Text>
+            <Text style={[styles.helpStep, { color: colors.textSecondary }]}>4. Select your glasses from the list</Text>
           </View>
         </>
       )}
@@ -234,7 +234,6 @@ export default function PairingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   backButton: {
     paddingHorizontal: spacing.screenPadding,
@@ -244,7 +243,6 @@ const styles = StyleSheet.create({
   backArrow: {
     fontSize: 36,
     fontWeight: '300',
-    color: colors.accent,
     lineHeight: 36,
   },
   title: {
@@ -254,7 +252,6 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...typography.callout,
-    color: colors.textSecondary,
     paddingHorizontal: spacing.screenPadding,
     marginBottom: 24,
   },
@@ -266,11 +263,9 @@ const styles = StyleSheet.create({
   },
   unavailableText: {
     ...typography.body,
-    color: colors.textTertiary,
     textAlign: 'center',
   },
   scanButton: {
-    backgroundColor: colors.accent,
     borderRadius: 14,
     paddingVertical: 16,
     marginHorizontal: spacing.screenPadding,
@@ -293,14 +288,12 @@ const styles = StyleSheet.create({
   },
   scanningText: {
     ...typography.callout,
-    color: colors.textSecondary,
     flex: 1,
   },
   stopButton: {
     paddingVertical: 6,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: colors.destructive,
   },
   stopButtonText: {
     color: '#FFFFFF',
@@ -317,13 +310,11 @@ const styles = StyleSheet.create({
   },
   hintText: {
     ...typography.callout,
-    color: colors.textTertiary,
     textAlign: 'center',
     marginTop: 40,
     paddingHorizontal: 20,
   },
   deviceCard: {
-    ...cardStyle,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
@@ -332,7 +323,6 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.accentMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
@@ -349,15 +339,12 @@ const styles = StyleSheet.create({
   },
   deviceModel: {
     ...typography.caption1,
-    color: colors.textTertiary,
   },
   connectLabel: {
     ...typography.caption1,
-    color: colors.accent,
     fontWeight: '600',
   },
   helpCard: {
-    ...cardStyle,
     margin: spacing.screenPadding,
     padding: spacing.cardPadding,
   },
@@ -367,7 +354,6 @@ const styles = StyleSheet.create({
   },
   helpStep: {
     ...typography.callout,
-    color: colors.textSecondary,
     marginBottom: 6,
     lineHeight: 20,
   },

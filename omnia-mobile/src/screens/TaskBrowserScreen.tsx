@@ -15,7 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
-import { colors, typography, spacing, categoryConfig } from '../theme';
+import { typography, spacing, useThemeColors } from '../theme';
 import { Task, TaskCategory, RootStackParamList } from '../types';
 import { getAvailableTasks, getUserSubmissions, getTotalEarnings, formatCents } from '../services/taskData';
 import TaskCard from '../components/TaskCard';
@@ -29,6 +29,8 @@ const ALL_CATEGORIES: (TaskCategory | 'all')[] = [
 export default function TaskBrowserScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
+  const theme = useThemeColors();
+  const { colors, categoryConfig } = theme;
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<TaskCategory | 'all'>('all');
@@ -104,10 +106,10 @@ export default function TaskBrowserScreen() {
       return (
         <TouchableOpacity
           key="all"
-          style={[styles.pill, isActive && styles.pillActive]}
+          style={[styles.pill, { backgroundColor: colors.accentMuted }, isActive && { backgroundColor: colors.accent }]}
           onPress={() => setSelectedCategory('all')}
         >
-          <Text style={[styles.pillText, isActive && styles.pillTextActive]}>All</Text>
+          <Text style={[styles.pillText, { color: colors.accent }, isActive && styles.pillTextActive]}>All</Text>
         </TouchableOpacity>
       );
     }
@@ -115,10 +117,10 @@ export default function TaskBrowserScreen() {
     return (
       <TouchableOpacity
         key={cat}
-        style={[styles.pill, isActive && styles.pillActive]}
+        style={[styles.pill, { backgroundColor: colors.accentMuted }, isActive && { backgroundColor: colors.accent }]}
         onPress={() => setSelectedCategory(cat)}
       >
-        <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
+        <Text style={[styles.pillText, { color: colors.accent }, isActive && styles.pillTextActive]}>
           {config.emoji} {config.label}
         </Text>
       </TouchableOpacity>
@@ -126,14 +128,14 @@ export default function TaskBrowserScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <StatusBar style={theme.statusBarStyle} />
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Tasks</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Tasks</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Account')}>
-          <View style={styles.avatar}>
+          <View style={[styles.avatar, { backgroundColor: colors.accentMuted }]}>
             {profilePhotoUrl ? (
               <Image
                 source={{ uri: profilePhotoUrl }}
@@ -141,7 +143,7 @@ export default function TaskBrowserScreen() {
                 onError={() => setProfilePhotoUrl(null)}
               />
             ) : (
-              <Text style={styles.avatarText}>{userInitials}</Text>
+              <Text style={[styles.avatarText, { color: colors.accent }]}>{userInitials}</Text>
             )}
           </View>
         </TouchableOpacity>
@@ -149,11 +151,11 @@ export default function TaskBrowserScreen() {
 
       {/* Earnings pill */}
       <TouchableOpacity
-        style={styles.earningsPill}
+        style={[styles.earningsPill, { backgroundColor: theme.isDark ? 'rgba(48, 209, 88, 0.15)' : 'rgba(48, 209, 88, 0.08)' }]}
         onPress={() => navigation.getParent()?.navigate('Submissions')}
       >
-        <View style={styles.earningsDot} />
-        <Text style={styles.earningsText}>
+        <View style={[styles.earningsDot, { backgroundColor: colors.earning }]} />
+        <Text style={[styles.earningsText, { color: colors.earning }]}>
           You've earned {formatCents(totalEarningsCents)}
         </Text>
       </TouchableOpacity>
@@ -175,7 +177,7 @@ export default function TaskBrowserScreen() {
         </View>
       ) : filteredTasks.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyText}>No tasks available right now</Text>
+          <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No tasks available right now</Text>
         </View>
       ) : (
         <FlatList
@@ -193,7 +195,6 @@ export default function TaskBrowserScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -210,7 +211,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.accentMuted,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -223,7 +223,6 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.accent,
   },
   earningsPill: {
     flexDirection: 'row',
@@ -233,42 +232,34 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: 'rgba(48, 209, 88, 0.08)',
     borderRadius: 20,
   },
   earningsDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.earning,
     marginRight: 8,
   },
   earningsText: {
     ...typography.callout,
-    color: colors.earning,
     fontWeight: '500',
   },
   filterList: {
-    flexGrow: 0,
+    flexShrink: 0,
     marginBottom: 12,
   },
   filterRow: {
     paddingHorizontal: spacing.screenPadding,
-    paddingVertical: 4,
+    paddingVertical: 6,
     gap: 8,
   },
   pill: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: colors.accentMuted,
-  },
-  pillActive: {
-    backgroundColor: colors.accent,
   },
   pillText: {
     ...typography.caption1,
-    color: colors.accent,
   },
   pillTextActive: {
     color: '#FFFFFF',
@@ -284,6 +275,5 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...typography.body,
-    color: colors.textTertiary,
   },
 });
