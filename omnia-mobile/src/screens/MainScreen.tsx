@@ -10,13 +10,15 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { Auth } from 'firebase/auth';
 import { auth as firebaseAuth, db } from '../services/firebase';
 import { metaWearablesService } from '../services/metaWearables';
+import { colors } from '../theme';
+import GlassCard from '../components/GlassCard';
+import MeshBackground from '../components/MeshBackground';
 
 // Explicitly type auth to avoid TypeScript errors
 const auth: Auth = firebaseAuth;
@@ -331,33 +333,33 @@ export default function MainScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'online':
-        return '#4CAF50';
+        return colors.success;
       case 'pending':
-        return '#FFC107';
+        return colors.warning;
       default:
-        return '#9E9E9E';
+        return colors.textTertiary;
     }
   };
 
   const getStatusBackgroundColor = (status: string) => {
     switch (status) {
       case 'online':
-        return 'rgba(76, 175, 80, 0.2)';
+        return 'rgba(45, 168, 79, 0.15)';
       case 'pending':
-        return 'rgba(255, 193, 7, 0.2)';
+        return 'rgba(230, 147, 31, 0.15)';
       default:
-        return 'rgba(158, 158, 158, 0.2)';
+        return 'rgba(156, 143, 130, 0.15)';
     }
   };
 
   const getDeviceImage = (model?: string, type?: string, deviceType?: string) => {
     // Check type first (most specific), then deviceType, then model
     const checkValue = type || deviceType || model;
-    
+
     if (!checkValue) return null;
-    
+
     const valueLower = checkValue.toLowerCase().replace(/_/g, '-');
-    
+
     // Map device types/models to images - check for even-realities-g1 first (most specific)
     if (valueLower.includes('even-realities-g1') || valueLower.includes('even') || valueLower.includes('g1')) {
       return evenImage;
@@ -366,25 +368,21 @@ export default function MainScreen() {
     } else if (valueLower.includes('vusix')) {
       return vusixImage;
     }
-    
+
     // Default fallback - return even if no match
     return evenImage;
   };
 
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.container}
-    >
+    <View style={styles.container}>
+      <MeshBackground variant="warm" />
       <StatusBar style="dark" />
 
       {/* Profile Icon - Top Right */}
       <TouchableOpacity style={styles.profileButton} onPress={handleAccountPress}>
         <View style={styles.profileIcon}>
           {loadingPhoto ? (
-            <ActivityIndicator size="small" color="#6366F1" />
+            <ActivityIndicator size="small" color={colors.accent} />
           ) : profilePhotoUrl ? (
             <Image
               source={{ uri: profilePhotoUrl }}
@@ -404,32 +402,27 @@ export default function MainScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366F1" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
       >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.welcomeText}>Welcome to</Text>
-          <Text style={styles.appName}>Omnia</Text>
+          <Text style={styles.appName}>SpecTask</Text>
           <Text style={styles.subtitle}>Manage your smart glasses devices</Text>
         </View>
 
         {/* Pair New Device Button - Always visible */}
         <TouchableOpacity onPress={handlePairDevice} style={styles.pairButton}>
-          <LinearGradient
-            colors={['#6366F1', '#8B5CF6']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.pairButtonGradient}
-          >
+          <View style={styles.pairButtonInner}>
             <Text style={styles.pairButtonText}>Pair New Device</Text>
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
 
         {/* Devices List */}
         {loadingDevices ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6366F1" />
+            <ActivityIndicator size="large" color={colors.accent} />
             <Text style={styles.loadingText}>Loading devices...</Text>
           </View>
         ) : devices.length === 0 ? (
@@ -455,10 +448,10 @@ export default function MainScreen() {
               return (
                 <TouchableOpacity
                   key={device.id}
-                  style={styles.deviceCard}
                   onPress={() => handleDevicePress(device)}
                   activeOpacity={0.7}
                 >
+                  <GlassCard style={styles.deviceCard}>
                   <View style={styles.deviceCardContent}>
                     {/* Device Image - Left Side */}
                     {deviceImage && (
@@ -496,10 +489,10 @@ export default function MainScreen() {
                                       width: `${device.battery}%`,
                                       backgroundColor:
                                         device.battery > 50
-                                          ? '#4CAF50'
+                                          ? colors.success
                                           : device.battery > 20
-                                          ? '#FFC107'
-                                          : '#FF6B6B',
+                                          ? colors.warning
+                                          : colors.destructive,
                                     },
                                   ]}
                                 />
@@ -532,7 +525,7 @@ export default function MainScreen() {
                             onPress={() => handleTestPersona(device)}
                             activeOpacity={0.7}
                           >
-                            <Text style={styles.testPersonaButtonText}>💬 Chat with Persona</Text>
+                            <Text style={styles.testPersonaButtonText}>Chat with Persona</Text>
                           </TouchableOpacity>
                         )}
 
@@ -597,10 +590,10 @@ export default function MainScreen() {
                                         width: `${device.battery_left}%`,
                                         backgroundColor:
                                           device.battery_left > 50
-                                            ? '#4CAF50'
+                                            ? colors.success
                                             : device.battery_left > 20
-                                            ? '#FFC107'
-                                            : '#FF6B6B',
+                                            ? colors.warning
+                                            : colors.destructive,
                                       },
                                     ]}
                                   />
@@ -623,10 +616,10 @@ export default function MainScreen() {
                                         width: `${device.battery_right}%`,
                                         backgroundColor:
                                           device.battery_right > 50
-                                            ? '#4CAF50'
+                                            ? colors.success
                                             : device.battery_right > 20
-                                            ? '#FFC107'
-                                            : '#FF6B6B',
+                                            ? colors.warning
+                                            : colors.destructive,
                                       },
                                     ]}
                                   />
@@ -640,19 +633,21 @@ export default function MainScreen() {
                       </View>
                     </View>
                   </View>
+                  </GlassCard>
                 </TouchableOpacity>
               );
             })}
           </>
         )}
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   profileButton: {
     position: 'absolute',
@@ -664,16 +659,16 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: colors.accentMuted,
     borderWidth: 2,
-    borderColor: '#6366F1',
+    borderColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
   },
   profileIconText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6366F1',
+    color: colors.accent,
   },
   profileImage: {
     width: '100%',
@@ -693,23 +688,24 @@ const styles = StyleSheet.create({
   },
   welcomeText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   appName: {
     fontSize: 40,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   pairButton: {
     marginBottom: 24,
   },
-  pairButtonGradient: {
+  pairButtonInner: {
+    backgroundColor: colors.accent,
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
@@ -724,7 +720,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontSize: 16,
     marginTop: 16,
   },
@@ -735,32 +731,23 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   devicesSectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 16,
   },
   deviceCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
     padding: 16,
     marginBottom: 16,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
   },
   deviceCardContent: {
     flexDirection: 'row',
@@ -771,7 +758,7 @@ const styles = StyleSheet.create({
     height: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(99, 102, 241, 0.05)',
+    backgroundColor: 'rgba(42, 37, 34, 0.03)',
     borderRadius: 8,
     overflow: 'hidden',
     flexShrink: 0,
@@ -796,7 +783,7 @@ const styles = StyleSheet.create({
   deviceName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
     flex: 1,
   },
   statusBadge: {
@@ -819,7 +806,7 @@ const styles = StyleSheet.create({
   },
   deviceModel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   deviceInfo: {
     gap: 12,
@@ -832,11 +819,11 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   infoValue: {
     fontSize: 14,
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   batteryContainer: {
     flexDirection: 'row',
@@ -848,7 +835,7 @@ const styles = StyleSheet.create({
   batteryBar: {
     flex: 1,
     height: 8,
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: 'rgba(42, 37, 34, 0.06)',
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -859,12 +846,12 @@ const styles = StyleSheet.create({
   batteryText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
     minWidth: 35,
     textAlign: 'right',
   },
   personaBadge: {
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: colors.accentMuted,
     borderWidth: 1,
     borderColor: 'transparent',
     borderRadius: 6,
@@ -873,19 +860,19 @@ const styles = StyleSheet.create({
   },
   personaText: {
     fontSize: 12,
-    color: '#6366F1',
+    color: colors.accent,
     fontWeight: '600',
   },
   bleConnectionSection: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(99, 102, 241, 0.2)',
+    borderTopColor: colors.separator,
   },
   bleConnectionTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textTertiary,
     marginBottom: 6,
   },
   bleArmsRow: {
@@ -895,7 +882,7 @@ const styles = StyleSheet.create({
   bleArmIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: 'rgba(45, 168, 79, 0.08)',
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -904,19 +891,19 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
     marginRight: 4,
   },
   bleArmText: {
     fontSize: 11,
-    color: '#4CAF50',
+    color: colors.success,
     fontWeight: '600',
   },
   batterySection: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(99, 102, 241, 0.2)',
+    borderTopColor: colors.separator,
   },
   armBatteryRow: {
     flexDirection: 'row',
@@ -926,13 +913,13 @@ const styles = StyleSheet.create({
   armBatteryLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textTertiary,
     width: 45,
     marginRight: 8,
   },
   testPersonaButton: {
     marginTop: 12,
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.accent,
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 16,

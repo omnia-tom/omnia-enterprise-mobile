@@ -11,11 +11,13 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { chatAPI, ChatResponse } from '../services/chatApi';
 import { sendMessageToGlasses } from '../services/glassesMessaging';
+import { colors } from '../theme';
+import GlassCard from '../components/GlassCard';
+import MeshBackground from '../components/MeshBackground';
 
 interface ChatMessage {
   id: string;
@@ -35,7 +37,7 @@ export default function ChatScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { deviceId, deviceName, personaId } = (route.params || {}) as ChatScreenParams;
-  
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -108,17 +110,17 @@ export default function ChatScreen() {
       });
     } catch (error: any) {
       console.error('[ChatScreen] Error sending message:', error);
-      
+
       // Remove user message on error and show error message
       setMessages(prev => prev.filter(m => m.id !== userMessage.id));
-      
+
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}`,
         text: `Error: ${error.message || 'Failed to send message. Please try again.'}`,
         isUser: false,
         timestamp: new Date(),
       };
-      
+
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setLoading(false);
@@ -126,12 +128,10 @@ export default function ChatScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
+      <MeshBackground variant="warm" />
       <StatusBar style="dark" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -185,7 +185,7 @@ export default function ChatScreen() {
           ))}
           {loading && (
             <View style={[styles.messageContainer, styles.botMessage]}>
-              <ActivityIndicator size="small" color="#6366F1" />
+              <ActivityIndicator size="small" color={colors.accent} />
             </View>
           )}
         </ScrollView>
@@ -197,7 +197,7 @@ export default function ChatScreen() {
             value={inputText}
             onChangeText={setInputText}
             placeholder="Type your message..."
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={colors.textTertiary}
             multiline
             maxLength={500}
             editable={!loading}
@@ -217,13 +217,14 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -232,14 +233,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(99, 102, 241, 0.2)',
+    borderBottomColor: colors.separator,
   },
   backButton: {
     marginRight: 16,
   },
   backButtonText: {
     fontSize: 16,
-    color: '#6366F1',
+    color: colors.accent,
     fontWeight: '600',
   },
   headerContent: {
@@ -248,11 +249,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   keyboardView: {
@@ -273,13 +274,13 @@ const styles = StyleSheet.create({
   },
   userMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.accent,
   },
   botMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.2)',
+    borderColor: 'rgba(42, 37, 34, 0.06)',
   },
   messageText: {
     fontSize: 15,
@@ -289,47 +290,47 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   botMessageText: {
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   citationsContainer: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(99, 102, 241, 0.2)',
+    borderTopColor: 'rgba(42, 37, 34, 0.08)',
   },
   citationsTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   citationText: {
     fontSize: 11,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   inputContainer: {
     flexDirection: 'row',
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(99, 102, 241, 0.2)',
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderTopColor: colors.separator,
+    backgroundColor: 'rgba(250, 248, 245, 0.95)',
   },
   input: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(42, 37, 34, 0.04)',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#1F2937',
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
+    borderColor: 'rgba(108, 92, 231, 0.2)',
     maxHeight: 100,
     marginRight: 8,
   },
   sendButton: {
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.accent,
     borderRadius: 20,
     paddingHorizontal: 24,
     paddingVertical: 12,
@@ -338,7 +339,7 @@ const styles = StyleSheet.create({
     minWidth: 70,
   },
   sendButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    backgroundColor: colors.textTertiary,
     opacity: 0.5,
   },
   sendButtonText: {
@@ -347,4 +348,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-

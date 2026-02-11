@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { metaWearablesService, MetaDevice } from '../services/metaWearables';
 import { typography, spacing, useThemeColors } from '../theme';
+import GlassCard from '../components/GlassCard';
+import MeshBackground from '../components/MeshBackground';
 
 export default function PairingScreen() {
   const insets = useSafeAreaInsets();
@@ -139,7 +141,8 @@ export default function PairingScreen() {
   const sdkAvailable = metaWearablesService.isSDKAvailable();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <MeshBackground variant="warm" />
       <StatusBar style={theme.statusBarStyle} />
 
       {/* Header */}
@@ -196,35 +199,36 @@ export default function PairingScreen() {
             {devices.map((device) => (
               <TouchableOpacity
                 key={device.id}
-                style={[styles.deviceCard, theme.cardStyle]}
                 onPress={() => selectDevice(device)}
                 activeOpacity={0.7}
                 disabled={connecting}
               >
-                <View style={[styles.deviceIcon, { backgroundColor: colors.accentMuted }]}>
-                  <Text style={styles.deviceEmoji}>🕶️</Text>
-                </View>
-                <View style={styles.deviceInfo}>
-                  <Text style={[styles.deviceName, { color: colors.textPrimary }]}>{device.name || 'Meta Glasses'}</Text>
-                  {device.model && <Text style={[styles.deviceModel, { color: colors.textTertiary }]}>{device.model}</Text>}
-                </View>
-                {connecting ? (
-                  <ActivityIndicator size="small" color={colors.accent} />
-                ) : (
-                  <Text style={[styles.connectLabel, { color: colors.accent }]}>Connect</Text>
-                )}
+                <GlassCard style={styles.deviceCard}>
+                  <View style={[styles.deviceIcon, { backgroundColor: colors.accentMuted }]}>
+                    <Text style={styles.deviceEmoji}>🕶️</Text>
+                  </View>
+                  <View style={styles.deviceInfo}>
+                    <Text style={[styles.deviceName, { color: colors.textPrimary }]}>{device.name || 'Meta Glasses'}</Text>
+                    {device.model && <Text style={[styles.deviceModel, { color: colors.textTertiary }]}>{device.model}</Text>}
+                  </View>
+                  {connecting ? (
+                    <ActivityIndicator size="small" color={colors.accent} />
+                  ) : (
+                    <Text style={[styles.connectLabel, { color: colors.accent }]}>Connect</Text>
+                  )}
+                </GlassCard>
               </TouchableOpacity>
             ))}
           </ScrollView>
 
           {/* How-to card */}
-          <View style={[styles.helpCard, theme.cardStyle]}>
+          <GlassCard style={styles.helpCard}>
             <Text style={[styles.helpTitle, { color: colors.textPrimary }]}>First time?</Text>
             <Text style={[styles.helpStep, { color: colors.textSecondary }]}>1. Pair your glasses with the Meta View app first</Text>
             <Text style={[styles.helpStep, { color: colors.textSecondary }]}>2. Make sure Bluetooth is on</Text>
             <Text style={[styles.helpStep, { color: colors.textSecondary }]}>3. Tap "Scan for Glasses" above</Text>
             <Text style={[styles.helpStep, { color: colors.textSecondary }]}>4. Select your glasses from the list</Text>
-          </View>
+          </GlassCard>
         </>
       )}
     </View>
@@ -234,6 +238,7 @@ export default function PairingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   backButton: {
     paddingHorizontal: spacing.screenPadding,

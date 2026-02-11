@@ -15,6 +15,21 @@ import { typography, spacing, useThemeColors } from '../theme';
 import { RootStackParamList, Task } from '../types';
 import { getTaskById, formatCents } from '../services/taskData';
 import { metaWearablesService } from '../services/metaWearables';
+import GlassCard from '../components/GlassCard';
+import MeshBackground from '../components/MeshBackground';
+
+let GlassViewComponent: any = null;
+let glassAvailable = false;
+
+try {
+  const glassEffect = require('expo-glass-effect');
+  glassAvailable = glassEffect.isLiquidGlassAvailable();
+  if (glassAvailable) {
+    GlassViewComponent = glassEffect.GlassView;
+  }
+} catch {
+  glassAvailable = false;
+}
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'TaskDetail'>;
 type Route = RouteProp<RootStackParamList, 'TaskDetail'>;
@@ -65,7 +80,8 @@ export default function TaskDetailScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.center, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
+        <MeshBackground variant="cool" />
         <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
@@ -73,7 +89,8 @@ export default function TaskDetailScreen() {
 
   if (!task) {
     return (
-      <View style={[styles.container, styles.center, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
+        <MeshBackground variant="cool" />
         <Text style={[styles.errorText, { color: colors.textTertiary }]}>Task not found</Text>
       </View>
     );
@@ -84,7 +101,8 @@ export default function TaskDetailScreen() {
   const progress = task.maxSubmissions > 0 ? task.currentSubmissions / task.maxSubmissions : 0;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <MeshBackground variant="cool" />
       <StatusBar style={theme.statusBarStyle} />
 
       {/* Back button */}
@@ -105,7 +123,7 @@ export default function TaskDetailScreen() {
         </View>
 
         {/* Info row */}
-        <View style={[styles.infoRow, { backgroundColor: colors.surface, shadowOpacity: theme.isDark ? 0.3 : 0.04 }]}>
+        <GlassCard style={styles.infoRow}>
           <View style={styles.infoCol}>
             <Text style={[styles.infoValue, { color: colors.earning }]}>{formatCents(task.payoutCents)}</Text>
             <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Payout</Text>
@@ -124,7 +142,7 @@ export default function TaskDetailScreen() {
             </View>
             <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Difficulty</Text>
           </View>
-        </View>
+        </GlassCard>
 
         {/* Description */}
         <View style={styles.section}>
@@ -171,13 +189,23 @@ export default function TaskDetailScreen() {
       </ScrollView>
 
       {/* Sticky CTA */}
-      <View style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: colors.background, borderTopColor: colors.separator }]}>
-        <TouchableOpacity style={[styles.ctaButton, { backgroundColor: colors.accent }]} onPress={handleStartRecording} activeOpacity={0.8}>
-          <Text style={styles.ctaText}>
-            {glassesConnected ? 'Start Recording' : 'Connect Glasses First'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {glassAvailable && GlassViewComponent ? (
+        <GlassViewComponent glassEffectStyle="regular" style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <TouchableOpacity style={[styles.ctaButton, { backgroundColor: colors.accent }]} onPress={handleStartRecording} activeOpacity={0.8}>
+            <Text style={styles.ctaText}>
+              {glassesConnected ? 'Start Recording' : 'Connect Glasses First'}
+            </Text>
+          </TouchableOpacity>
+        </GlassViewComponent>
+      ) : (
+        <View style={[styles.ctaContainer, styles.ctaFallback, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <TouchableOpacity style={[styles.ctaButton, { backgroundColor: colors.accent }]} onPress={handleStartRecording} activeOpacity={0.8}>
+            <Text style={styles.ctaText}>
+              {glassesConnected ? 'Start Recording' : 'Connect Glasses First'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -185,6 +213,7 @@ export default function TaskDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   center: {
     alignItems: 'center',
@@ -230,13 +259,8 @@ const styles = StyleSheet.create({
   },
   infoRow: {
     flexDirection: 'row',
-    borderRadius: 16,
     padding: 20,
     marginBottom: spacing.sectionGap,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 8,
-    elevation: 2,
   },
   infoCol: {
     flex: 1,
@@ -332,7 +356,11 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: spacing.screenPadding,
     paddingTop: 12,
+  },
+  ctaFallback: {
+    backgroundColor: 'rgba(250, 248, 245, 0.92)',
     borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2D9CE',
   },
   ctaButton: {
     borderRadius: 14,

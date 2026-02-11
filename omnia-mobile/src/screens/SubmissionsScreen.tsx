@@ -13,13 +13,16 @@ import { auth } from '../services/firebase';
 import { typography, spacing, useThemeColors } from '../theme';
 import { Submission, SubmissionStatus } from '../types';
 import { getUserSubmissions, getTotalEarnings, formatCents } from '../services/taskData';
+import GlassCard from '../components/GlassCard';
+import GlassPill from '../components/GlassPill';
+import MeshBackground from '../components/MeshBackground';
 
 const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; bg: string }> = {
-  recording: { label: 'Recording', color: '#FF9F0A', bg: 'rgba(255, 159, 10, 0.12)' },
+  recording: { label: 'Recording', color: '#E6931F', bg: 'rgba(230, 147, 31, 0.12)' },
   uploading: { label: 'Uploading', color: '#007AFF', bg: 'rgba(0, 122, 255, 0.12)' },
-  under_review: { label: 'Under Review', color: '#FF9F0A', bg: 'rgba(255, 159, 10, 0.12)' },
-  approved: { label: 'Approved', color: '#34C759', bg: 'rgba(52, 199, 89, 0.12)' },
-  rejected: { label: 'Rejected', color: '#FF3B30', bg: 'rgba(255, 59, 48, 0.12)' },
+  under_review: { label: 'Under Review', color: '#E6931F', bg: 'rgba(230, 147, 31, 0.12)' },
+  approved: { label: 'Approved', color: '#2DA84F', bg: 'rgba(45, 168, 79, 0.12)' },
+  rejected: { label: 'Rejected', color: '#D84848', bg: 'rgba(216, 72, 72, 0.12)' },
 };
 
 const FILTERS: { key: 'all' | SubmissionStatus; label: string }[] = [
@@ -69,7 +72,7 @@ export default function SubmissionsScreen() {
   const renderSubmission = ({ item }: { item: Submission }) => {
     const statusConf = STATUS_CONFIG[item.status];
     return (
-      <View style={[styles.subCard, theme.cardStyle]}>
+      <GlassCard style={styles.subCard}>
         <View style={styles.subTopRow}>
           <Text style={[styles.subTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.taskTitle}</Text>
           <Text style={[styles.subPayout, { color: colors.earning }]}>{formatCents(item.payoutCents)}</Text>
@@ -84,18 +87,19 @@ export default function SubmissionsScreen() {
         {item.status === 'rejected' && item.rejectionReason && (
           <Text style={[styles.rejectionText, { color: colors.destructive }]}>{item.rejectionReason}</Text>
         )}
-      </View>
+      </GlassCard>
     );
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <MeshBackground variant="balanced" />
       <StatusBar style={theme.statusBarStyle} />
 
       <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Submissions</Text>
 
       {/* Summary card */}
-      <View style={[styles.summaryCard, theme.cardStyle]}>
+      <GlassCard style={styles.summaryCard}>
         <View style={styles.summaryCol}>
           <Text style={[styles.summaryValue, { color: colors.earning }]}>{formatCents(totalEarned)}</Text>
           <Text style={[styles.summaryLabel, { color: colors.textTertiary }]}>Total Earned</Text>
@@ -110,7 +114,7 @@ export default function SubmissionsScreen() {
           <Text style={[styles.summaryValueDefault, { color: colors.textPrimary }]}>{approvalRate}%</Text>
           <Text style={[styles.summaryLabel, { color: colors.textTertiary }]}>Approval</Text>
         </View>
-      </View>
+      </GlassCard>
 
       {/* Filter tabs */}
       <FlatList
@@ -119,13 +123,12 @@ export default function SubmissionsScreen() {
         data={FILTERS}
         keyExtractor={(item) => item.key}
         renderItem={({ item: f }) => (
-          <TouchableOpacity
-            style={[styles.filterPill, { backgroundColor: colors.accentMuted }, filter === f.key && { backgroundColor: colors.accent }]}
-            onPress={() => setFilter(f.key)}
-          >
-            <Text style={[styles.filterText, { color: colors.accent }, filter === f.key && styles.filterTextActive]}>
-              {f.label}
-            </Text>
+          <TouchableOpacity onPress={() => setFilter(f.key)}>
+            <GlassPill active={filter === f.key} style={styles.filterPill}>
+              <Text style={[styles.filterText, { color: filter === f.key ? '#FFFFFF' : colors.textSecondary }]}>
+                {f.label}
+              </Text>
+            </GlassPill>
           </TouchableOpacity>
         )}
         contentContainerStyle={styles.filterRow}
@@ -157,6 +160,7 @@ export default function SubmissionsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   headerTitle: {
     ...typography.display,
@@ -197,19 +201,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   filterPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    // GlassPill handles padding/radius
   },
   filterText: {
     ...typography.caption1,
   },
-  filterTextActive: {
-    color: '#FFFFFF',
-  },
   listContent: {
     paddingHorizontal: spacing.screenPadding,
-    paddingBottom: 32,
+    paddingBottom: 100,
   },
   subCard: {
     padding: spacing.cardPadding,

@@ -19,6 +19,9 @@ import { typography, spacing, useThemeColors } from '../theme';
 import { Task, TaskCategory, RootStackParamList } from '../types';
 import { getAvailableTasks, getUserSubmissions, getTotalEarnings, formatCents } from '../services/taskData';
 import TaskCard from '../components/TaskCard';
+import GlassPill from '../components/GlassPill';
+import GlassCard from '../components/GlassCard';
+import MeshBackground from '../components/MeshBackground';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -104,38 +107,35 @@ export default function TaskBrowserScreen() {
     const isActive = selectedCategory === cat;
     if (cat === 'all') {
       return (
-        <TouchableOpacity
-          key="all"
-          style={[styles.pill, { backgroundColor: colors.accentMuted }, isActive && { backgroundColor: colors.accent }]}
-          onPress={() => setSelectedCategory('all')}
-        >
-          <Text style={[styles.pillText, { color: colors.accent }, isActive && styles.pillTextActive]}>All</Text>
+        <TouchableOpacity key="all" onPress={() => setSelectedCategory('all')}>
+          <GlassPill active={isActive} style={styles.pill}>
+            <Text style={[styles.pillText, { color: isActive ? '#FFFFFF' : colors.textSecondary }]}>All</Text>
+          </GlassPill>
         </TouchableOpacity>
       );
     }
     const config = categoryConfig[cat];
     return (
-      <TouchableOpacity
-        key={cat}
-        style={[styles.pill, { backgroundColor: colors.accentMuted }, isActive && { backgroundColor: colors.accent }]}
-        onPress={() => setSelectedCategory(cat)}
-      >
-        <Text style={[styles.pillText, { color: colors.accent }, isActive && styles.pillTextActive]}>
-          {config.emoji} {config.label}
-        </Text>
+      <TouchableOpacity key={cat} onPress={() => setSelectedCategory(cat)}>
+        <GlassPill active={isActive} style={styles.pill}>
+          <Text style={[styles.pillText, { color: isActive ? '#FFFFFF' : colors.textSecondary }]}>
+            {config.emoji} {config.label}
+          </Text>
+        </GlassPill>
       </TouchableOpacity>
     );
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <MeshBackground variant="cool" />
       <StatusBar style={theme.statusBarStyle} />
 
       {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Tasks</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Account')}>
-          <View style={[styles.avatar, { backgroundColor: colors.accentMuted }]}>
+          <GlassCard glassStyle="clear" style={styles.avatar}>
             {profilePhotoUrl ? (
               <Image
                 source={{ uri: profilePhotoUrl }}
@@ -145,19 +145,23 @@ export default function TaskBrowserScreen() {
             ) : (
               <Text style={[styles.avatarText, { color: colors.accent }]}>{userInitials}</Text>
             )}
-          </View>
+          </GlassCard>
         </TouchableOpacity>
       </View>
 
       {/* Earnings pill */}
       <TouchableOpacity
-        style={[styles.earningsPill, { backgroundColor: theme.isDark ? 'rgba(48, 209, 88, 0.15)' : 'rgba(48, 209, 88, 0.08)' }]}
         onPress={() => navigation.getParent()?.navigate('Submissions')}
+        style={styles.earningsPillWrap}
       >
-        <View style={[styles.earningsDot, { backgroundColor: colors.earning }]} />
-        <Text style={[styles.earningsText, { color: colors.earning }]}>
-          You've earned {formatCents(totalEarningsCents)}
-        </Text>
+        <GlassPill tintColor="rgba(45, 168, 79, 0.15)">
+          <View style={styles.earningsPillInner}>
+            <View style={[styles.earningsDot, { backgroundColor: colors.earning }]} />
+            <Text style={[styles.earningsText, { color: colors.earning }]}>
+              You've earned {formatCents(totalEarningsCents)}
+            </Text>
+          </View>
+        </GlassPill>
       </TouchableOpacity>
 
       {/* Category filter */}
@@ -195,6 +199,7 @@ export default function TaskBrowserScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',
@@ -224,15 +229,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  earningsPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  earningsPillWrap: {
     alignSelf: 'flex-start',
     marginHorizontal: spacing.screenPadding,
     marginBottom: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+  },
+  earningsPillInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   earningsDot: {
     width: 8,
@@ -254,19 +258,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    // GlassPill handles padding
   },
   pillText: {
     ...typography.caption1,
   },
-  pillTextActive: {
-    color: '#FFFFFF',
-  },
   listContent: {
     paddingHorizontal: spacing.screenPadding,
-    paddingBottom: 32,
+    paddingBottom: 100,
   },
   center: {
     flex: 1,

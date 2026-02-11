@@ -19,6 +19,7 @@
     "expo-camera": "^17.0.9",
     "expo-constants": "^18.0.10",
     "expo-dev-client": "~6.0.18",
+    "expo-glass-effect": "~0.1.8",
     "expo-linear-gradient": "^15.0.7",
     "expo-status-bar": "~3.0.8",
     "firebase": "^12.5.0",

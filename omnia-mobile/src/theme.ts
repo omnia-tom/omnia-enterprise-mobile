@@ -1,106 +1,106 @@
-import { StyleSheet, useColorScheme } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { useMemo } from 'react';
 
-// ── Light palette ──────────────────────────────────────────────
-export const lightColors = {
-  background: '#FAFAFA',
-  surface: '#FFFFFF',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#86868B',
-  textTertiary: '#AEAEB2',
-  accent: '#6366F1',
-  accentMuted: 'rgba(99, 102, 241, 0.08)',
-  earning: '#30D158',
-  success: '#34C759',
-  warning: '#FF9F0A',
-  destructive: '#FF3B30',
-  separator: '#E5E5EA',
+// ── Color palette (warm Barcelona-modern) ────────────────────
+export const colors = {
+  background: '#FAF8F5',
+  surface: '#F0ECE6',
+  textPrimary: '#2A2522',
+  textSecondary: '#6B5E54',
+  textTertiary: '#9C8F82',
+  accent: '#6C5CE7',
+  accentMuted: 'rgba(108, 92, 231, 0.10)',
+  earning: '#2DA84F',
+  success: '#2DA84F',
+  warning: '#E6931F',
+  destructive: '#D84848',
+  separator: '#E2D9CE',
 };
 
-// ── Dark palette ───────────────────────────────────────────────
-export const darkColors = {
-  background: '#000000',
-  surface: '#1C1C1E',
-  textPrimary: '#F2F2F7',
-  textSecondary: '#98989D',
-  textTertiary: '#636366',
-  accent: '#818CF8',
-  accentMuted: 'rgba(129, 140, 248, 0.15)',
-  earning: '#32D74B',
-  success: '#30D158',
-  warning: '#FFD60A',
-  destructive: '#FF453A',
-  separator: '#38383A',
-};
-
-// Backward-compat export
-export const colors = lightColors;
+// Backward-compat aliases
+export const darkColors = colors;
+export const lightColors = colors;
 
 export const typography = StyleSheet.create({
   display: {
     fontSize: 34,
     fontWeight: '700',
     letterSpacing: -0.4,
-    color: lightColors.textPrimary,
+    color: colors.textPrimary,
   },
   title1: {
     fontSize: 22,
     fontWeight: '600',
     letterSpacing: -0.2,
-    color: lightColors.textPrimary,
+    color: colors.textPrimary,
   },
   title2: {
     fontSize: 17,
     fontWeight: '600',
-    color: lightColors.textPrimary,
+    color: colors.textPrimary,
   },
   body: {
     fontSize: 17,
     fontWeight: '400',
-    color: lightColors.textPrimary,
+    color: colors.textPrimary,
   },
   callout: {
     fontSize: 15,
     fontWeight: '400',
-    color: lightColors.textSecondary,
+    color: colors.textSecondary,
   },
   caption1: {
     fontSize: 13,
     fontWeight: '500',
-    color: lightColors.textTertiary,
+    color: colors.textTertiary,
   },
   caption2: {
     fontSize: 11,
     fontWeight: '400',
-    color: lightColors.textTertiary,
+    color: colors.textTertiary,
   },
   money: {
     fontSize: 22,
     fontWeight: '700',
     letterSpacing: -0.4,
-    color: lightColors.earning,
+    color: colors.earning,
   },
 });
 
 // ── Card styles ────────────────────────────────────────────────
 export const cardStyle = {
-  backgroundColor: lightColors.surface,
+  backgroundColor: colors.surface,
   borderRadius: 16,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.04,
+  shadowColor: '#2A2522',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.06,
   shadowRadius: 8,
   elevation: 2,
 };
 
-export const darkCardStyle = {
-  backgroundColor: darkColors.surface,
-  borderRadius: 16,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.3,
-  shadowRadius: 8,
+// Backward-compat alias
+export const darkCardStyle = cardStyle;
+
+// ── Glass styles (fallback for non-iOS-26) ─────────────────────
+export const glassCardStyle = {
+  backgroundColor: 'rgba(255, 255, 255, 0.65)',
+  borderRadius: 20,
+  borderWidth: StyleSheet.hairlineWidth,
+  borderColor: 'rgba(42, 37, 34, 0.06)',
+  shadowColor: '#2A2522',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.04,
+  shadowRadius: 12,
   elevation: 2,
+  overflow: 'hidden' as const,
+};
+
+export const glassPillStyle = {
+  backgroundColor: 'rgba(255, 255, 255, 0.55)',
+  borderRadius: 20,
+  borderWidth: StyleSheet.hairlineWidth,
+  borderColor: 'rgba(42, 37, 34, 0.06)',
+  overflow: 'hidden' as const,
 };
 
 export const spacing = {
@@ -112,48 +112,36 @@ export const spacing = {
 
 // ── Category config ────────────────────────────────────────────
 export const categoryConfig: Record<string, { emoji: string; tint: string; label: string }> = {
-  kitchen: { emoji: '🍳', tint: '#FFF3E0', label: 'Kitchen' },
-  warehouse: { emoji: '📦', tint: '#E3F2FD', label: 'Warehouse' },
-  household: { emoji: '🏠', tint: '#E8F5E9', label: 'Household' },
-  office: { emoji: '💼', tint: '#F3E5F5', label: 'Office' },
-  workshop: { emoji: '🔧', tint: '#FFF8E1', label: 'Workshop' },
-  outdoor: { emoji: '🌿', tint: '#E0F2F1', label: 'Outdoor' },
-  personal_care: { emoji: '✨', tint: '#FCE4EC', label: 'Personal Care' },
+  kitchen: { emoji: '🍳', tint: 'rgba(230, 147, 31, 0.15)', label: 'Kitchen' },
+  warehouse: { emoji: '📦', tint: 'rgba(33, 150, 243, 0.15)', label: 'Warehouse' },
+  household: { emoji: '🏠', tint: 'rgba(45, 168, 79, 0.15)', label: 'Household' },
+  office: { emoji: '💼', tint: 'rgba(108, 92, 231, 0.15)', label: 'Office' },
+  workshop: { emoji: '🔧', tint: 'rgba(230, 147, 31, 0.15)', label: 'Workshop' },
+  outdoor: { emoji: '🌿', tint: 'rgba(45, 168, 79, 0.15)', label: 'Outdoor' },
+  personal_care: { emoji: '✨', tint: 'rgba(216, 72, 72, 0.15)', label: 'Personal Care' },
 };
 
-export const darkCategoryConfig: Record<string, { emoji: string; tint: string; label: string }> = {
-  kitchen: { emoji: '🍳', tint: 'rgba(255, 152, 0, 0.15)', label: 'Kitchen' },
-  warehouse: { emoji: '📦', tint: 'rgba(33, 150, 243, 0.15)', label: 'Warehouse' },
-  household: { emoji: '🏠', tint: 'rgba(76, 175, 80, 0.15)', label: 'Household' },
-  office: { emoji: '💼', tint: 'rgba(156, 39, 176, 0.15)', label: 'Office' },
-  workshop: { emoji: '🔧', tint: 'rgba(255, 235, 59, 0.15)', label: 'Workshop' },
-  outdoor: { emoji: '🌿', tint: 'rgba(0, 150, 136, 0.15)', label: 'Outdoor' },
-  personal_care: { emoji: '✨', tint: 'rgba(233, 30, 99, 0.15)', label: 'Personal Care' },
-};
+// Backward-compat alias
+export const darkCategoryConfig = categoryConfig;
 
 // ── Difficulty config ──────────────────────────────────────────
 export const difficultyConfig: Record<string, { color: string; bg: string }> = {
-  beginner: { color: '#34C759', bg: 'rgba(52, 199, 89, 0.12)' },
-  intermediate: { color: '#FF9F0A', bg: 'rgba(255, 159, 10, 0.12)' },
-  advanced: { color: '#FF3B30', bg: 'rgba(255, 59, 48, 0.12)' },
+  beginner: { color: '#2DA84F', bg: 'rgba(45, 168, 79, 0.18)' },
+  intermediate: { color: '#E6931F', bg: 'rgba(230, 147, 31, 0.18)' },
+  advanced: { color: '#D84848', bg: 'rgba(216, 72, 72, 0.18)' },
 };
 
-export const darkDifficultyConfig: Record<string, { color: string; bg: string }> = {
-  beginner: { color: '#30D158', bg: 'rgba(48, 209, 88, 0.18)' },
-  intermediate: { color: '#FFD60A', bg: 'rgba(255, 214, 10, 0.18)' },
-  advanced: { color: '#FF453A', bg: 'rgba(255, 69, 58, 0.18)' },
-};
+// Backward-compat alias
+export const darkDifficultyConfig = difficultyConfig;
 
 // ── Theme hook ─────────────────────────────────────────────────
 export function useThemeColors() {
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
   return useMemo(() => ({
-    colors: isDark ? darkColors : lightColors,
-    cardStyle: isDark ? darkCardStyle : cardStyle,
-    categoryConfig: isDark ? darkCategoryConfig : categoryConfig,
-    difficultyConfig: isDark ? darkDifficultyConfig : difficultyConfig,
-    isDark,
-    statusBarStyle: (isDark ? 'light' : 'dark') as 'light' | 'dark',
-  }), [isDark]);
+    colors,
+    cardStyle,
+    categoryConfig,
+    difficultyConfig,
+    isDark: false,
+    statusBarStyle: 'dark' as const,
+  }), []);
 }
