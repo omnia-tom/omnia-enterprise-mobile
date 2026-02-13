@@ -86,6 +86,12 @@ export interface VoiceCommand {
   transcript: string;
 }
 
+export interface StepValidation {
+  stepIndex: number;
+  validated: boolean;
+  checking: boolean;
+}
+
 class MetaWearablesService {
   private isAvailable: boolean;
   private currentDevice: MetaDevice | null = null;
@@ -142,6 +148,10 @@ class MetaWearablesService {
 
     metaWearablesEmitter.addListener('onStreamingStats', (stats: StreamingStats) => {
       this.emit('streamingStats', stats);
+    });
+
+    metaWearablesEmitter.addListener('onStepValidation', (data: StepValidation) => {
+      this.emit('stepValidation', data);
     });
 
     metaWearablesEmitter.addListener('onError', (error: { code: string; message: string }) => {
@@ -355,6 +365,32 @@ class MetaWearablesService {
       throw new Error('Meta Wearables SDK is not available on this platform');
     }
     return MetaWearablesModule.stopVoiceRecognition();
+  }
+
+  /**
+   * Pre-download and load the FastVLM model for step validation.
+   * Best called from TaskDetail screen so it's ready by recording time.
+   */
+  async preloadVLM(): Promise<void> {
+    if (!this.isAvailable) return;
+    return MetaWearablesModule.preloadVLM();
+  }
+
+  /**
+   * Start VLM-based validation for a recording step.
+   * The model will analyze frames at ~1fps and emit 'stepValidation' events.
+   */
+  async startStepValidation(stepIndex: number, description: string): Promise<void> {
+    if (!this.isAvailable) return;
+    return MetaWearablesModule.startStepValidation(stepIndex, description);
+  }
+
+  /**
+   * Stop step validation and unload the VLM model to free memory.
+   */
+  async stopStepValidation(): Promise<void> {
+    if (!this.isAvailable) return;
+    return MetaWearablesModule.stopStepValidation();
   }
 
   /**

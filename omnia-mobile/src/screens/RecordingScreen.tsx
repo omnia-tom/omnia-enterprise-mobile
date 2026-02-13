@@ -16,7 +16,7 @@ import { auth } from '../services/firebase';
 import { typography, spacing, useThemeColors } from '../theme';
 import { RootStackParamList, Task, Submission } from '../types';
 import { getTaskById, addSubmission } from '../services/taskData';
-import { metaWearablesService, MetaVideoFrame, HandPoseData, VoiceCommand } from '../services/metaWearables';
+import { metaWearablesService, MetaVideoFrame, HandPoseData, VoiceCommand, StepValidation } from '../services/metaWearables';
 import HandPoseOverlay from '../components/HandPoseOverlay';
 import NativeFrameView from '../components/NativeFrameView';
 
@@ -43,6 +43,8 @@ export default function RecordingScreen() {
   const [recordedVideo, setRecordedVideo] = useState<{ filePath: string; frameCount: number; duration: number } | null>(null);
   const [currentStep, setCurrentStep] = useState(-1);
   const [voiceReady, setVoiceReady] = useState(false);
+  const [stepValidations, setStepValidations] = useState<boolean[]>([]);
+  const [vlmChecking, setVlmChecking] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const instructionFade = useRef(new Animated.Value(0)).current;
@@ -51,6 +53,8 @@ export default function RecordingScreen() {
   const isRecordingRef = useRef(false);
   const voiceActiveRef = useRef(false);
   const waitingForCommandRef = useRef<((cmd: string) => void) | null>(null);
+  const stepDotPulse = useRef(new Animated.Value(1)).current;
+  const stepValidationsRef = useRef<boolean[]>([]);
 
   useEffect(() => {
     loadTask();
@@ -74,6 +78,7 @@ export default function RecordingScreen() {
       metaWearablesService.addEventListener('videoFrame', handleVideoFrame);
       metaWearablesService.addEventListener('handPoseDetected', handleHandPose);
       metaWearablesService.addEventListener('voiceCommand', handleVoiceCommand);
+      metaWearablesService.addEventListener('stepValidation', handleStepValidation);
 
       // Show instruction overlay briefly
       setTimeout(() => {
@@ -131,12 +136,25 @@ export default function RecordingScreen() {
     setHandPoseData(data);
   }, []);
 
+  const handleStepValidation = useCallback((data: StepValidation) => {
+    setVlmChecking(data.checking);
+    if (data.validated) {
+      setStepValidations(prev => {
+        const next = [...prev];
+        next[data.stepIndex] = true;
+        stepValidationsRef.current = next;
+        return next;
+      });
+    }
+  }, []);
+
   const stopEverything = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
     waitingForCommandRef.current = null;
     metaWearablesService.removeEventListener('videoFrame', handleVideoFrame);
     metaWearablesService.removeEventListener('handPoseDetected', handleHandPose);
     metaWearablesService.removeEventListener('voiceCommand', handleVoiceCommand);
+    metaWearablesService.removeEventListener('stepValidation', handleStepValidation);
     try {
       if (voiceActiveRef.current) {
         await metaWearablesService.stopVoiceRecognition();
@@ -146,6 +164,7 @@ export default function RecordingScreen() {
         await metaWearablesService.stopRecording();
         isRecordingRef.current = false;
       }
+      await metaWearablesService.stopStepValidation().catch(() => {});
       await metaWearablesService.setHandPoseEnabled(false);
       await metaWearablesService.stopVideoStream();
     } catch {}
@@ -165,6 +184,11 @@ export default function RecordingScreen() {
       setElapsedSeconds(0);
       setCurrentStep(0);
 
+      // Initialize step validations array
+      const validArr = new Array(task?.instructions.length || 0).fill(false);
+      setStepValidations(validArr);
+      stepValidationsRef.current = validArr;
+
       // Start timer
       timerRef.current = setInterval(() => {
         setElapsedSeconds(prev => prev + 1);
@@ -175,6 +199,14 @@ export default function RecordingScreen() {
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.15, duration: 800, useNativeDriver: true }),
           Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        ])
+      ).start();
+
+      // Step dot pulse animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(stepDotPulse, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+          Animated.timing(stepDotPulse, { toValue: 1, duration: 600, useNativeDriver: true }),
         ])
       ).start();
 
@@ -197,11 +229,14 @@ export default function RecordingScreen() {
       );
     } catch {}
 
-    // Step-by-step with voice commands
+    // Step-by-step with voice commands + VLM validation
     for (let i = 0; i < task.instructions.length; i++) {
       if (!isRecordingRef.current) break;
       audioStepRef.current = i;
       setCurrentStep(i);
+
+      // Start VLM validation for this step (fire-and-forget)
+      metaWearablesService.startStepValidation(i, task.instructions[i]).catch(() => {});
 
       try {
         await metaWearablesService.speakInstruction(task.instructions[i]);
@@ -246,7 +281,12 @@ export default function RecordingScreen() {
     if (timerRef.current) clearInterval(timerRef.current);
     pulseAnim.stopAnimation();
     pulseAnim.setValue(1);
+    stepDotPulse.stopAnimation();
+    stepDotPulse.setValue(1);
     waitingForCommandRef.current = null;
+
+    // Stop VLM validation
+    metaWearablesService.stopStepValidation().catch(() => {});
 
     try {
       const result = await metaWearablesService.stopRecording();
@@ -290,6 +330,9 @@ export default function RecordingScreen() {
     setRecordedVideo(null);
     setElapsedSeconds(0);
     setCurrentStep(-1);
+    setStepValidations([]);
+    stepValidationsRef.current = [];
+    setVlmChecking(false);
     setPhase('preview');
   };
 
@@ -317,6 +360,11 @@ export default function RecordingScreen() {
 
           <Text style={[styles.reviewTitle, { color: colors.textPrimary }]}>Recording Complete</Text>
           <Text style={[styles.reviewSubtitle, { color: colors.textSecondary }]}>{task?.title}</Text>
+          {stepValidations.length > 0 && (
+            <Text style={[styles.reviewValidation, { color: colors.textSecondary }]}>
+              {stepValidations.filter(Boolean).length}/{stepValidations.length} steps verified
+            </Text>
+          )}
 
           <View style={styles.reviewActions}>
             <TouchableOpacity style={[styles.reRecordButton, { borderColor: colors.accent }]} onPress={handleReRecord}>
@@ -372,15 +420,37 @@ export default function RecordingScreen() {
         <View style={styles.topSpacer} />
       </View>
 
-      {/* Step indicator during recording */}
-      {phase === 'recording' && task && currentStep >= 0 && currentStep < task.instructions.length && (
-        <View style={styles.stepIndicator}>
-          <Text style={styles.stepIndicatorText}>Step {currentStep + 1} of {task.instructions.length}</Text>
-        </View>
-      )}
-      {phase === 'recording' && task && currentStep >= task.instructions.length && (
-        <View style={styles.stepIndicator}>
-          <Text style={styles.stepIndicatorText}>All steps complete</Text>
+      {/* Step dots indicator during recording */}
+      {phase === 'recording' && task && currentStep >= 0 && (
+        <View style={styles.stepDotsContainer}>
+          <View style={styles.stepDotsRow}>
+            {task.instructions.map((_, i) => {
+              const isValidated = stepValidations[i];
+              const isCurrent = i === currentStep && currentStep < task.instructions.length;
+              const isFuture = i > currentStep;
+
+              return (
+                <View key={i} style={styles.stepDotWrapper}>
+                  {isValidated ? (
+                    <View style={[styles.stepDot, styles.stepDotValidated]}>
+                      <Text style={styles.stepDotCheck}>{'✓'}</Text>
+                    </View>
+                  ) : isCurrent ? (
+                    <Animated.View style={[styles.stepDot, styles.stepDotActive, { opacity: stepDotPulse }]}>
+                      <View style={styles.stepDotActiveInner} />
+                    </Animated.View>
+                  ) : (
+                    <View style={[styles.stepDot, styles.stepDotInactive]} />
+                  )}
+                </View>
+              );
+            })}
+          </View>
+          <Text style={styles.stepDotsLabel} numberOfLines={2}>
+            {currentStep < task.instructions.length
+              ? `Step ${currentStep + 1} of ${task.instructions.length}: "${task.instructions[currentStep]}"`
+              : 'All steps complete'}
+          </Text>
         </View>
       )}
 
@@ -501,20 +571,60 @@ const styles = StyleSheet.create({
     width: 44,
   },
 
-  // Step indicator
-  stepIndicator: {
+  // Step dots indicator
+  stepDotsContainer: {
     position: 'absolute',
     top: 120,
-    alignSelf: 'center',
+    left: 16,
+    right: 16,
+    alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
   },
-  stepIndicatorText: {
+  stepDotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 6,
+  },
+  stepDotWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepDotValidated: {
+    backgroundColor: '#30D158',
+  },
+  stepDotCheck: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  stepDotActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  stepDotActiveInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FFFFFF',
+  },
+  stepDotInactive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  stepDotsLabel: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 
   // Instructions overlay
@@ -660,7 +770,11 @@ const styles = StyleSheet.create({
   },
   reviewSubtitle: {
     ...typography.callout,
-    marginBottom: 32,
+    marginBottom: 8,
+  },
+  reviewValidation: {
+    ...typography.caption1,
+    marginBottom: 24,
   },
   reviewActions: {
     flexDirection: 'row',

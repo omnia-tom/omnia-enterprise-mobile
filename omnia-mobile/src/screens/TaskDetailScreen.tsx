@@ -35,6 +35,8 @@ export default function TaskDetailScreen() {
 
   useEffect(() => {
     loadTask();
+    // Pre-download/load FastVLM model so it's ready by recording time
+    metaWearablesService.preloadVLM().catch(() => {});
   }, []);
 
   useFocusEffect(

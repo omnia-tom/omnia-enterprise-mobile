@@ -79,5 +79,17 @@ RCT_EXTERN_METHOD(startVoiceRecognition:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(stopVoiceRecognition:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// Step Validation (FastVLM)
+RCT_EXTERN_METHOD(preloadVLM:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(startStepValidation:(nonnull NSNumber *)stepIndex
+                  description:(NSString *)description
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(stopStepValidation:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end
 

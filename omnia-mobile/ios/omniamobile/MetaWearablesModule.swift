@@ -62,6 +62,9 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
   // Hand pose detection toggle
   private var isHandPoseEnabled: Bool = true
 
+  // Step validation (FastVLM)
+  private var stepValidator: Any?  // StepValidator (iOS 18.2+)
+
   override static func requiresMainQueueSetup() -> Bool {
     return true
   }
@@ -78,7 +81,8 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
       "onBarcodeDetected",
       "onHandPoseDetected",
       "onVoiceCommand",
-      "onStreamingStats"
+      "onStreamingStats",
+      "onStepValidation"
     ]
   }
 
@@ -1067,6 +1071,71 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
       print("[MetaWearables] Voice recognition stopped")
       resolve(["success": true])
     }
+  }
+
+  // MARK: - Step Validation (FastVLM)
+
+  @objc
+  func preloadVLM(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    if #available(iOS 18.2, *) {
+      Task {
+        do {
+          print("[MetaWearables] FastVLM model loading...")
+          try await FastVLMService.shared.loadModel()
+          print("[MetaWearables] FastVLM model loaded")
+          resolve(["success": true])
+        } catch {
+          print("[MetaWearables] FastVLM load failed: \(error.localizedDescription)")
+          reject("VLM_LOAD_ERROR", error.localizedDescription, error)
+        }
+      }
+    } else {
+      resolve(["success": false, "reason": "iOS 18.2+ required"])
+    }
+  }
+
+  @objc
+  func startStepValidation(_ stepIndex: NSNumber, description: NSString, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    if #available(iOS 18.2, *) {
+      guard FastVLMService.shared.isModelLoaded else {
+        reject("VLM_NOT_LOADED", "FastVLM model not loaded. Call preloadVLM first.", nil)
+        return
+      }
+
+      let validator: StepValidator
+      if let existing = self.stepValidator as? StepValidator {
+        validator = existing
+      } else {
+        validator = StepValidator()
+        validator.eventEmitter = self
+        self.stepValidator = validator
+        // Register with ML pipeline if available
+        self.mlPipeline?.registerConsumer(validator)
+      }
+
+      validator.configure(stepIndex: stepIndex.intValue, description: description as String)
+      validator.isEnabled = true
+
+      print("[MetaWearables] Step validation started for step \(stepIndex.intValue)")
+      resolve(["success": true])
+    } else {
+      resolve(["success": false, "reason": "iOS 18.2+ required"])
+    }
+  }
+
+  @objc
+  func stopStepValidation(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    if #available(iOS 18.2, *) {
+      if let validator = self.stepValidator as? StepValidator {
+        validator.isEnabled = false
+        validator.reset()
+        self.mlPipeline?.removeConsumer(named: validator.modelName)
+        self.stepValidator = nil
+      }
+      FastVLMService.shared.unloadModel()
+      print("[MetaWearables] Step validation stopped")
+    }
+    resolve(["success": true])
   }
 
   // MARK: - Utility
