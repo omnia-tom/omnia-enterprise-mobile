@@ -28,13 +28,19 @@ final class StepValidator: MLModelConsumer {
 
   // MARK: - MLModelConsumer
 
+  private var frameCount = 0
+
   func process(cgImage: CGImage, timestamp: TimeInterval, width: Int, height: Int) {
+    frameCount += 1
+    if frameCount <= 3 || frameCount % 30 == 0 {
+      print("[StepValidator] process() called — frame #\(frameCount), enabled=\(isEnabled), isProcessing=\(isProcessing), prompt='\(currentPrompt.prefix(30))'")
+    }
     guard isEnabled, !isProcessing, !currentPrompt.isEmpty else { return }
 
     isProcessing = true
 
     // Emit "checking" state so JS can show the pulsing indicator
-    emitValidation(stepIndex: currentStepIndex, validated: false, checking: true)
+    emitValidation(stepIndex: currentStepIndex, validated: false, checking: true, response: nil, prompt: currentPrompt)
 
     let prompt = currentPrompt
     let stepIndex = currentStepIndex
@@ -47,7 +53,15 @@ final class StepValidator: MLModelConsumer {
 
         do {
           let vlmPrompt = "Look at this image. Is the person currently doing this: '\(prompt)'? Answer only YES or NO."
+
+          print("[StepValidator] ──────────────────────────────────")
+          print("[StepValidator] Step \(stepIndex) | Sending to FastVLM")
+          print("[StepValidator]   Image: \(cgImage.width)x\(cgImage.height)")
+          print("[StepValidator]   Prompt: \(vlmPrompt)")
+
+          let startTime = CFAbsoluteTimeGetCurrent()
           let response = try await FastVLMService.shared.predict(image: cgImage, prompt: vlmPrompt)
+          let elapsed = CFAbsoluteTimeGetCurrent() - startTime
 
           let upperResponse = response.uppercased()
           let isYes = upperResponse.contains("YES")
@@ -60,14 +74,18 @@ final class StepValidator: MLModelConsumer {
 
           let validated = self.consecutiveYesCount >= self.requiredConsensus
 
+          print("[StepValidator]   Raw response: \"\(response)\"")
+          print("[StepValidator]   Parsed as: \(isYes ? "YES" : "NO") | Consecutive YES: \(self.consecutiveYesCount)/\(self.requiredConsensus)")
+          print("[StepValidator]   Validated: \(validated) | Inference time: \(String(format: "%.0f", elapsed * 1000))ms")
+          print("[StepValidator] ──────────────────────────────────")
+
           // Only emit if still on the same step (user might have advanced)
           if self.currentStepIndex == stepIndex {
-            self.emitValidation(stepIndex: stepIndex, validated: validated, checking: !validated)
+            self.emitValidation(stepIndex: stepIndex, validated: validated, checking: !validated, response: response, prompt: prompt)
           }
-
-          print("[StepValidator] Step \(stepIndex): response=\(response), consecutive=\(self.consecutiveYesCount), validated=\(validated)")
         } catch {
           print("[StepValidator] Inference error: \(error.localizedDescription)")
+          self.emitValidation(stepIndex: stepIndex, validated: false, checking: false, response: "ERROR: \(error.localizedDescription)", prompt: prompt)
           self.isProcessing = false
         }
       }
@@ -92,13 +110,20 @@ final class StepValidator: MLModelConsumer {
 
   // MARK: - Event Emission
 
-  private func emitValidation(stepIndex: Int, validated: Bool, checking: Bool) {
+  private func emitValidation(stepIndex: Int, validated: Bool, checking: Bool, response: String?, prompt: String?) {
     DispatchQueue.main.async { [weak self] in
-      self?.eventEmitter?.sendEvent(withName: "onStepValidation", body: [
+      var body: [String: Any] = [
         "stepIndex": stepIndex,
         "validated": validated,
         "checking": checking
-      ])
+      ]
+      if let response = response {
+        body["response"] = response
+      }
+      if let prompt = prompt {
+        body["prompt"] = prompt
+      }
+      self?.eventEmitter?.sendEvent(withName: "onStepValidation", body: body)
     }
   }
 }

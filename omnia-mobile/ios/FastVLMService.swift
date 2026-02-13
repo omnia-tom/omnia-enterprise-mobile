@@ -40,9 +40,8 @@ final class FastVLMService {
     // Cap GPU cache to 2 GB so we don't starve the rest of the app.
     MLX.GPU.set(cacheLimit: 2_000_000_000)
 
-    let modelConfig = ModelConfiguration(
-      id: "mlx-community/FastVLM-0.5B-mlx"
-    )
+    // Use the library's built-in FastVLM preset (mlx-community/FastVLM-0.5B-bf16)
+    let modelConfig = VLMRegistry.fastvlm
 
     let container = try await VLMModelFactory.shared.loadContainer(
       configuration: modelConfig
@@ -58,15 +57,18 @@ final class FastVLMService {
   /// Returns the raw text response from the model.
   func predict(image: CGImage, prompt: String) async throws -> String {
     guard let container = modelContainer else {
+      print("[FastVLM] predict() called but model not loaded!")
       throw FastVLMError.modelNotLoaded
     }
 
+    print("[FastVLM] predict() preparing input...")
     let userInput = UserInput(
       prompt: prompt,
       images: [.ciImage(CIImage(cgImage: image))]
     )
 
     let input = try await container.prepare(input: userInput)
+    print("[FastVLM] predict() generating response...")
 
     let stream = try await container.generate(
       input: input,
@@ -80,7 +82,9 @@ final class FastVLMService {
       }
     }
 
-    return output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+    let result = output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+    print("[FastVLM] predict() complete -> \"\(result)\"")
+    return result
   }
 
   /// Free model memory. Call when leaving the recording screen.

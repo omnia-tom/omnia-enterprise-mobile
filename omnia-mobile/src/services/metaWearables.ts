@@ -90,6 +90,8 @@ export interface StepValidation {
   stepIndex: number;
   validated: boolean;
   checking: boolean;
+  response?: string;
+  prompt?: string;
 }
 
 class MetaWearablesService {

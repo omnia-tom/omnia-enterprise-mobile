@@ -7,6 +7,7 @@ import {
   Animated,
   Dimensions,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -45,6 +46,17 @@ export default function RecordingScreen() {
   const [voiceReady, setVoiceReady] = useState(false);
   const [stepValidations, setStepValidations] = useState<boolean[]>([]);
   const [vlmChecking, setVlmChecking] = useState(false);
+  const [vlmStatus, setVlmStatus] = useState<{ response: string; prompt: string; validated: boolean } | null>(null);
+  const [vlmModelState, setVlmModelState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [vlmModelError, setVlmModelError] = useState<string | null>(null);
+  const [vlmLog, setVlmLog] = useState<Array<{ time: string; msg: string; color?: string }>>([]);
+
+  const addVlmLog = (msg: string, color?: string) => {
+    const now = new Date();
+    const time = `${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    setVlmLog(prev => [...prev.slice(-19), { time, msg, color }]);
+    setTimeout(() => vlmLogScrollRef.current?.scrollToEnd({ animated: true }), 50);
+  };
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const instructionFade = useRef(new Animated.Value(0)).current;
@@ -55,19 +67,39 @@ export default function RecordingScreen() {
   const waitingForCommandRef = useRef<((cmd: string) => void) | null>(null);
   const stepDotPulse = useRef(new Animated.Value(1)).current;
   const stepValidationsRef = useRef<boolean[]>([]);
+  const taskRef = useRef<Task | null>(null);
+  const startRecordingRef = useRef<() => void>(() => {});
+  const stopRecordingRef = useRef<() => void>(() => {});
+  const vlmLogScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     loadTask();
     startStream();
+    preloadModel();
 
     return () => {
       stopEverything();
     };
   }, []);
 
+  const preloadModel = async () => {
+    setVlmModelState('loading');
+    addVlmLog('Loading FastVLM model...', '#FF9F0A');
+    try {
+      await metaWearablesService.preloadVLM();
+      setVlmModelState('ready');
+      addVlmLog('FastVLM model loaded OK', '#30D158');
+    } catch (err: any) {
+      setVlmModelState('error');
+      setVlmModelError(err?.message || 'Unknown error');
+      addVlmLog(`Model load FAILED: ${err?.message || err}`, '#FF453A');
+    }
+  };
+
   const loadTask = async () => {
     const data = await getTaskById(taskId);
     setTask(data || null);
+    taskRef.current = data || null;
   };
 
   const startStream = async () => {
@@ -116,15 +148,15 @@ export default function RecordingScreen() {
       return;
     }
 
-    // Handle "start" command during preview
+    // Handle "start" command during preview — use ref to get latest function
     if (cmd.command === 'start' && !isRecordingRef.current) {
-      startRecording();
+      startRecordingRef.current();
       return;
     }
 
     // Handle "done" command during recording
     if (cmd.command === 'done' && isRecordingRef.current) {
-      stopRecording();
+      stopRecordingRef.current();
     }
   }, []);
 
@@ -138,6 +170,21 @@ export default function RecordingScreen() {
 
   const handleStepValidation = useCallback((data: StepValidation) => {
     setVlmChecking(data.checking);
+    if (data.checking && !data.response) {
+      addVlmLog(`Step ${data.stepIndex}: analyzing frame...`, '#FF9F0A');
+    }
+    if (data.response) {
+      const isYes = data.response.toUpperCase().includes('YES');
+      const color = data.response.startsWith('ERROR') ? '#FF453A' : data.validated ? '#30D158' : isYes ? '#FF9F0A' : '#8E8E93';
+      addVlmLog(`Step ${data.stepIndex}: "${data.response}" ${data.validated ? '(VALIDATED)' : ''}`, color);
+    }
+    if (data.response || data.prompt) {
+      setVlmStatus({
+        response: data.response || '...',
+        prompt: data.prompt || '',
+        validated: data.validated,
+      });
+    }
     if (data.validated) {
       setStepValidations(prev => {
         const next = [...prev];
@@ -183,6 +230,7 @@ export default function RecordingScreen() {
       setPhase('recording');
       setElapsedSeconds(0);
       setCurrentStep(0);
+      addVlmLog(`Recording started. Model: ${vlmModelState}`);
 
       // Initialize step validations array
       const validArr = new Array(task?.instructions.length || 0).fill(false);
@@ -218,16 +266,49 @@ export default function RecordingScreen() {
     }
   };
 
+  const speakAndResumeVoice = async (text: string) => {
+    // Stop voice recognition before TTS to avoid audio session conflicts
+    if (voiceActiveRef.current) {
+      try { await metaWearablesService.stopVoiceRecognition(); } catch {}
+    }
+
+    // Speak
+    try {
+      await metaWearablesService.speakInstruction(text);
+    } catch (err) {
+      console.warn('[RecordingScreen] TTS error:', err);
+    }
+
+    // Restart voice recognition after TTS finishes
+    if (isRecordingRef.current) {
+      try {
+        await metaWearablesService.startVoiceRecognition();
+        voiceActiveRef.current = true;
+      } catch (err) {
+        console.warn('[RecordingScreen] Voice restart error:', err);
+        voiceActiveRef.current = false;
+      }
+    }
+  };
+
   const startAudioGuidance = async () => {
     if (!task) return;
     audioStepRef.current = 0;
 
+    // Ensure voice recognition is active
+    if (!voiceActiveRef.current) {
+      try {
+        await metaWearablesService.startVoiceRecognition();
+        voiceActiveRef.current = true;
+      } catch {
+        voiceActiveRef.current = false;
+      }
+    }
+
     // Speak intro
-    try {
-      await metaWearablesService.speakInstruction(
-        "We'll guide you through the steps. Say 'next' for the next step, 'repeat' to hear again, or 'done' when complete."
-      );
-    } catch {}
+    await speakAndResumeVoice(
+      "We'll guide you through the steps. Say 'next' for the next step, 'repeat' to hear again, or 'done' when complete."
+    );
 
     // Step-by-step with voice commands + VLM validation
     for (let i = 0; i < task.instructions.length; i++) {
@@ -235,44 +316,42 @@ export default function RecordingScreen() {
       audioStepRef.current = i;
       setCurrentStep(i);
 
-      // Start VLM validation for this step (fire-and-forget)
-      metaWearablesService.startStepValidation(i, task.instructions[i]).catch(() => {});
+      // Start VLM validation for this step
+      addVlmLog(`Starting validation for step ${i}: "${task.instructions[i].substring(0, 40)}..."`);
+      metaWearablesService.startStepValidation(i, task.instructions[i]).then(() => {
+        addVlmLog(`Step ${i} validation started OK`, '#30D158');
+      }).catch((err) => {
+        console.warn('[RecordingScreen] VLM startStepValidation error:', err);
+        addVlmLog(`Step ${i} validation FAILED: ${err?.message || err}`, '#FF453A');
+        setVlmStatus({ response: `ERROR: ${err?.message || err}`, prompt: task.instructions[i], validated: false });
+      });
 
-      try {
-        await metaWearablesService.speakInstruction(task.instructions[i]);
-      } catch {}
+      await speakAndResumeVoice(task.instructions[i]);
 
       if (!isRecordingRef.current) break;
 
-      // Wait for voice command or auto-advance after 5s
-      if (voiceActiveRef.current) {
-        const cmd = await Promise.race([
-          waitForVoiceCommand(),
-          new Promise<string>(resolve => setTimeout(() => resolve('timeout'), 5000)),
-        ]);
+      // Wait for voice command or auto-advance after 8s
+      const cmd = await Promise.race([
+        waitForVoiceCommand(),
+        new Promise<string>(resolve => setTimeout(() => resolve('timeout'), 8000)),
+      ]);
 
-        if (cmd === 'repeat') {
-          i--; // Re-speak current step
-          continue;
-        }
-        if (cmd === 'done') {
-          stopRecording();
-          return;
-        }
-        // 'next' or 'timeout' → proceed to next step
-      } else {
-        // Fallback: auto-advance with pause
-        await new Promise(resolve => setTimeout(resolve, 5000));
+      if (cmd === 'repeat') {
+        i--; // Re-speak current step
+        continue;
       }
+      if (cmd === 'done') {
+        stopRecording();
+        return;
+      }
+      // 'next' or 'timeout' → proceed to next step
     }
 
     // All steps done — notify
     if (isRecordingRef.current) {
-      try {
-        await metaWearablesService.speakInstruction(
-          "All steps complete. Say 'done' or tap stop when you're finished."
-        );
-      } catch {}
+      await speakAndResumeVoice(
+        "All steps complete. Say 'done' or tap stop when you're finished."
+      );
       setCurrentStep(task.instructions.length);
     }
   };
@@ -304,6 +383,10 @@ export default function RecordingScreen() {
     }
   };
 
+  // Keep refs pointing to latest closures so voice commands work
+  startRecordingRef.current = startRecording;
+  stopRecordingRef.current = stopRecording;
+
   const handleSubmit = async () => {
     if (!task || !recordedVideo) return;
     const user = auth.currentUser;
@@ -333,6 +416,7 @@ export default function RecordingScreen() {
     setStepValidations([]);
     stepValidationsRef.current = [];
     setVlmChecking(false);
+    setVlmStatus(null);
     setPhase('preview');
   };
 
@@ -420,36 +504,98 @@ export default function RecordingScreen() {
         <View style={styles.topSpacer} />
       </View>
 
-      {/* Step dots indicator during recording */}
-      {phase === 'recording' && task && currentStep >= 0 && (
-        <View style={styles.stepDotsContainer}>
-          <View style={styles.stepDotsRow}>
-            {task.instructions.map((_, i) => {
-              const isValidated = stepValidations[i];
-              const isCurrent = i === currentStep && currentStep < task.instructions.length;
-              const isFuture = i > currentStep;
-
-              return (
-                <View key={i} style={styles.stepDotWrapper}>
-                  {isValidated ? (
-                    <View style={[styles.stepDot, styles.stepDotValidated]}>
-                      <Text style={styles.stepDotCheck}>{'✓'}</Text>
-                    </View>
-                  ) : isCurrent ? (
-                    <Animated.View style={[styles.stepDot, styles.stepDotActive, { opacity: stepDotPulse }]}>
-                      <View style={styles.stepDotActiveInner} />
-                    </Animated.View>
-                  ) : (
-                    <View style={[styles.stepDot, styles.stepDotInactive]} />
-                  )}
-                </View>
-              );
-            })}
+      {/* VLM + Step info panel (always visible during recording) */}
+      {phase === 'recording' && task && (
+        <View style={styles.vlmPanel}>
+          {/* Model status row */}
+          <View style={styles.vlmPanelStatusRow}>
+            <View style={[
+              styles.vlmBadgeDot,
+              { backgroundColor:
+                vlmModelState === 'ready' ? '#30D158' :
+                vlmModelState === 'error' ? '#FF453A' :
+                vlmModelState === 'loading' ? '#FF9F0A' :
+                '#8E8E93'
+              }
+            ]} />
+            <Text style={styles.vlmPanelStatusText}>
+              {vlmModelState === 'loading' ? 'FastVLM loading...' :
+               vlmModelState === 'ready' ? 'FastVLM ready' :
+               vlmModelState === 'error' ? `Model error: ${vlmModelError}` :
+               'FastVLM idle'}
+            </Text>
           </View>
-          <Text style={styles.stepDotsLabel} numberOfLines={2}>
-            {currentStep < task.instructions.length
-              ? `Step ${currentStep + 1} of ${task.instructions.length}: "${task.instructions[currentStep]}"`
-              : 'All steps complete'}
+
+          {/* Step dots */}
+          {currentStep >= 0 && (
+            <>
+              <View style={styles.stepDotsRow}>
+                {task.instructions.map((_, i) => {
+                  const isValidated = stepValidations[i];
+                  const isCurrent = i === currentStep && currentStep < task.instructions.length;
+
+                  return (
+                    <View key={i} style={styles.stepDotWrapper}>
+                      {isValidated ? (
+                        <View style={[styles.stepDot, styles.stepDotValidated]}>
+                          <Text style={styles.stepDotCheck}>{'✓'}</Text>
+                        </View>
+                      ) : isCurrent ? (
+                        <Animated.View style={[styles.stepDot, styles.stepDotActive, { opacity: stepDotPulse }]}>
+                          <View style={styles.stepDotActiveInner} />
+                        </Animated.View>
+                      ) : (
+                        <View style={[styles.stepDot, styles.stepDotInactive]} />
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+              <Text style={styles.stepDotsLabel} numberOfLines={2}>
+                {currentStep < task.instructions.length
+                  ? `Step ${currentStep + 1}/${task.instructions.length}: "${task.instructions[currentStep]}"`
+                  : 'All steps complete'}
+              </Text>
+            </>
+          )}
+
+          {/* VLM Debug Log */}
+          <View style={styles.vlmLogContainer}>
+            <Text style={styles.vlmLogTitle}>VLM Log</Text>
+            <ScrollView ref={vlmLogScrollRef} style={styles.vlmLogScroll} nestedScrollEnabled>
+              {vlmLog.length === 0 && (
+                <Text style={styles.vlmLogEntry}>No VLM events yet...</Text>
+              )}
+              {vlmLog.map((entry, idx) => (
+                <Text key={idx} style={[styles.vlmLogEntry, entry.color ? { color: entry.color } : undefined]}>
+                  {entry.time} {entry.msg}
+                </Text>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
+      {/* VLM model badge (non-recording phases) */}
+      {phase !== 'recording' && vlmModelState !== 'idle' && (
+        <View style={[
+          styles.vlmModelBadge,
+          vlmModelState === 'ready' ? styles.vlmBadgeReady :
+          vlmModelState === 'error' ? styles.vlmBadgeError :
+          styles.vlmBadgeLoading,
+        ]}>
+          <View style={[
+            styles.vlmBadgeDot,
+            { backgroundColor:
+              vlmModelState === 'ready' ? '#30D158' :
+              vlmModelState === 'error' ? '#FF453A' :
+              '#FF9F0A'
+            }
+          ]} />
+          <Text style={styles.vlmBadgeText}>
+            {vlmModelState === 'loading' ? 'FastVLM loading...' :
+             vlmModelState === 'ready' ? 'FastVLM ready' :
+             `FastVLM error: ${vlmModelError}`}
           </Text>
         </View>
       )}
@@ -571,23 +717,117 @@ const styles = StyleSheet.create({
     width: 44,
   },
 
-  // Step dots indicator
-  stepDotsContainer: {
+  // Unified VLM + Steps panel (during recording)
+  vlmPanel: {
     position: 'absolute',
-    top: 120,
-    left: 16,
-    right: 16,
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    top: 110,
+    left: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    padding: 12,
+    gap: 8,
   },
+  vlmPanelStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  vlmPanelStatusText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  vlmResultSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 8,
+  },
+  vlmOverlayResponseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  vlmOverlayDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  vlmOverlayResponse: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+  },
+  vlmOverlayChecking: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  vlmLogContainer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 8,
+    maxHeight: 120,
+  },
+  vlmLogTitle: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  vlmLogScroll: {
+    maxHeight: 100,
+  },
+  vlmLogEntry: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 10,
+    fontFamily: 'Courier',
+    lineHeight: 14,
+  },
+
+  // VLM model badge (preview/instructions phases)
+  vlmModelBadge: {
+    position: 'absolute',
+    top: 100,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  vlmBadgeLoading: {
+    backgroundColor: 'rgba(255, 159, 10, 0.25)',
+  },
+  vlmBadgeReady: {
+    backgroundColor: 'rgba(48, 209, 88, 0.25)',
+  },
+  vlmBadgeError: {
+    backgroundColor: 'rgba(255, 69, 58, 0.25)',
+  },
+  vlmBadgeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  vlmBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Step dots
   stepDotsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
-    marginBottom: 6,
   },
   stepDotWrapper: {
     alignItems: 'center',

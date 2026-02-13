@@ -1097,27 +1097,56 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
   @objc
   func startStepValidation(_ stepIndex: NSNumber, description: NSString, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
     if #available(iOS 18.2, *) {
-      guard FastVLMService.shared.isModelLoaded else {
-        reject("VLM_NOT_LOADED", "FastVLM model not loaded. Call preloadVLM first.", nil)
-        return
+      let stepIdx = stepIndex.intValue
+      let desc = description as String
+
+      // Load model on-demand if preload didn't finish
+      Task {
+        if !FastVLMService.shared.isModelLoaded {
+          print("[MetaWearables] VLM not loaded yet — loading on-demand...")
+          do {
+            try await FastVLMService.shared.loadModel()
+            print("[MetaWearables] VLM on-demand load complete")
+          } catch {
+            print("[MetaWearables] VLM on-demand load failed: \(error.localizedDescription)")
+            reject("VLM_LOAD_ERROR", "Failed to load FastVLM: \(error.localizedDescription)", error)
+            return
+          }
+        }
+
+        await MainActor.run {
+          let validator: StepValidator
+          if let existing = self.stepValidator as? StepValidator {
+            validator = existing
+            print("[MetaWearables] Reusing existing StepValidator")
+          } else {
+            validator = StepValidator()
+            validator.eventEmitter = self
+            self.stepValidator = validator
+
+            if let pipeline = self.mlPipeline {
+              pipeline.registerConsumer(validator)
+              print("[MetaWearables] StepValidator registered with ML pipeline")
+            } else {
+              print("[MetaWearables] WARNING: mlPipeline is nil — StepValidator will NOT receive frames!")
+              // Try getting it from FrameDistributor as fallback
+              let fallbackPipeline = MLProcessingPipeline()
+              fallbackPipeline.eventEmitter = self
+              fallbackPipeline.isHandPoseEnabled = self.isHandPoseEnabled
+              self.mlPipeline = fallbackPipeline
+              FrameDistributor.shared.setMLPipeline(fallbackPipeline)
+              fallbackPipeline.registerConsumer(validator)
+              print("[MetaWearables] Created fallback ML pipeline and registered StepValidator")
+            }
+          }
+
+          validator.configure(stepIndex: stepIdx, description: desc)
+          validator.isEnabled = true
+
+          print("[MetaWearables] Step validation started for step \(stepIdx): \(desc)")
+          resolve(["success": true])
+        }
       }
-
-      let validator: StepValidator
-      if let existing = self.stepValidator as? StepValidator {
-        validator = existing
-      } else {
-        validator = StepValidator()
-        validator.eventEmitter = self
-        self.stepValidator = validator
-        // Register with ML pipeline if available
-        self.mlPipeline?.registerConsumer(validator)
-      }
-
-      validator.configure(stepIndex: stepIndex.intValue, description: description as String)
-      validator.isEnabled = true
-
-      print("[MetaWearables] Step validation started for step \(stepIndex.intValue)")
-      resolve(["success": true])
     } else {
       resolve(["success": false, "reason": "iOS 18.2+ required"])
     }
