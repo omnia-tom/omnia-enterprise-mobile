@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   Animated,
   Dimensions,
   Alert,
@@ -19,6 +18,7 @@ import { RootStackParamList, Task, Submission } from '../types';
 import { getTaskById, addSubmission } from '../services/taskData';
 import { metaWearablesService, MetaVideoFrame, HandPoseData, VoiceCommand } from '../services/metaWearables';
 import HandPoseOverlay from '../components/HandPoseOverlay';
+import NativeFrameView from '../components/NativeFrameView';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Recording'>;
 type Route = RouteProp<RootStackParamList, 'Recording'>;
@@ -37,7 +37,7 @@ export default function RecordingScreen() {
 
   const [task, setTask] = useState<Task | null>(null);
   const [phase, setPhase] = useState<RecordingPhase>('preview');
-  const [currentFrame, setCurrentFrame] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [handPoseData, setHandPoseData] = useState<HandPoseData | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [recordedVideo, setRecordedVideo] = useState<{ filePath: string; frameCount: number; duration: number } | null>(null);
@@ -124,7 +124,7 @@ export default function RecordingScreen() {
   }, []);
 
   const handleVideoFrame = useCallback((frame: MetaVideoFrame) => {
-    setCurrentFrame(frame.data);
+    setIsStreaming(true);
   }, []);
 
   const handleHandPose = useCallback((data: HandPoseData) => {
@@ -309,13 +309,6 @@ export default function RecordingScreen() {
         <StatusBar style={theme.statusBarStyle} />
         <View style={[styles.reviewContainer, { backgroundColor: colors.background }]}>
           <View style={styles.reviewThumbnail}>
-            {currentFrame && (
-              <Image
-                source={{ uri: `data:image/jpeg;base64,${currentFrame}` }}
-                style={styles.fullFrame}
-                resizeMode="cover"
-              />
-            )}
             <View style={styles.reviewOverlay}>
               <Text style={styles.reviewDuration}>{formatTime(Math.round(recordedVideo.duration))}</Text>
               <Text style={styles.reviewFrames}>{recordedVideo.frameCount} frames</Text>
@@ -343,14 +336,10 @@ export default function RecordingScreen() {
     <View style={styles.container}>
       <StatusBar style="light" />
 
-      {/* Full-screen video */}
+      {/* Full-screen video — rendered natively, no bridge traffic */}
       <View style={styles.videoContainer}>
-        {currentFrame ? (
-          <Image
-            source={{ uri: `data:image/jpeg;base64,${currentFrame}` }}
-            style={styles.fullFrame}
-            resizeMode="cover"
-          />
+        {NativeFrameView ? (
+          <NativeFrameView style={styles.fullFrame} isActive={true} contentMode="cover" />
         ) : (
           <View style={styles.placeholderFrame}>
             <Text style={styles.placeholderText}>Waiting for video stream...</Text>

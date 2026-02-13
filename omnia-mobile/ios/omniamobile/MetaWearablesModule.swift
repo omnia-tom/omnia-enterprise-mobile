@@ -26,11 +26,7 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
   private var errorListenerToken: AnyListenerToken?
   private var photoDataListenerToken: AnyListenerToken?
 
-  // Barcode detection debouncing
-  private var lastDetectedBarcode: String?
-  private var lastDetectionTime: TimeInterval = 0
-
-  // Frame skipping for better processing (process every 2nd frame)
+  // Frame counter (for logging)
   private var frameCounter: Int = 0
 
   // Track announced UPC codes to prevent re-announcing the same code
@@ -55,17 +51,15 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
   private var audioEngine: AVAudioEngine?
   private var isVoiceRecognitionActive: Bool = false
 
-  // Video recording state
+  // Video recording — now uses StreamingRecorder (O(1) memory)
   private var isRecording: Bool = false
-  private var recordedFrames: [(image: UIImage, timestamp: TimeInterval)] = []
+  private var streamingRecorder: StreamingRecorder?
   private var recordingStartTime: TimeInterval = 0
 
-  // Audio recording
-  private var audioRecorder: AVAudioRecorder?
-  private var audioFileURL: URL?
+  // ML Processing Pipeline — runs on background queues
+  private var mlPipeline: MLProcessingPipeline?
 
-  // Hand pose detection
-  private let handPoseQueue = DispatchQueue(label: "com.omnia.handPoseDetection", qos: .userInitiated)
+  // Hand pose detection toggle
   private var isHandPoseEnabled: Bool = true
 
   override static func requiresMainQueueSetup() -> Bool {
@@ -83,7 +77,8 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
       "onPhotoCaptured",
       "onBarcodeDetected",
       "onHandPoseDetected",
-      "onVoiceCommand"
+      "onVoiceCommand",
+      "onStreamingStats"
     ]
   }
 
@@ -161,19 +156,13 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
       for await registrationState in await wearables.registrationStateStream() {
         print("[MetaWearables] Registration state changed: \(previousState) -> \(registrationState)")
         print("[MetaWearables] Current devices count: \(await wearables.devices.count)")
-        print("[MetaWearables] Checking if state is .registered: \(registrationState == .registered)")
-        print("[MetaWearables] Checking if state is .registering: \(registrationState == .registering)")
 
         // Set up device stream when registered
         if registrationState == .registered {
-          // Get the first available device ID if any
           let devices = await wearables.devices
           let deviceId = devices.first ?? ""
-          print("[MetaWearables] Now in .registered state")
-          print("[MetaWearables] Devices available: \(devices)")
-          print("[MetaWearables] First device ID: '\(deviceId)'")
+          print("[MetaWearables] Now in .registered state, devices: \(devices)")
 
-          // Only emit pairing complete if coming from registering state
           if previousState == .registering {
             print("[MetaWearables] Emitting onPairingComplete event")
             self.sendEvent(withName: "onPairingComplete", body: [
@@ -182,7 +171,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
             ])
           }
 
-          // Always setup device stream when registered
           print("[MetaWearables] About to setup device stream...")
           await self.setupDeviceStream()
         } else if registrationState == .unavailable {
@@ -221,7 +209,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
 
       print("[MetaWearables] Starting to listen for devices...")
 
-      // Track previous devices to detect removals
       var previousDevices: Set<DeviceIdentifier> = []
 
       for await devices in await wearables.devicesStream() {
@@ -229,36 +216,29 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         let currentDevices = Set(devices)
         self.discoveredDevices = devices
 
-        // Detect removed devices (devices that were in previous list but not in current)
         let removedDevices = previousDevices.subtracting(currentDevices)
         for removedDeviceId in removedDevices {
           print("[MetaWearables] Device removed from stream: \(removedDeviceId)")
-          // Clear current device if it was the one that disconnected
           if let currentDeviceId = self.currentDevice?.identifier, currentDeviceId == removedDeviceId {
             self.currentDevice = nil
           }
-          // Emit disconnect event
           self.sendEvent(withName: "onDeviceDisconnected", body: [
             "deviceId": removedDeviceId
           ])
         }
 
-        // Emit events for newly discovered devices
         for deviceId in devices {
           print("[MetaWearables] Processing device: \(deviceId)")
           if let device = await wearables.deviceForIdentifier(deviceId) {
             print("[MetaWearables] Emitting deviceFound for: \(device.nameOrId())")
             self.sendEvent(withName: "onDeviceFound", body: [
-              "id": deviceId, // DeviceIdentifier is already a String
+              "id": deviceId,
               "name": device.nameOrId(),
               "isConnected": true
             ])
-          } else {
-            print("[MetaWearables] Could not get device for identifier: \(deviceId)")
           }
         }
 
-        // Update previous devices for next iteration
         previousDevices = currentDevices
       }
     }
@@ -279,7 +259,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         return
       }
 
-      // Check if already registered
       if wearables.registrationState == .registered {
         await self.setupDeviceStream()
         resolve(nil)
@@ -297,7 +276,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         return
       }
 
-      // Stop device stream monitoring
       self.deviceStreamTask?.cancel()
       self.deviceStreamTask = nil
       resolve(nil)
@@ -392,7 +370,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
 
       if let components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
         let hasMetaAction = components.queryItems?.contains(where: { $0.name == "metaWearablesAction" }) == true
-        print("[MetaWearables] URL has metaWearablesAction: \(hasMetaAction)")
 
         if !hasMetaAction {
           print("[MetaWearables] Not a Meta Wearables callback, ignoring")
@@ -405,7 +382,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         print("[MetaWearables] Calling Wearables.shared.handleUrl()...")
         _ = try await wearables.handleUrl(url)
         print("[MetaWearables] Successfully handled Meta Wearables URL")
-        print("[MetaWearables] Current registration state: \(await wearables.registrationState)")
         resolve(["success": true])
       } catch {
         print("[MetaWearables] Failed to handle Meta Wearables URL: \(error)")
@@ -455,326 +431,14 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
     }
   }
 
-  // MARK: - Barcode Detection
-
-  private func detectBarcodes(in image: UIImage) {
-    guard let cgImage = image.cgImage else {
-      return
-    }
-
-    let startTime = Date()
-
-    guard let enhancedImage = self.preprocessImageForBarcode(cgImage) else {
-      print("[MetaWearables] Failed to preprocess image")
-      return
-    }
-
-    let request = VNDetectBarcodesRequest { [weak self] request, error in
-      guard let self = self else { return }
-
-      let processingTime = Date().timeIntervalSince(startTime) * 1000
-
-      if let error = error {
-        print("[MetaWearables] Barcode detection error: \(error.localizedDescription)")
-        return
-      }
-
-      guard let observations = request.results as? [VNBarcodeObservation] else {
-        return
-      }
-
-      for observation in observations {
-        guard let payload = observation.payloadStringValue else {
-          continue
-        }
-
-        let currentTime = Date().timeIntervalSince1970
-        var barcodeType = self.getBarcodeTypeName(observation.symbology)
-        var finalPayload = payload
-
-        if barcodeType == "EAN-13" && payload.count == 13 {
-          barcodeType = "EAN-13"
-          finalPayload = String(payload.prefix(12))
-        }
-
-        let shouldEmit = (finalPayload != self.lastDetectedBarcode) ||
-                        (currentTime - self.lastDetectionTime > 1.0)
-
-        if !shouldEmit {
-          continue
-        }
-
-        self.lastDetectedBarcode = finalPayload
-        self.lastDetectionTime = currentTime
-
-        print("[MetaWearables] Barcode detected: \(barcodeType) = \(finalPayload) (confidence: \(String(format: "%.1f%%", observation.confidence * 100)))")
-
-        self.sendEvent(withName: "onBarcodeDetected", body: [
-          "type": barcodeType,
-          "data": finalPayload,
-          "confidence": observation.confidence,
-          "timestamp": currentTime * 1000
-        ])
-
-        if barcodeType.contains("UPC") && !self.announcedUPCs.contains(finalPayload) {
-          self.announcedUPCs.insert(finalPayload)
-          self.announceBarcode(barcodeType: barcodeType)
-        }
-      }
-    }
-
-    if #available(iOS 15.0, *) {
-      request.revision = VNDetectBarcodesRequestRevision2
-    }
-
-    request.regionOfInterest = CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
-
-    request.symbologies = [
-      .upce,
-      .ean8,
-      .ean13
-    ]
-
-    let handler = VNImageRequestHandler(cgImage: enhancedImage, options: [:])
-    DispatchQueue.global(qos: .userInitiated).async {
-      do {
-        try handler.perform([request])
-      } catch {
-        print("[MetaWearables] Failed to perform barcode detection: \(error)")
-      }
-    }
-  }
-
-  // MARK: - Hand Pose Detection
-
-  private func readableJointName(_ joint: VNHumanHandPoseObservation.JointName) -> String {
-    switch joint {
-    case .wrist: return "wrist"
-    case .thumbCMC: return "thumbCMC"
-    case .thumbMP: return "thumbMP"
-    case .thumbIP: return "thumbIP"
-    case .thumbTip: return "thumbTip"
-    case .indexMCP: return "indexMCP"
-    case .indexPIP: return "indexPIP"
-    case .indexDIP: return "indexDIP"
-    case .indexTip: return "indexTip"
-    case .middleMCP: return "middleMCP"
-    case .middlePIP: return "middlePIP"
-    case .middleDIP: return "middleDIP"
-    case .middleTip: return "middleTip"
-    case .ringMCP: return "ringMCP"
-    case .ringPIP: return "ringPIP"
-    case .ringDIP: return "ringDIP"
-    case .ringTip: return "ringTip"
-    case .littleMCP: return "littleMCP"
-    case .littlePIP: return "littlePIP"
-    case .littleDIP: return "littleDIP"
-    case .littleTip: return "littleTip"
-    default: return "unknown"
-    }
-  }
-
-  private func detectHandPose(in image: UIImage, timestamp: TimeInterval, width: Int, height: Int) {
-    guard let cgImage = image.cgImage else { return }
-
-    handPoseQueue.async { [weak self] in
-      guard let self = self else { return }
-
-      let request = VNDetectHumanHandPoseRequest()
-      request.maximumHandCount = 2
-
-      let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-      do {
-        try handler.perform([request])
-      } catch {
-        print("[MetaWearables] Hand pose detection error: \(error.localizedDescription)")
-        return
-      }
-
-      guard let observations = request.results, !observations.isEmpty else {
-        return
-      }
-
-      var handsArray: [[String: Any]] = []
-
-      for observation in observations {
-        let chirality: String
-        switch observation.chirality {
-        case .left: chirality = "left"
-        case .right: chirality = "right"
-        default: chirality = "unknown"
-        }
-
-        guard let allPoints = try? observation.recognizedPoints(.all) else { continue }
-
-        var jointsArray: [[String: Any]] = []
-
-        for (jointName, point) in allPoints {
-          guard point.confidence > 0.1 else { continue }
-
-          let name = self.readableJointName(jointName)
-          guard name != "unknown" else { continue }
-
-          let flippedY = 1.0 - point.location.y
-
-          jointsArray.append([
-            "name": name,
-            "x": point.location.x,
-            "y": flippedY,
-            "confidence": point.confidence
-          ])
-        }
-
-        guard !jointsArray.isEmpty else { continue }
-
-        handsArray.append([
-          "chirality": chirality,
-          "joints": jointsArray
-        ])
-      }
-
-      guard !handsArray.isEmpty else { return }
-
-      let eventBody: [String: Any] = [
-        "hands": handsArray,
-        "timestamp": timestamp,
-        "frameWidth": width,
-        "frameHeight": height
-      ]
-
-      DispatchQueue.main.async {
-        self.sendEvent(withName: "onHandPoseDetected", body: eventBody)
-      }
-    }
-  }
+  // MARK: - Hand Pose Toggle
 
   @objc
   func setHandPoseEnabled(_ enabled: Bool, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
     self.isHandPoseEnabled = enabled
+    self.mlPipeline?.isHandPoseEnabled = enabled
     print("[MetaWearables] Hand pose detection \(enabled ? "enabled" : "disabled")")
     resolve(["success": true, "enabled": enabled])
-  }
-
-  private func preprocessImageForBarcode(_ cgImage: CGImage) -> CGImage? {
-    return cgImage
-  }
-
-  private func upscaleImage(_ image: UIImage, targetScale: CGFloat) -> UIImage {
-    let originalSize = image.size
-    let newSize = CGSize(width: originalSize.width * targetScale, height: originalSize.height * targetScale)
-
-    UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-    image.draw(in: CGRect(origin: .zero, size: newSize))
-    let upscaledImage = UIGraphicsGetImageFromCurrentImageContext()
-    UIGraphicsEndImageContext()
-
-    return upscaledImage ?? image
-  }
-
-  private func isImageSharp(_ image: UIImage) -> Bool {
-    guard let cgImage = image.cgImage else { return false }
-
-    let ciImage = CIImage(cgImage: cgImage)
-
-    guard let grayFilter = CIFilter(name: "CIColorControls") else { return true }
-    grayFilter.setValue(ciImage, forKey: kCIInputImageKey)
-    grayFilter.setValue(0.0, forKey: kCIInputSaturationKey)
-
-    guard let grayOutput = grayFilter.outputImage else { return true }
-
-    guard let edgeFilter = CIFilter(name: "CIEdges") else { return true }
-    edgeFilter.setValue(grayOutput, forKey: kCIInputImageKey)
-    edgeFilter.setValue(1.0, forKey: kCIInputIntensityKey)
-
-    guard let edgeOutput = edgeFilter.outputImage else { return true }
-
-    let context = CIContext(options: nil)
-    let centerRect = CGRect(
-      x: ciImage.extent.width * 0.4,
-      y: ciImage.extent.height * 0.4,
-      width: ciImage.extent.width * 0.2,
-      height: ciImage.extent.height * 0.2
-    )
-
-    guard let edgeCGImage = context.createCGImage(edgeOutput, from: centerRect) else { return true }
-
-    let width = edgeCGImage.width
-    let height = edgeCGImage.height
-    let bytesPerPixel = 4
-    let bytesPerRow = bytesPerPixel * width
-    let bitsPerComponent = 8
-
-    var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
-
-    guard let context2 = CGContext(
-      data: &pixelData,
-      width: width,
-      height: height,
-      bitsPerComponent: bitsPerComponent,
-      bytesPerRow: bytesPerRow,
-      space: CGColorSpaceCreateDeviceRGB(),
-      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-    ) else { return true }
-
-    context2.draw(edgeCGImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-    var sum: Int = 0
-    for i in 0..<(width * height) {
-      let offset = i * bytesPerPixel
-      let gray = Int(pixelData[offset])
-      sum += gray
-    }
-
-    let mean = Double(sum) / Double(width * height)
-    var variance: Double = 0
-
-    for i in 0..<(width * height) {
-      let offset = i * bytesPerPixel
-      let gray = Double(pixelData[offset])
-      variance += (gray - mean) * (gray - mean)
-    }
-
-    variance /= Double(width * height)
-
-    let isSharp = variance > 50.0
-
-    if !isSharp {
-      print("[MetaWearables] Frame too blurry (variance: \(String(format: "%.1f", variance))) - skipping")
-    }
-
-    return isSharp
-  }
-
-  private func getBarcodeTypeName(_ symbology: VNBarcodeSymbology) -> String {
-    switch symbology {
-    case .upce:
-      return "UPC-E"
-    case .ean8:
-      return "EAN-8"
-    case .ean13:
-      return "EAN-13"
-    case .qr:
-      return "QR"
-    case .code128:
-      return "Code 128"
-    case .code39:
-      return "Code 39"
-    case .code93:
-      return "Code 93"
-    case .itf14:
-      return "ITF-14"
-    case .i2of5:
-      return "I2of5"
-    case .pdf417:
-      return "PDF417"
-    default:
-      if #available(iOS 15.0, *) {
-        if symbology == .codabar {
-          return "Codabar"
-        }
-      }
-      return "Unknown"
-    }
   }
 
   // MARK: - Video Streaming
@@ -800,6 +464,17 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
       streamSession = StreamSession(streamSessionConfig: config, deviceSelector: deviceSelector)
       print("[MetaWearables] StreamSession created")
 
+      // Initialize ML pipeline
+      let pipeline = MLProcessingPipeline()
+      pipeline.eventEmitter = self
+      pipeline.isHandPoseEnabled = self.isHandPoseEnabled
+      self.mlPipeline = pipeline
+      FrameDistributor.shared.setMLPipeline(pipeline)
+
+      // Wire up FrameDistributor for event emission + stats
+      FrameDistributor.shared.eventEmitter = self
+      FrameDistributor.shared.startStatsEmission()
+
       print("[MetaWearables] Subscribing to video frame publisher...")
       videoFrameListenerToken = streamSession?.videoFramePublisher.listen { [weak self] videoFrame in
         Task { @MainActor [weak self] in
@@ -811,47 +486,13 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
             print("[MetaWearables] Video frame #\(self.frameCounter) received")
           }
 
-          if let image = videoFrame.makeUIImage() {
-            // If recording is active, store the frame
-            if self.isRecording {
-              let currentTime = Date().timeIntervalSince1970
-              self.recordedFrames.append((image: image, timestamp: currentTime))
-              let frameCount = self.recordedFrames.count
+          if let image = videoFrame.makeUIImage(), let cgImage = image.cgImage {
+            let timestamp = Date().timeIntervalSince1970
+            let width = Int(image.size.width)
+            let height = Int(image.size.height)
 
-              if frameCount % 100 == 0 {
-                let duration = currentTime - self.recordingStartTime
-                print("[MetaWearables] Recording: \(frameCount) frames (\(String(format: "%.1f", duration))s)")
-              }
-
-              if frameCount == 9000 {
-                print("[MetaWearables] Long recording detected (\(frameCount) frames). Consider stopping to avoid memory issues.")
-              }
-            }
-
-            // Always send frames to JS for the live preview
-            if let imageData = self.convertImageToBase64(image) {
-              self.sendEvent(withName: "onVideoFrame", body: [
-                "data": imageData,
-                "timestamp": Date().timeIntervalSince1970 * 1000,
-                "width": Int(image.size.width),
-                "height": Int(image.size.height)
-              ])
-            }
-
-            // Only run barcode/hand detection on sharp frames
-            if self.isImageSharp(image) {
-              let upscaledImage = self.upscaleImage(image, targetScale: 2.0)
-              self.detectBarcodes(in: upscaledImage)
-
-              if self.isHandPoseEnabled {
-                self.detectHandPose(
-                  in: image,
-                  timestamp: Date().timeIntervalSince1970 * 1000,
-                  width: Int(image.size.width),
-                  height: Int(image.size.height)
-                )
-              }
-            }
+            // Push to FrameDistributor — handles display, ML, recording, and JS metadata
+            FrameDistributor.shared.distributeFrame(cgImage, timestamp: timestamp, width: width, height: height)
           }
         }
       }
@@ -941,12 +582,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         await self.streamSession?.start()
         print("[MetaWearables] Stream session start() called - waiting for frames...")
 
-        if let deviceSelector = self.deviceSelector {
-          print("[MetaWearables] Device selector is configured")
-        } else {
-          print("[MetaWearables] WARNING: Device selector is nil!")
-        }
-
         resolve(nil)
 
       } catch {
@@ -965,6 +600,14 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
       }
 
       await self.streamSession?.stop()
+
+      // Clean up pipeline and distributor
+      FrameDistributor.shared.stopStatsEmission()
+      FrameDistributor.shared.setMLPipeline(nil)
+      FrameDistributor.shared.setRecorder(nil)
+      FrameDistributor.shared.reset()
+      self.mlPipeline = nil
+
       resolve(nil)
     }
   }
@@ -1065,7 +708,7 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
     }
   }
 
-  // MARK: - Video Recording
+  // MARK: - Video Recording (StreamingRecorder — O(1) memory)
 
   @objc
   func startRecording(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
@@ -1087,65 +730,25 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         return
       }
 
-      print("[MetaWearables] Starting video recording with audio...")
+      print("[MetaWearables] Starting video recording with StreamingRecorder...")
+
+      // Default to 640x480 — will be updated on first frame if different
+      let recorder = StreamingRecorder()
+      do {
+        try recorder.startRecording(width: 640, height: 480)
+      } catch {
+        reject("RECORDING_ERROR", "Failed to start recording: \(error.localizedDescription)", error)
+        return
+      }
+
+      self.streamingRecorder = recorder
       self.isRecording = true
-      self.recordedFrames = []
       self.recordingStartTime = Date().timeIntervalSince1970
 
-      // Start audio recording
-      do {
-        try self.startAudioRecording()
-        print("[MetaWearables] Audio recording started successfully")
-      } catch {
-        print("[MetaWearables] Failed to start audio recording: \(error.localizedDescription)")
-      }
+      // Register with FrameDistributor so it receives frames
+      FrameDistributor.shared.setRecorder(recorder)
 
       resolve(["success": true, "message": "Recording started"])
-    }
-  }
-
-  private func startAudioRecording() throws {
-    let audioSession = AVAudioSession.sharedInstance()
-    do {
-      try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .allowBluetooth])
-      try audioSession.setActive(true, options: [])
-    } catch {
-      print("[MetaWearables] Audio session configuration failed: \(error.localizedDescription)")
-      throw error
-    }
-
-    let tempDir = FileManager.default.temporaryDirectory
-    let audioFileName = "meta_audio_\(Int(Date().timeIntervalSince1970)).m4a"
-    let audioURL = tempDir.appendingPathComponent(audioFileName)
-
-    try? FileManager.default.removeItem(at: audioURL)
-
-    self.audioFileURL = audioURL
-
-    let settings: [String: Any] = [
-      AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-      AVSampleRateKey: 44100.0,
-      AVNumberOfChannelsKey: 1,
-      AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-    ]
-
-    do {
-      let recorder = try AVAudioRecorder(url: audioURL, settings: settings)
-      recorder.delegate = self
-
-      if recorder.prepareToRecord() {
-        if recorder.record() {
-          self.audioRecorder = recorder
-          print("[MetaWearables] Audio recording started to: \(audioURL.path)")
-        } else {
-          throw NSError(domain: "MetaWearables", code: 7, userInfo: [NSLocalizedDescriptionKey: "Failed to start audio recording"])
-        }
-      } else {
-        throw NSError(domain: "MetaWearables", code: 8, userInfo: [NSLocalizedDescriptionKey: "Failed to prepare audio recorder"])
-      }
-    } catch {
-      print("[MetaWearables] Audio recorder creation failed: \(error.localizedDescription)")
-      throw error
     }
   }
 
@@ -1165,298 +768,33 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
       print("[MetaWearables] Stopping video recording...")
       self.isRecording = false
 
-      self.audioRecorder?.stop()
-      let audioURL = self.audioFileURL
-      self.audioRecorder = nil
+      // Unregister from FrameDistributor
+      FrameDistributor.shared.setRecorder(nil)
 
-      let frameCount = self.recordedFrames.count
-      let duration = Date().timeIntervalSince1970 - self.recordingStartTime
-
-      guard frameCount > 0 else {
-        if let audioURL = audioURL {
-          try? FileManager.default.removeItem(at: audioURL)
-        }
-        reject("NO_FRAMES", "No frames were recorded", nil)
+      guard let recorder = self.streamingRecorder else {
+        reject("NO_RECORDER", "No streaming recorder available", nil)
         return
       }
 
-      print("[MetaWearables] Recorded \(frameCount) frames over \(String(format: "%.1f", duration))s")
-
-      do {
-        let videoPath = try await self.createVideoFromFrames(self.recordedFrames, audioURL: audioURL)
-        print("[MetaWearables] Video saved to: \(videoPath)")
-
-        self.recordedFrames = []
-
-        if let audioURL = audioURL {
-          try? FileManager.default.removeItem(at: audioURL)
-        }
-        self.audioFileURL = nil
-
-        resolve([
-          "success": true,
-          "filePath": videoPath,
-          "frameCount": frameCount,
-          "duration": duration
-        ])
-      } catch {
-        print("[MetaWearables] Failed to create video: \(error.localizedDescription)")
-        if let audioURL = audioURL {
-          try? FileManager.default.removeItem(at: audioURL)
-        }
-        self.audioFileURL = nil
-        reject("VIDEO_CREATION_ERROR", error.localizedDescription, error)
-      }
-    }
-  }
-
-  private func createVideoFromFrames(_ frames: [(image: UIImage, timestamp: TimeInterval)], audioURL: URL?) async throws -> String {
-    guard !frames.isEmpty else {
-      throw NSError(domain: "MetaWearables", code: 1, userInfo: [NSLocalizedDescriptionKey: "No frames to process"])
-    }
-
-    let tempDir = FileManager.default.temporaryDirectory
-    let fileName = "meta_recording_\(Int(Date().timeIntervalSince1970)).mov"
-    let outputURL = tempDir.appendingPathComponent(fileName)
-
-    try? FileManager.default.removeItem(at: outputURL)
-
-    let firstFrame = frames[0].image
-    let videoWidth = Int(firstFrame.size.width)
-    let videoHeight = Int(firstFrame.size.height)
-
-    let assetWriter = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
-
-    let videoSettings: [String: Any] = [
-      AVVideoCodecKey: AVVideoCodecType.h264,
-      AVVideoWidthKey: videoWidth,
-      AVVideoHeightKey: videoHeight,
-      AVVideoCompressionPropertiesKey: [
-        AVVideoAverageBitRateKey: 6000000,
-        AVVideoMaxKeyFrameIntervalKey: 30
-      ]
-    ]
-
-    let assetWriterInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
-    assetWriterInput.expectsMediaDataInRealTime = false
-
-    let sourcePixelBufferAttributes: [String: Any] = [
-      kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB,
-      kCVPixelBufferWidthKey as String: videoWidth,
-      kCVPixelBufferHeightKey as String: videoHeight
-    ]
-
-    let pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(
-      assetWriterInput: assetWriterInput,
-      sourcePixelBufferAttributes: sourcePixelBufferAttributes
-    )
-
-    guard assetWriter.canAdd(assetWriterInput) else {
-      throw NSError(domain: "MetaWearables", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cannot add input to asset writer"])
-    }
-
-    assetWriter.add(assetWriterInput)
-
-    var audioWriterInput: AVAssetWriterInput?
-    var audioReader: AVAssetReader?
-    var audioReaderOutput: AVAssetReaderTrackOutput?
-
-    if let audioURL = audioURL, FileManager.default.fileExists(atPath: audioURL.path) {
-      do {
-        let audioAsset = AVAsset(url: audioURL)
-        guard let audioTrack = try await audioAsset.loadTracks(withMediaType: .audio).first else {
-          throw NSError(domain: "MetaWearables", code: 6, userInfo: [NSLocalizedDescriptionKey: "No audio track found"])
-        }
-
-        let reader = try AVAssetReader(asset: audioAsset)
-        let readerOutput = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: nil)
-        reader.add(readerOutput)
-        audioReader = reader
-        audioReaderOutput = readerOutput
-
-        let audioSettings: [String: Any] = [
-          AVFormatIDKey: kAudioFormatMPEG4AAC,
-          AVSampleRateKey: 44100,
-          AVNumberOfChannelsKey: 1,
-          AVEncoderBitRateKey: 128000
-        ]
-
-        let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
-        audioInput.expectsMediaDataInRealTime = false
-
-        if assetWriter.canAdd(audioInput) {
-          assetWriter.add(audioInput)
-          audioWriterInput = audioInput
-        }
-      } catch {
-        print("[MetaWearables] Failed to add audio track: \(error.localizedDescription)")
-      }
-    }
-
-    guard assetWriter.startWriting() else {
-      throw NSError(domain: "MetaWearables", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to start writing: \(assetWriter.error?.localizedDescription ?? "unknown error")"])
-    }
-
-    assetWriter.startSession(atSourceTime: .zero)
-
-    let fps: Int32 = 15
-    let frameDuration = CMTimeMake(value: 1, timescale: fps)
-
-    var frameIndex = 0
-    for (image, _) in frames {
-      while !assetWriterInput.isReadyForMoreMediaData {
-        try await Task.sleep(nanoseconds: 10_000_000)
-      }
-
-      guard let pixelBuffer = self.pixelBuffer(from: image, size: CGSize(width: videoWidth, height: videoHeight)) else {
-        continue
-      }
-
-      let presentationTime = CMTimeMultiply(frameDuration, multiplier: Int32(frameIndex))
-
-      if !pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: presentationTime) {
-        print("[MetaWearables] Failed to append frame \(frameIndex)")
-      }
-
-      frameIndex += 1
-
-      if frameIndex % 30 == 0 {
-        print("[MetaWearables] Progress: \(frameIndex)/\(frames.count) frames written")
-      }
-    }
-
-    assetWriterInput.markAsFinished()
-
-    if let audioInput = audioWriterInput,
-       let reader = audioReader,
-       let readerOutput = audioReaderOutput {
-
-      reader.startReading()
-
-      while audioInput.isReadyForMoreMediaData {
-        guard let sampleBuffer = readerOutput.copyNextSampleBuffer() else {
-          break
-        }
-        audioInput.append(sampleBuffer)
-      }
-
-      audioInput.markAsFinished()
-    }
-
-    let videoPath = try await withCheckedThrowingContinuation { continuation in
-      assetWriter.finishWriting {
-        if assetWriter.status == .completed {
-          continuation.resume(returning: outputURL.path)
-        } else if let error = assetWriter.error {
-          continuation.resume(throwing: error)
-        } else {
-          let error = NSError(domain: "MetaWearables", code: 4, userInfo: [NSLocalizedDescriptionKey: "Unknown error during video writing"])
-          continuation.resume(throwing: error)
+      recorder.stopRecording { [weak self] result in
+        DispatchQueue.main.async {
+          switch result {
+          case .success(let info):
+            print("[MetaWearables] Recording saved: \(info.filePath)")
+            self?.streamingRecorder = nil
+            resolve([
+              "success": true,
+              "filePath": info.filePath,
+              "frameCount": info.frameCount,
+              "duration": info.duration
+            ])
+          case .failure(let error):
+            print("[MetaWearables] Recording failed: \(error.localizedDescription)")
+            self?.streamingRecorder = nil
+            reject("VIDEO_CREATION_ERROR", error.localizedDescription, error)
+          }
         }
       }
-    }
-
-    let savedPath = try await self.saveVideoToPhotosLibrary(videoURL: outputURL)
-    return savedPath
-  }
-
-  private func saveVideoToPhotosLibrary(videoURL: URL) async throws -> String {
-    let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-
-    if status == .notDetermined {
-      let newStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-      if newStatus != .authorized {
-        throw NSError(domain: "MetaWearables", code: 5, userInfo: [NSLocalizedDescriptionKey: "Photos library permission denied"])
-      }
-    } else if status != .authorized {
-      throw NSError(domain: "MetaWearables", code: 5, userInfo: [NSLocalizedDescriptionKey: "Photos library permission denied"])
-    }
-
-    var localIdentifier: String?
-
-    try await PHPhotoLibrary.shared().performChanges {
-      let request = PHAssetCreationRequest.forAsset()
-      request.addResource(with: .video, fileURL: videoURL, options: nil)
-      localIdentifier = request.placeholderForCreatedAsset?.localIdentifier
-    }
-
-    try? FileManager.default.removeItem(at: videoURL)
-
-    return localIdentifier ?? "Photos Library"
-  }
-
-  private func pixelBuffer(from image: UIImage, size: CGSize) -> CVPixelBuffer? {
-    let attrs = [
-      kCVPixelBufferCGImageCompatibilityKey: kCFBooleanTrue!,
-      kCVPixelBufferCGBitmapContextCompatibilityKey: kCFBooleanTrue!
-    ] as CFDictionary
-
-    var pixelBuffer: CVPixelBuffer?
-    let status = CVPixelBufferCreate(
-      kCFAllocatorDefault,
-      Int(size.width),
-      Int(size.height),
-      kCVPixelFormatType_32ARGB,
-      attrs,
-      &pixelBuffer
-    )
-
-    guard status == kCVReturnSuccess, let buffer = pixelBuffer else {
-      return nil
-    }
-
-    CVPixelBufferLockBaseAddress(buffer, [])
-    defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
-
-    let pixelData = CVPixelBufferGetBaseAddress(buffer)
-
-    let rgbColorSpace = CGColorSpaceCreateDeviceRGB()
-    guard let context = CGContext(
-      data: pixelData,
-      width: Int(size.width),
-      height: Int(size.height),
-      bitsPerComponent: 8,
-      bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
-      space: rgbColorSpace,
-      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
-    ) else {
-      return nil
-    }
-
-    let rect = CGRect(x: 0, y: 0, width: size.width, height: size.height)
-    if let cgImage = image.cgImage {
-      context.draw(cgImage, in: rect)
-    } else {
-      UIGraphicsPushContext(context)
-      image.draw(in: rect)
-      UIGraphicsPopContext()
-    }
-
-    return buffer
-  }
-
-  // MARK: - Helper Methods
-
-  private func announceBarcode(barcodeType: String) {
-    DispatchQueue.main.async { [weak self] in
-      guard let self = self else { return }
-
-      let audioSession = AVAudioSession.sharedInstance()
-      do {
-        try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
-        try audioSession.setActive(true)
-      } catch {
-        print("[MetaWearables] Failed to configure audio session: \(error.localizedDescription)")
-      }
-
-      let utterance = AVSpeechUtterance(string: "UPC found")
-      utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-      utterance.rate = 0.5
-      utterance.volume = 1.0
-      utterance.pitchMultiplier = 1.0
-
-      self.speechSynthesizer.speak(utterance)
-      print("[MetaWearables] Announced: 'UPC found'")
     }
   }
 
@@ -1478,7 +816,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         print("[MetaWearables] Failed to configure audio session: \(error.localizedDescription)")
       }
 
-      // Store resolve/reject for delegate callback
       self.speechResolve = resolve
       self.speechReject = reject
 
@@ -1532,14 +869,10 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         return
       }
 
-      // Stop any current audio playback
       self.audioPlayer?.stop()
 
       do {
-        // During recording, match the audio session startAudioRecording() already set.
-        // Re-setting the same values won't trigger Bluetooth renegotiation.
-        // Before recording, don't touch the session — play through Meta SDK's session.
-        if self.isRecording || self.audioRecorder != nil {
+        if self.isRecording {
           let audioSession = AVAudioSession.sharedInstance()
           try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .allowBluetooth])
           try audioSession.setActive(true)
@@ -1599,7 +932,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         return
       }
 
-      // Request authorization
       SFSpeechRecognizer.requestAuthorization { [weak self] authStatus in
         DispatchQueue.main.async {
           guard let self = self else { return }
@@ -1628,7 +960,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
   }
 
   private func startRecognitionEngine() throws {
-    // Cancel previous task if any
     recognitionTask?.cancel()
     recognitionTask = nil
 
@@ -1660,7 +991,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
 
       if let result = result {
         let transcript = result.bestTranscription.formattedString.lowercased()
-        // Check last few words for commands
         let words = transcript.split(separator: " ")
         let lastWords = words.suffix(3).map { String($0) }
 
@@ -1686,7 +1016,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
           }
         }
 
-        // Auto-restart when recognition finalizes (SFSpeechRecognizer has ~1min limit)
         if result.isFinal && self.isVoiceRecognitionActive {
           self.restartRecognitionEngine()
         }
@@ -1700,7 +1029,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
   }
 
   private func restartRecognitionEngine() {
-    // Clean up current engine
     audioEngine?.stop()
     audioEngine?.inputNode.removeTap(onBus: 0)
     recognitionRequest?.endAudio()
@@ -1708,7 +1036,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
     recognitionTask = nil
     audioEngine = nil
 
-    // Restart after brief delay
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
       guard let self = self, self.isVoiceRecognitionActive else { return }
       do {
@@ -1764,9 +1091,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
   func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
     if let error = error {
       print("[MetaWearables] Audio recording encode error: \(error.localizedDescription)")
-      self.isRecording = false
-      self.audioRecorder?.stop()
-      self.audioRecorder = nil
     }
   }
 
@@ -1775,15 +1099,17 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
     registrationTask?.cancel()
     deviceStreamTask?.cancel()
 
-    audioRecorder?.stop()
-    audioRecorder = nil
-
     // Stop voice recognition
     isVoiceRecognitionActive = false
     audioEngine?.stop()
     audioEngine?.inputNode.removeTap(onBus: 0)
     recognitionRequest?.endAudio()
     recognitionTask?.cancel()
+
+    // Clean up frame pipeline
+    FrameDistributor.shared.stopStatsEmission()
+    FrameDistributor.shared.setMLPipeline(nil)
+    FrameDistributor.shared.setRecorder(nil)
 
     stateListenerToken = nil
     videoFrameListenerToken = nil

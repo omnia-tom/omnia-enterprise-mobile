@@ -26,10 +26,19 @@ export interface MetaConnectionStatus {
 }
 
 export interface MetaVideoFrame {
-  data: string; // Base64 encoded video frame
   timestamp: number;
   width: number;
   height: number;
+  frameNumber: number;
+  data?: string; // deprecated — only present for capturePhoto. Frames now render via NativeFrameView.
+}
+
+export interface StreamingStats {
+  fps: number;
+  totalFrames: number;
+  droppedFrames: number;
+  isRecording: boolean;
+  recordingDuration: number;
 }
 
 export interface MetaPhoto {
@@ -129,6 +138,10 @@ class MetaWearablesService {
 
     metaWearablesEmitter.addListener('onVoiceCommand', (command: VoiceCommand) => {
       this.emit('voiceCommand', command);
+    });
+
+    metaWearablesEmitter.addListener('onStreamingStats', (stats: StreamingStats) => {
+      this.emit('streamingStats', stats);
     });
 
     metaWearablesEmitter.addListener('onError', (error: { code: string; message: string }) => {

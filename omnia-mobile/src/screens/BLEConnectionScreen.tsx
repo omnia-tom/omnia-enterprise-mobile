@@ -10,7 +10,6 @@ import {
   PermissionsAndroid,
   Platform,
   TextInput,
-  Image,
   AppState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -31,6 +30,7 @@ import { storeConnectedDevices, sendMessageToGlasses } from '../services/glasses
 import { chatAPI } from '../services/chatApi';
 import { ArmConnectionState, GlassesConnectionState } from '../types';
 import { metaWearablesService, MetaDevice, HandPoseData } from '../services/metaWearables';
+import NativeFrameView from '../components/NativeFrameView';
 import HandPoseOverlay from '../components/HandPoseOverlay';
 
 interface BLEConnectionScreenParams {
@@ -114,7 +114,7 @@ export default function BLEConnectionScreen() {
   const [metaConnected, setMetaConnected] = useState(false);
   const [metaStreaming, setMetaStreaming] = useState(false);
   const [metaDevices, setMetaDevices] = useState<MetaDevice[]>([]);
-  const [currentVideoFrame, setCurrentVideoFrame] = useState<string | null>(null);
+  const [isVideoStreaming, setIsVideoStreaming] = useState(false);
   const [lastBarcode, setLastBarcode] = useState<{ type: string; data: string; timestamp: number } | null>(null);
 
   // Hand tracking state
@@ -1635,8 +1635,8 @@ export default function BLEConnectionScreen() {
         });
 
         metaWearablesService.addEventListener('videoFrame', (frame: any) => {
-          // Update video frame for display
-          setCurrentVideoFrame(frame.data);
+          // Track streaming state — frames render natively via NativeFrameView
+          setIsVideoStreaming(true);
         });
 
         metaWearablesService.addEventListener('barcodeDetected', (barcode: any) => {
@@ -1810,7 +1810,7 @@ export default function BLEConnectionScreen() {
       addLog('⏹️ Stopping video stream...');
       await metaWearablesService.stopVideoStream();
       setMetaStreaming(false);
-      setCurrentVideoFrame(null);
+      setIsVideoStreaming(false);
       addLog('✅ Video streaming stopped');
 
       // Set status to offline when streaming stops
@@ -2148,17 +2148,19 @@ export default function BLEConnectionScreen() {
   // Render Meta Wearables UI if it's a Meta device
   if (isMetaWearable) {
     // Fullscreen streaming mode
-    if (metaStreaming && currentVideoFrame) {
+    if (metaStreaming && isVideoStreaming) {
       return (
         <View style={styles.fullscreenContainer}>
           <StatusBar style="light" />
 
-          {/* Fullscreen Video */}
-          <Image
-            source={{ uri: `data:image/jpeg;base64,${currentVideoFrame}` }}
-            style={styles.fullscreenVideo}
-            resizeMode="cover"
-          />
+          {/* Fullscreen Video — rendered natively, no bridge traffic */}
+          {NativeFrameView ? (
+            <NativeFrameView style={styles.fullscreenVideo} isActive={true} contentMode="cover" />
+          ) : (
+            <View style={[styles.fullscreenVideo, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+              <Text style={{ color: '#fff' }}>Native frame view unavailable</Text>
+            </View>
+          )}
 
           {/* Hand Pose Overlay */}
           {handTrackingEnabled && handPoseData && (
