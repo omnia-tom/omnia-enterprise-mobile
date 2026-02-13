@@ -18,19 +18,6 @@ import { metaWearablesService } from '../services/metaWearables';
 import GlassCard from '../components/GlassCard';
 import MeshBackground from '../components/MeshBackground';
 
-let GlassViewComponent: any = null;
-let glassAvailable = false;
-
-try {
-  const glassEffect = require('expo-glass-effect');
-  glassAvailable = glassEffect.isLiquidGlassAvailable();
-  if (glassAvailable) {
-    GlassViewComponent = glassEffect.GlassView;
-  }
-} catch {
-  glassAvailable = false;
-}
-
 type Nav = NativeStackNavigationProp<RootStackParamList, 'TaskDetail'>;
 type Route = RouteProp<RootStackParamList, 'TaskDetail'>;
 
@@ -189,23 +176,13 @@ export default function TaskDetailScreen() {
       </ScrollView>
 
       {/* Sticky CTA */}
-      {glassAvailable && GlassViewComponent ? (
-        <GlassViewComponent glassEffectStyle="regular" style={[styles.ctaContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <TouchableOpacity style={[styles.ctaButton, { backgroundColor: colors.accent }]} onPress={handleStartRecording} activeOpacity={0.8}>
-            <Text style={styles.ctaText}>
-              {glassesConnected ? 'Start Recording' : 'Connect Glasses First'}
-            </Text>
-          </TouchableOpacity>
-        </GlassViewComponent>
-      ) : (
-        <View style={[styles.ctaContainer, styles.ctaFallback, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <TouchableOpacity style={[styles.ctaButton, { backgroundColor: colors.accent }]} onPress={handleStartRecording} activeOpacity={0.8}>
-            <Text style={styles.ctaText}>
-              {glassesConnected ? 'Start Recording' : 'Connect Glasses First'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <View style={[styles.ctaContainer, styles.ctaFallback, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <TouchableOpacity style={[styles.ctaButton, { backgroundColor: colors.accent }]} onPress={handleStartRecording} activeOpacity={0.8}>
+          <Text style={styles.ctaText}>
+            {glassesConnected ? 'Start Recording' : 'Connect Glasses First'}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -358,9 +335,9 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   ctaFallback: {
-    backgroundColor: 'rgba(250, 248, 245, 0.92)',
+    backgroundColor: 'rgba(12, 12, 18, 0.92)',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2D9CE',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   ctaButton: {
     borderRadius: 14,
@@ -368,7 +345,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ctaText: {
-    color: '#FFFFFF',
+    color: '#09090F',
     fontSize: 17,
     fontWeight: '600',
   },

@@ -8,11 +8,13 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { collection, query, where, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
+import { colors } from '../theme';
+import MeshBackground from '../components/MeshBackground';
+import GlassCard from '../components/GlassCard';
 
 interface Device {
   id: string;
@@ -46,7 +48,7 @@ export default function DevicesScreen() {
 
     try {
       const devicesRef = collection(db, 'devices');
-      
+
       // Try with orderBy first, fall back to just where if it fails
       let q = query(
         devicesRef,
@@ -125,7 +127,7 @@ export default function DevicesScreen() {
     if (!user) return;
 
     const devicesRef = collection(db, 'devices');
-    
+
     // Use simple query without orderBy to avoid index requirements
     // We'll sort manually
     const q = query(devicesRef, where('userId', '==', user.uid));
@@ -152,9 +154,9 @@ export default function DevicesScreen() {
         // Sort manually by paired date (newest first)
         devicesData.sort((a, b) => {
           try {
-            const dateA = a.pairedAt?.toDate ? a.pairedAt.toDate().getTime() : 
+            const dateA = a.pairedAt?.toDate ? a.pairedAt.toDate().getTime() :
                          a.pairedAt ? new Date(a.pairedAt).getTime() : 0;
-            const dateB = b.pairedAt?.toDate ? b.pairedAt.toDate().getTime() : 
+            const dateB = b.pairedAt?.toDate ? b.pairedAt.toDate().getTime() :
                          b.pairedAt ? new Date(b.pairedAt).getTime() : 0;
             return dateB - dateA;
           } catch {
@@ -196,50 +198,42 @@ export default function DevicesScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'online':
-        return '#4CAF50';
+        return colors.success;
       case 'pending':
-        return '#FFC107';
+        return colors.warning;
       default:
-        return '#9E9E9E';
+        return colors.textTertiary;
     }
   };
 
   const getStatusBackgroundColor = (status: string) => {
     switch (status) {
       case 'online':
-        return 'rgba(76, 175, 80, 0.2)';
+        return 'rgba(48, 209, 88, 0.12)';
       case 'pending':
-        return 'rgba(255, 193, 7, 0.2)';
+        return 'rgba(255, 159, 10, 0.12)';
       default:
-        return 'rgba(158, 158, 158, 0.2)';
+        return 'rgba(99, 99, 102, 0.12)';
     }
   };
 
   if (loading && devices.length === 0) {
     return (
-      <LinearGradient
-        colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={styles.container}
-      >
-        <StatusBar style="dark" />
+      <View style={styles.container}>
+        <MeshBackground variant="warm" />
+        <StatusBar style="light" />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6366F1" />
+          <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>Loading devices...</Text>
         </View>
-      </LinearGradient>
+      </View>
     );
   }
 
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.container}
-    >
-      <StatusBar style="dark" />
+    <View style={styles.container}>
+      <MeshBackground variant="warm" />
+      <StatusBar style="light" />
 
       {/* Header */}
       <View style={styles.header}>
@@ -253,7 +247,7 @@ export default function DevicesScreen() {
           }}
           style={styles.backButton}
         >
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Text style={styles.backButtonText}>{'‹'} Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>My Devices</Text>
         <Text style={styles.subtitle}>
@@ -265,7 +259,7 @@ export default function DevicesScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366F1" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
       >
         {devices.length === 0 ? (
@@ -279,19 +273,14 @@ export default function DevicesScreen() {
               onPress={() => navigation.navigate('Pairing' as never)}
               style={styles.emptyButton}
             >
-              <LinearGradient
-                colors={['#6366F1', '#8B5CF6']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.emptyButtonGradient}
-              >
+              <View style={styles.emptyButtonInner}>
                 <Text style={styles.emptyButtonText}>Pair New Device</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         ) : (
           devices.map((device) => (
-            <View key={device.id} style={styles.deviceCard}>
+            <GlassCard key={device.id} style={styles.deviceCard}>
               <View style={styles.deviceHeader}>
                 <View style={styles.deviceTitleRow}>
                   <Text style={styles.deviceName}>{device.deviceName}</Text>
@@ -335,10 +324,10 @@ export default function DevicesScreen() {
                                   width: `${device.battery_left}%`,
                                   backgroundColor:
                                     device.battery_left > 50
-                                      ? '#4CAF50'
+                                      ? colors.success
                                       : device.battery_left > 20
-                                      ? '#FFC107'
-                                      : '#FF6B6B',
+                                      ? colors.warning
+                                      : colors.destructive,
                                 },
                               ]}
                             />
@@ -359,10 +348,10 @@ export default function DevicesScreen() {
                                   width: `${device.battery_right}%`,
                                   backgroundColor:
                                     device.battery_right > 50
-                                      ? '#4CAF50'
+                                      ? colors.success
                                       : device.battery_right > 20
-                                      ? '#FFC107'
-                                      : '#FF6B6B',
+                                      ? colors.warning
+                                      : colors.destructive,
                                 },
                               ]}
                             />
@@ -384,10 +373,10 @@ export default function DevicesScreen() {
                               width: `${device.battery}%`,
                               backgroundColor:
                                 device.battery > 50
-                                  ? '#4CAF50'
+                                  ? colors.success
                                   : device.battery > 20
-                                  ? '#FFC107'
-                                  : '#FF6B6B',
+                                  ? colors.warning
+                                  : colors.destructive,
                             },
                           ]}
                         />
@@ -413,40 +402,40 @@ export default function DevicesScreen() {
                   </View>
                 )}
               </View>
-            </View>
+            </GlassCard>
           ))
         )}
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   header: {
     padding: 24,
     paddingTop: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
   },
   backButton: {
     marginBottom: 16,
   },
   backButtonText: {
-    color: '#6366F1',
+    color: colors.accent,
     fontSize: 16,
     fontWeight: '600',
   },
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   scrollView: {
     flex: 1,
@@ -461,7 +450,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontSize: 16,
     marginTop: 16,
   },
@@ -478,12 +467,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 32,
   },
@@ -491,28 +480,20 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 300,
   },
-  emptyButtonGradient: {
+  emptyButtonInner: {
+    backgroundColor: colors.accent,
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
   },
   emptyButtonText: {
-    color: '#FFFFFF',
+    color: '#09090F',
     fontSize: 16,
     fontWeight: '600',
   },
   deviceCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
   },
   deviceHeader: {
     marginBottom: 16,
@@ -526,7 +507,7 @@ const styles = StyleSheet.create({
   deviceName: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
     flex: 1,
   },
   statusBadge: {
@@ -549,7 +530,7 @@ const styles = StyleSheet.create({
   },
   deviceModel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   deviceInfo: {
     gap: 12,
@@ -562,11 +543,11 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   infoValue: {
     fontSize: 14,
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   batteryContainer: {
     flexDirection: 'row',
@@ -578,7 +559,7 @@ const styles = StyleSheet.create({
   batteryBar: {
     flex: 1,
     height: 8,
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -589,22 +570,21 @@ const styles = StyleSheet.create({
   batteryText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
     minWidth: 35,
     textAlign: 'right',
   },
   personaBadge: {
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: colors.accentMuted,
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.4)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
   personaText: {
     fontSize: 12,
-    color: '#6366F1',
+    color: colors.accent,
     fontWeight: '600',
   },
 });
-

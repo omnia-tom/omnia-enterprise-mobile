@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   scanButtonText: {
-    color: '#FFFFFF',
+    color: '#09090F',
     fontSize: 17,
     fontWeight: '600',
   },

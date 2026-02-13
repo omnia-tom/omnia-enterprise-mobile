@@ -1,19 +1,6 @@
 import React from 'react';
 import { View, ViewProps, StyleSheet } from 'react-native';
-import { glassPillStyle, colors } from '../theme';
-
-let GlassViewComponent: any = null;
-let glassAvailable = false;
-
-try {
-  const glassEffect = require('expo-glass-effect');
-  glassAvailable = glassEffect.isLiquidGlassAvailable();
-  if (glassAvailable) {
-    GlassViewComponent = glassEffect.GlassView;
-  }
-} catch {
-  glassAvailable = false;
-}
+import { glassPillStyle } from '../theme';
 
 interface GlassPillProps extends ViewProps {
   tintColor?: string;
@@ -23,23 +10,9 @@ interface GlassPillProps extends ViewProps {
 export default function GlassPill({
   children,
   style,
-  tintColor,
   active,
   ...rest
 }: GlassPillProps) {
-  if (glassAvailable && GlassViewComponent) {
-    return (
-      <GlassViewComponent
-        glassEffectStyle="clear"
-        tintColor={active ? colors.accent : tintColor}
-        style={[styles.glass, active && styles.activeGlass, style]}
-        {...rest}
-      >
-        {children}
-      </GlassViewComponent>
-    );
-  }
-
   return (
     <View style={[styles.fallback, active && styles.activeFallback, style]} {...rest}>
       {children}
@@ -48,27 +21,18 @@ export default function GlassPill({
 }
 
 const styles = StyleSheet.create({
-  glass: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  activeGlass: {
-    // native glass handles active tinting
-  },
   fallback: {
     ...glassPillStyle,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
   activeFallback: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-    shadowColor: colors.accent,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    shadowColor: '#FFFFFF',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
   },
 });

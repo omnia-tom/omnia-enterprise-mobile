@@ -154,7 +154,7 @@ export default function TaskBrowserScreen() {
         onPress={() => navigation.getParent()?.navigate('Submissions')}
         style={styles.earningsPillWrap}
       >
-        <GlassPill tintColor="rgba(45, 168, 79, 0.15)">
+        <GlassPill tintColor="rgba(48, 209, 88, 0.12)">
           <View style={styles.earningsPillInner}>
             <View style={[styles.earningsDot, { backgroundColor: colors.earning }]} />
             <Text style={[styles.earningsText, { color: colors.earning }]}>

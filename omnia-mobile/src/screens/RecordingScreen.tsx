@@ -526,10 +526,10 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   instructionCard: {
-    backgroundColor: 'rgba(30, 30, 32, 0.85)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     padding: 24,
     maxWidth: 340,
     width: '100%',
@@ -595,7 +595,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#FF453A',
   },
 
   // Stop button
@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 6,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#FF453A',
   },
   minDurationHint: {
     color: 'rgba(255,255,255,0.7)',
@@ -684,7 +684,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   submitText: {
-    color: '#FFFFFF',
+    color: '#09090F',
     fontSize: 17,
     fontWeight: '600',
   },

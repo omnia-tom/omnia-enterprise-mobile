@@ -18,22 +18,20 @@ const BLOBS: Record<MeshVariant, Array<{
   opacity: number;
 }>> = {
   warm: [
-    { color: '#F5C6A0', size: width * 0.85, top: -height * 0.08, left: -width * 0.2, opacity: 0.35 },
-    { color: '#C5B4E3', size: width * 0.7, top: height * 0.25, left: width * 0.45, opacity: 0.25 },
-    { color: '#A8D4F0', size: width * 0.65, top: height * 0.55, left: -width * 0.15, opacity: 0.2 },
-    { color: '#F0D6C0', size: width * 0.5, top: height * 0.7, left: width * 0.5, opacity: 0.2 },
+    { color: '#2A1B4E', size: width * 0.85, top: -height * 0.08, left: -width * 0.2, opacity: 0.35 },
+    { color: '#3A1A4E', size: width * 0.7, top: height * 0.25, left: width * 0.45, opacity: 0.22 },
+    { color: '#0E3048', size: width * 0.65, top: height * 0.55, left: -width * 0.15, opacity: 0.18 },
   ],
   cool: [
-    { color: '#C5B4E3', size: width * 0.8, top: -height * 0.05, left: -width * 0.15, opacity: 0.3 },
-    { color: '#A8D4F0', size: width * 0.75, top: height * 0.2, left: width * 0.4, opacity: 0.25 },
-    { color: '#F5C6A0', size: width * 0.55, top: height * 0.55, left: -width * 0.1, opacity: 0.2 },
-    { color: '#D0C4F0', size: width * 0.5, top: height * 0.7, left: width * 0.45, opacity: 0.18 },
+    { color: '#0E1E48', size: width * 0.8, top: -height * 0.05, left: -width * 0.15, opacity: 0.35 },
+    { color: '#2A0E4E', size: width * 0.75, top: height * 0.2, left: width * 0.4, opacity: 0.22 },
+    { color: '#0E3838', size: width * 0.55, top: height * 0.55, left: -width * 0.1, opacity: 0.18 },
   ],
   balanced: [
-    { color: '#F5C6A0', size: width * 0.7, top: -height * 0.05, left: -width * 0.15, opacity: 0.28 },
-    { color: '#A8D4F0', size: width * 0.7, top: height * 0.15, left: width * 0.4, opacity: 0.25 },
-    { color: '#C5B4E3', size: width * 0.6, top: height * 0.5, left: -width * 0.1, opacity: 0.22 },
-    { color: '#F0D6C0', size: width * 0.5, top: height * 0.65, left: width * 0.5, opacity: 0.2 },
+    { color: '#2A1B4E', size: width * 0.7, top: -height * 0.05, left: -width * 0.15, opacity: 0.28 },
+    { color: '#0E1E48', size: width * 0.7, top: height * 0.15, left: width * 0.4, opacity: 0.28 },
+    { color: '#2A0E4E', size: width * 0.6, top: height * 0.5, left: -width * 0.1, opacity: 0.22 },
+    { color: '#0E3838', size: width * 0.5, top: height * 0.65, left: width * 0.5, opacity: 0.18 },
   ],
 };
 
@@ -67,6 +65,7 @@ const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
+    backgroundColor: colors.background,
   },
   blob: {
     position: 'absolute',

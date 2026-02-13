@@ -73,7 +73,7 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <MeshBackground variant="warm" />
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -135,7 +135,7 @@ export default function LoginScreen() {
             >
               <View style={[styles.button, loading && styles.buttonDisabled]}>
                 {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color="#09090F" />
                 ) : (
                   <Text style={styles.buttonText}>Sign In</Text>
                 )}
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#09090F',
     letterSpacing: 2,
   },
   subtitle: {
@@ -212,9 +212,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: 'rgba(42, 37, 34, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 92, 231, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: '#09090F',
     fontSize: 16,
     fontWeight: '600',
   },

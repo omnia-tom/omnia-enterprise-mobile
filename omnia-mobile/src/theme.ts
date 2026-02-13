@@ -1,20 +1,20 @@
 import { StyleSheet } from 'react-native';
 import { useMemo } from 'react';
 
-// ── Color palette (warm Barcelona-modern) ────────────────────
+// ── Color palette (dark glass) ────────────────────────────────
 export const colors = {
-  background: '#FAF8F5',
-  surface: '#F0ECE6',
-  textPrimary: '#2A2522',
-  textSecondary: '#6B5E54',
-  textTertiary: '#9C8F82',
-  accent: '#6C5CE7',
-  accentMuted: 'rgba(108, 92, 231, 0.10)',
-  earning: '#2DA84F',
-  success: '#2DA84F',
-  warning: '#E6931F',
-  destructive: '#D84848',
-  separator: '#E2D9CE',
+  background: '#0D0D12',
+  surface: '#1C1C23',
+  textPrimary: '#F0F0F5',
+  textSecondary: '#8E8E93',
+  textTertiary: '#636366',
+  accent: '#FFFFFF',
+  accentMuted: 'rgba(255, 255, 255, 0.08)',
+  earning: '#30D158',
+  success: '#30D158',
+  warning: '#FF9F0A',
+  destructive: '#FF453A',
+  separator: 'rgba(255, 255, 255, 0.06)',
 };
 
 // Backward-compat aliases
@@ -71,9 +71,9 @@ export const typography = StyleSheet.create({
 export const cardStyle = {
   backgroundColor: colors.surface,
   borderRadius: 16,
-  shadowColor: '#2A2522',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.06,
+  shadowColor: '#000000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.25,
   shadowRadius: 8,
   elevation: 2,
 };
@@ -82,24 +82,26 @@ export const cardStyle = {
 export const darkCardStyle = cardStyle;
 
 // ── Glass styles (fallback for non-iOS-26) ─────────────────────
+// Content cards use SOLID backgrounds for readability.
+// Only navigation surfaces (tab bar, sticky CTA) use translucent glass.
 export const glassCardStyle = {
-  backgroundColor: 'rgba(255, 255, 255, 0.65)',
+  backgroundColor: colors.surface,
   borderRadius: 20,
   borderWidth: StyleSheet.hairlineWidth,
-  borderColor: 'rgba(42, 37, 34, 0.06)',
-  shadowColor: '#2A2522',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.04,
+  borderColor: 'rgba(255, 255, 255, 0.06)',
+  shadowColor: '#000000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.25,
   shadowRadius: 12,
   elevation: 2,
   overflow: 'hidden' as const,
 };
 
 export const glassPillStyle = {
-  backgroundColor: 'rgba(255, 255, 255, 0.55)',
+  backgroundColor: 'rgba(255, 255, 255, 0.08)',
   borderRadius: 20,
   borderWidth: StyleSheet.hairlineWidth,
-  borderColor: 'rgba(42, 37, 34, 0.06)',
+  borderColor: 'rgba(255, 255, 255, 0.06)',
   overflow: 'hidden' as const,
 };
 
@@ -112,13 +114,13 @@ export const spacing = {
 
 // ── Category config ────────────────────────────────────────────
 export const categoryConfig: Record<string, { emoji: string; tint: string; label: string }> = {
-  kitchen: { emoji: '🍳', tint: 'rgba(230, 147, 31, 0.15)', label: 'Kitchen' },
-  warehouse: { emoji: '📦', tint: 'rgba(33, 150, 243, 0.15)', label: 'Warehouse' },
-  household: { emoji: '🏠', tint: 'rgba(45, 168, 79, 0.15)', label: 'Household' },
-  office: { emoji: '💼', tint: 'rgba(108, 92, 231, 0.15)', label: 'Office' },
-  workshop: { emoji: '🔧', tint: 'rgba(230, 147, 31, 0.15)', label: 'Workshop' },
-  outdoor: { emoji: '🌿', tint: 'rgba(45, 168, 79, 0.15)', label: 'Outdoor' },
-  personal_care: { emoji: '✨', tint: 'rgba(216, 72, 72, 0.15)', label: 'Personal Care' },
+  kitchen: { emoji: '🍳', tint: 'rgba(255, 159, 10, 0.12)', label: 'Kitchen' },
+  warehouse: { emoji: '📦', tint: 'rgba(100, 210, 255, 0.12)', label: 'Warehouse' },
+  household: { emoji: '🏠', tint: 'rgba(48, 209, 88, 0.12)', label: 'Household' },
+  office: { emoji: '💼', tint: 'rgba(255, 255, 255, 0.08)', label: 'Office' },
+  workshop: { emoji: '🔧', tint: 'rgba(255, 159, 10, 0.12)', label: 'Workshop' },
+  outdoor: { emoji: '🌿', tint: 'rgba(48, 209, 88, 0.12)', label: 'Outdoor' },
+  personal_care: { emoji: '✨', tint: 'rgba(255, 69, 58, 0.12)', label: 'Personal Care' },
 };
 
 // Backward-compat alias
@@ -126,9 +128,9 @@ export const darkCategoryConfig = categoryConfig;
 
 // ── Difficulty config ──────────────────────────────────────────
 export const difficultyConfig: Record<string, { color: string; bg: string }> = {
-  beginner: { color: '#2DA84F', bg: 'rgba(45, 168, 79, 0.18)' },
-  intermediate: { color: '#E6931F', bg: 'rgba(230, 147, 31, 0.18)' },
-  advanced: { color: '#D84848', bg: 'rgba(216, 72, 72, 0.18)' },
+  beginner: { color: '#30D158', bg: 'rgba(48, 209, 88, 0.15)' },
+  intermediate: { color: '#FF9F0A', bg: 'rgba(255, 159, 10, 0.15)' },
+  advanced: { color: '#FF453A', bg: 'rgba(255, 69, 58, 0.15)' },
 };
 
 // Backward-compat alias
@@ -141,7 +143,7 @@ export function useThemeColors() {
     cardStyle,
     categoryConfig,
     difficultyConfig,
-    isDark: false,
-    statusBarStyle: 'dark' as const,
+    isDark: true,
+    statusBarStyle: 'light' as const,
   }), []);
 }

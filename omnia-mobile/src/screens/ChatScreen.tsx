@@ -130,7 +130,7 @@ export default function ChatScreen() {
   return (
     <View style={styles.container}>
       <MeshBackground variant="warm" />
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
       {/* Header */}
       <View style={styles.header}>
@@ -278,16 +278,16 @@ const styles = StyleSheet.create({
   },
   botMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(42, 37, 34, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   messageText: {
     fontSize: 15,
     lineHeight: 20,
   },
   userMessageText: {
-    color: '#FFFFFF',
+    color: '#09090F',
   },
   botMessageText: {
     color: colors.textPrimary,
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(42, 37, 34, 0.08)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   citationsTitle: {
     fontSize: 12,
@@ -314,18 +314,18 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: colors.separator,
-    backgroundColor: 'rgba(250, 248, 245, 0.95)',
+    backgroundColor: 'rgba(12, 12, 18, 0.95)',
   },
   input: {
     flex: 1,
-    backgroundColor: 'rgba(42, 37, 34, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 15,
     color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: 'rgba(108, 92, 231, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     maxHeight: 100,
     marginRight: 8,
   },
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   sendButtonText: {
-    color: '#FFFFFF',
+    color: '#09090F',
     fontSize: 15,
     fontWeight: '600',
   },

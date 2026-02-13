@@ -18,11 +18,11 @@ import GlassPill from '../components/GlassPill';
 import MeshBackground from '../components/MeshBackground';
 
 const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; bg: string }> = {
-  recording: { label: 'Recording', color: '#E6931F', bg: 'rgba(230, 147, 31, 0.12)' },
-  uploading: { label: 'Uploading', color: '#007AFF', bg: 'rgba(0, 122, 255, 0.12)' },
-  under_review: { label: 'Under Review', color: '#E6931F', bg: 'rgba(230, 147, 31, 0.12)' },
-  approved: { label: 'Approved', color: '#2DA84F', bg: 'rgba(45, 168, 79, 0.12)' },
-  rejected: { label: 'Rejected', color: '#D84848', bg: 'rgba(216, 72, 72, 0.12)' },
+  recording: { label: 'Recording', color: '#FF9F0A', bg: 'rgba(255, 159, 10, 0.12)' },
+  uploading: { label: 'Uploading', color: '#0A84FF', bg: 'rgba(10, 132, 255, 0.12)' },
+  under_review: { label: 'Under Review', color: '#FF9F0A', bg: 'rgba(255, 159, 10, 0.12)' },
+  approved: { label: 'Approved', color: '#30D158', bg: 'rgba(48, 209, 88, 0.12)' },
+  rejected: { label: 'Rejected', color: '#FF453A', bg: 'rgba(255, 69, 58, 0.12)' },
 };
 
 const FILTERS: { key: 'all' | SubmissionStatus; label: string }[] = [

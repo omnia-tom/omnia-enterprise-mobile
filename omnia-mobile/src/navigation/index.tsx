@@ -36,7 +36,7 @@ export default function Navigation({ isAuthenticated }: NavigationProps) {
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#FAF8F5' },
+          contentStyle: { backgroundColor: '#0D0D12' },
         }}
       >
         <Stack.Screen

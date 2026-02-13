@@ -2283,12 +2283,12 @@ export default function BLEConnectionScreen() {
     // Normal connection UI
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
+        colors={['#14141F', '#0F0F18', '#0D0D12']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={styles.container}
       >
-        <StatusBar style="dark" />
+        <StatusBar style="light" />
 
         {/* Header */}
         <View style={styles.header}>
@@ -2326,7 +2326,7 @@ export default function BLEConnectionScreen() {
                 </Text>
                 <TouchableOpacity onPress={startMetaConnection} style={[styles.scanButton, {marginTop: 12}]}>
                   <LinearGradient
-                    colors={['#6366F1', '#8B5CF6']}
+                    colors={['#FFFFFF', 'rgba(255, 255, 255, 0.15)']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.scanButtonGradient}
@@ -2374,12 +2374,12 @@ export default function BLEConnectionScreen() {
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
-                        backgroundColor: autoRecordOnStream ? '#F0FDF4' : '#F3F4F6',
+                        backgroundColor: autoRecordOnStream ? 'rgba(48, 209, 88, 0.1)' : 'rgba(255, 255, 255, 0.06)',
                         padding: 12,
                         borderRadius: 8,
                         marginBottom: 16,
                         borderWidth: 1,
-                        borderColor: autoRecordOnStream ? '#10B981' : '#D1D5DB',
+                        borderColor: autoRecordOnStream ? '#30D158' : 'rgba(255, 255, 255, 0.08)',
                       }}
                     >
                       <View
@@ -2387,7 +2387,7 @@ export default function BLEConnectionScreen() {
                           width: 20,
                           height: 20,
                           borderRadius: 4,
-                          backgroundColor: autoRecordOnStream ? '#10B981' : '#9CA3AF',
+                          backgroundColor: autoRecordOnStream ? '#30D158' : '#636366',
                           marginRight: 12,
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -2396,10 +2396,10 @@ export default function BLEConnectionScreen() {
                         {autoRecordOnStream && <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' }}>✓</Text>}
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 2 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#F0F0F5', marginBottom: 2 }}>
                           Auto-start recording
                         </Text>
-                        <Text style={{ fontSize: 12, color: '#6B7280' }}>
+                        <Text style={{ fontSize: 12, color: '#8E8E93' }}>
                           Automatically record video + audio when streaming starts
                         </Text>
                       </View>
@@ -2407,7 +2407,7 @@ export default function BLEConnectionScreen() {
 
                     <TouchableOpacity onPress={startMetaStreaming} style={styles.sendTestButton}>
                       <LinearGradient
-                        colors={['#6366F1', '#8B5CF6']}
+                        colors={['#FFFFFF', 'rgba(255, 255, 255, 0.15)']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.sendTestButtonGradient}
@@ -2420,15 +2420,15 @@ export default function BLEConnectionScreen() {
 
                 {metaStreaming && (
                   <View>
-                    <View style={{ backgroundColor: '#EDE9FE', padding: 12, borderRadius: 8, marginBottom: 12 }}>
-                      <Text style={[styles.infoText, { color: '#6366F1', textAlign: 'center' }]}>
+                    <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.06)', padding: 12, borderRadius: 8, marginBottom: 12 }}>
+                      <Text style={[styles.infoText, { color: '#FFFFFF', textAlign: 'center' }]}>
                         📹 Streaming active - video preview is fullscreen
                       </Text>
                     </View>
 
                     {lastRecordedVideo && (
-                      <View style={{ backgroundColor: '#F0FDF4', padding: 12, borderRadius: 8, marginBottom: 12 }}>
-                        <Text style={[styles.infoText, { color: '#059669', fontWeight: '600', marginBottom: 4 }]}>
+                      <View style={{ backgroundColor: 'rgba(48, 209, 88, 0.1)', padding: 12, borderRadius: 8, marginBottom: 12 }}>
+                        <Text style={[styles.infoText, { color: '#30D158', fontWeight: '600', marginBottom: 4 }]}>
                           ✅ Last recording saved to Photos
                         </Text>
                         <Text style={[styles.infoText, { fontSize: 12 }]}>
@@ -2449,12 +2449,12 @@ export default function BLEConnectionScreen() {
   // Render BLE UI for Even Realities G1
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
+      colors={['#14141F', '#0F0F18', '#0D0D12']}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
       style={styles.container}
     >
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
       {/* Header */}
       <View style={styles.header}>
@@ -2531,7 +2531,7 @@ export default function BLEConnectionScreen() {
                     Fully: {connectionState.isFullyConnected ? '✓' : '✗'}
                   </Text>
                   {connectionState.isFullyConnected && (
-                    <Text style={[styles.debugText, { color: '#10B981', marginTop: 4 }]}>
+                    <Text style={[styles.debugText, { color: '#30D158', marginTop: 4 }]}>
                       🎉 Both arms connected! Scroll down for test message button.
                     </Text>
                   )}
@@ -2539,13 +2539,13 @@ export default function BLEConnectionScreen() {
                   {(batteryStatus.caseBattery !== null || batteryStatus.glassesState) && (
                     <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(99, 102, 241, 0.2)' }}>
                       {batteryStatus.caseBattery !== null && (
-                        <Text style={[styles.debugText, { color: '#6366F1' }]}>
+                        <Text style={[styles.debugText, { color: '#FFFFFF' }]}>
                           🔋 Case Battery: {batteryStatus.caseBattery}%
                         </Text>
                       )}
                       {batteryStatus.glassesState && (
                         <Text style={[styles.debugText, {
-                          color: batteryStatus.glassesState === 'on' ? '#10B981' : '#EF4444',
+                          color: batteryStatus.glassesState === 'on' ? '#30D158' : '#FF453A',
                           marginTop: 4
                         }]}>
                           👓 Glasses: {batteryStatus.glassesState.toUpperCase()}
@@ -2557,7 +2557,7 @@ export default function BLEConnectionScreen() {
               )}
               {/* Show offline status message when glasses are off */}
               {batteryStatus.glassesState === 'off' && (
-                <Text style={[styles.debugText, { color: '#EF4444' }]}>
+                <Text style={[styles.debugText, { color: '#FF453A' }]}>
                   👓 Status: OFFLINE (Turn on glasses to connect)
                 </Text>
               )}
@@ -2588,7 +2588,7 @@ export default function BLEConnectionScreen() {
                   value={testMessage}
                   onChangeText={setTestMessage}
                   placeholder="Enter message..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#636366"
                 />
                 <TouchableOpacity
                   onPress={sendTestMessage}
@@ -2596,7 +2596,7 @@ export default function BLEConnectionScreen() {
                   style={styles.sendTestButton}
                 >
                   <LinearGradient
-                    colors={['#6366F1', '#8B5CF6']}
+                    colors={['#FFFFFF', 'rgba(255, 255, 255, 0.15)']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={[
@@ -2617,7 +2617,7 @@ export default function BLEConnectionScreen() {
                   onPress={clearDisplays}
                   style={[styles.sendTestButton, { marginTop: 12 }]}
                 >
-                  <View style={[styles.sendTestButtonGradient, { backgroundColor: '#EF4444' }]}>
+                  <View style={[styles.sendTestButtonGradient, { backgroundColor: '#FF453A' }]}>
                     <Text style={styles.sendTestButtonText}>Clear Displays</Text>
                   </View>
                 </TouchableOpacity>
@@ -2650,7 +2650,7 @@ export default function BLEConnectionScreen() {
 
         {!initialized && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6366F1" />
+            <ActivityIndicator size="large" color="#FFFFFF" />
             <Text style={styles.loadingText}>Initializing Bluetooth...</Text>
           </View>
         )}
@@ -2666,7 +2666,7 @@ export default function BLEConnectionScreen() {
             {!scanning && !connecting && (
               <TouchableOpacity onPress={startScan} style={styles.scanButton}>
                 <LinearGradient
-                  colors={['#6366F1', '#8B5CF6']}
+                  colors={['#FFFFFF', 'rgba(255, 255, 255, 0.15)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.scanButtonGradient}
@@ -2680,7 +2680,7 @@ export default function BLEConnectionScreen() {
 
             {(scanning || connecting) && (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#6366F1" />
+                <ActivityIndicator size="large" color="#FFFFFF" />
                 <Text style={styles.loadingText}>
                   {scanning ? 'Scanning for devices...' : 'Connecting...'}
                 </Text>
@@ -2751,7 +2751,7 @@ export default function BLEConnectionScreen() {
                           </View>
                         </View>
                         {connecting && (
-                          <ActivityIndicator size="small" color="#6366F1" />
+                          <ActivityIndicator size="small" color="#FFFFFF" />
                         )}
                       </View>
                     </TouchableOpacity>
@@ -2782,13 +2782,13 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 16,
-    color: '#6366F1',
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#F0F0F5',
     flex: 1,
   },
   scrollView: {
@@ -2802,14 +2802,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#6366F1',
+    borderColor: '#FFFFFF',
     padding: 20,
     marginBottom: 24,
   },
   statusCardTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#F0F0F5',
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -2829,12 +2829,12 @@ const styles = StyleSheet.create({
   },
   armCardConnected: {
     backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    borderColor: '#4CAF50',
+    borderColor: '#30D158',
   },
   armLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#F0F0F5',
     marginBottom: 8,
   },
   connectedIndicator: {
@@ -2846,23 +2846,23 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#30D158',
     marginRight: 6,
   },
   connectedText: {
     fontSize: 12,
-    color: '#4CAF50',
+    color: '#30D158',
     fontWeight: '600',
   },
   armDeviceName: {
     fontSize: 11,
-    color: '#6B7280',
+    color: '#8E8E93',
     marginBottom: 8,
     textAlign: 'center',
   },
   armNotConnected: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: '#636366',
     fontStyle: 'italic',
   },
   testMessageSection: {
@@ -2874,7 +2874,7 @@ const styles = StyleSheet.create({
   testMessageLabel: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#F0F0F5',
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -2890,12 +2890,12 @@ const styles = StyleSheet.create({
   },
   targetArmsLabel: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#8E8E93',
     fontWeight: '600',
     marginRight: 8,
   },
   targetArmBadge: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#FFFFFF',
     borderRadius: 4,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -2913,7 +2913,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
-    color: '#1F2937',
+    color: '#F0F0F5',
     marginBottom: 12,
   },
   sendTestButton: {
@@ -2941,7 +2941,7 @@ const styles = StyleSheet.create({
   logTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#8E8E93',
     marginBottom: 8,
   },
   logScroll: {
@@ -2952,7 +2952,7 @@ const styles = StyleSheet.create({
   },
   logText: {
     fontSize: 11,
-    color: '#374151',
+    color: '#8E8E93',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     marginBottom: 4,
   },
@@ -2970,7 +2970,7 @@ const styles = StyleSheet.create({
   },
   instructions: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#8E8E93',
     marginBottom: 24,
     textAlign: 'center',
   },
@@ -3006,20 +3006,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#6B7280',
+    color: '#8E8E93',
     fontSize: 14,
     marginTop: 12,
   },
   devicesTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#F0F0F5',
     marginBottom: 8,
     marginTop: 8,
   },
   devicesSubtitle: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#8E8E93',
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -3061,17 +3061,17 @@ const styles = StyleSheet.create({
   deviceCardName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#F0F0F5',
     marginBottom: 4,
   },
   deviceCardId: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#8E8E93',
     marginBottom: 2,
   },
   deviceCardRssi: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#8E8E93',
   },
   deviceNameRow: {
     flexDirection: 'row',
@@ -3079,7 +3079,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   evenDeviceCard: {
-    borderColor: '#8B5CF6',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     borderWidth: 2,
     backgroundColor: 'rgba(145, 105, 205, 0.14)',
   },
@@ -3102,7 +3102,7 @@ const styles = StyleSheet.create({
   },
   deviceCardDistance: {
     fontSize: 12,
-    color: '#6366F1',
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   videoContainer: {
@@ -3120,7 +3120,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#8E8E93',
     textAlign: 'center',
   },
   fullscreenContainer: {

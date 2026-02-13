@@ -344,11 +344,11 @@ export default function MainScreen() {
   const getStatusBackgroundColor = (status: string) => {
     switch (status) {
       case 'online':
-        return 'rgba(45, 168, 79, 0.15)';
+        return 'rgba(48, 209, 88, 0.12)';
       case 'pending':
-        return 'rgba(230, 147, 31, 0.15)';
+        return 'rgba(255, 159, 10, 0.12)';
       default:
-        return 'rgba(156, 143, 130, 0.15)';
+        return 'rgba(99, 99, 102, 0.12)';
     }
   };
 
@@ -376,7 +376,7 @@ export default function MainScreen() {
   return (
     <View style={styles.container}>
       <MeshBackground variant="warm" />
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
       {/* Profile Icon - Top Right */}
       <TouchableOpacity style={styles.profileButton} onPress={handleAccountPress}>
@@ -711,7 +711,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pairButtonText: {
-    color: '#FFFFFF',
+    color: '#09090F',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
     height: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(42, 37, 34, 0.03)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: 8,
     overflow: 'hidden',
     flexShrink: 0,
@@ -835,7 +835,7 @@ const styles = StyleSheet.create({
   batteryBar: {
     flex: 1,
     height: 8,
-    backgroundColor: 'rgba(42, 37, 34, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -882,7 +882,7 @@ const styles = StyleSheet.create({
   bleArmIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(45, 168, 79, 0.08)',
+    backgroundColor: 'rgba(48, 209, 88, 0.1)',
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -928,7 +928,7 @@ const styles = StyleSheet.create({
     minHeight: 40,
   },
   testPersonaButtonText: {
-    color: '#FFFFFF',
+    color: '#09090F',
     fontSize: 14,
     fontWeight: '600',
   },
