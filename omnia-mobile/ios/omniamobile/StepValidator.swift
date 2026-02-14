@@ -1,9 +1,12 @@
 import Foundation
 import CoreGraphics
+import CoreImage
+import UIKit
+import Photos
 import React
 
-/// MLModelConsumer that validates recording steps by sending camera frames
-/// to FastVLM and emitting validation events back to React Native.
+/// MLModelConsumer that continuously validates recording steps at ~1fps.
+/// Emits VLM responses to React Native for display in the debug log.
 @available(iOS 18.2, *)
 final class StepValidator: MLModelConsumer {
 
@@ -22,24 +25,18 @@ final class StepValidator: MLModelConsumer {
   // MARK: - Internal state
 
   private var isProcessing = false
-  private var consecutiveYesCount = 0
-  private let requiredConsensus = 2  // 2 consecutive YES → validated
   private let validationQueue = DispatchQueue(label: "com.spectask.stepValidator", qos: .userInitiated)
+  private var debugFramesSaved = 0
 
   // MARK: - MLModelConsumer
 
-  private var frameCount = 0
-
   func process(cgImage: CGImage, timestamp: TimeInterval, width: Int, height: Int) {
-    frameCount += 1
-    if frameCount <= 3 || frameCount % 30 == 0 {
-      print("[StepValidator] process() called — frame #\(frameCount), enabled=\(isEnabled), isProcessing=\(isProcessing), prompt='\(currentPrompt.prefix(30))'")
-    }
+    // Back-pressure: skip frame if previous inference still running
     guard isEnabled, !isProcessing, !currentPrompt.isEmpty else { return }
 
     isProcessing = true
 
-    // Emit "checking" state so JS can show the pulsing indicator
+    // Emit "checking" state so JS shows activity
     emitValidation(stepIndex: currentStepIndex, validated: false, checking: true, response: nil, prompt: currentPrompt)
 
     let prompt = currentPrompt
@@ -52,41 +49,28 @@ final class StepValidator: MLModelConsumer {
         defer { self.isProcessing = false }
 
         do {
-          let vlmPrompt = "Look at this image. Is the person currently doing this: '\(prompt)'? Answer only YES or NO."
+          let vlmPrompt = "What text is written on the page in this image? Read carefully and output ONLY the exact text you can see. If no text is visible, say NONE."
 
-          print("[StepValidator] ──────────────────────────────────")
-          print("[StepValidator] Step \(stepIndex) | Sending to FastVLM")
-          print("[StepValidator]   Image: \(cgImage.width)x\(cgImage.height)")
-          print("[StepValidator]   Prompt: \(vlmPrompt)")
+          // Pre-process: fix aspect ratio, center-crop, upscale
+          let processed = self.preprocessForVLM(cgImage)
+
+          // Save first debug frame to Photos for inspection
+          if self.debugFramesSaved < 1 {
+            self.debugFramesSaved += 1
+            self.saveDebugFrame(processed)
+            print("[StepValidator] Raw: \(cgImage.width)x\(cgImage.height) → Processed: \(processed.width)x\(processed.height)")
+          }
 
           let startTime = CFAbsoluteTimeGetCurrent()
-          let response = try await FastVLMService.shared.predict(image: cgImage, prompt: vlmPrompt)
-          let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+          let response = try await FastVLMService.shared.predict(image: processed, prompt: vlmPrompt)
+          let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
 
-          let upperResponse = response.uppercased()
-          let isYes = upperResponse.contains("YES")
+          print("[StepValidator] Step \(stepIndex) | VLM: \"\(response)\" (\(elapsedMs)ms)")
 
-          if isYes {
-            self.consecutiveYesCount += 1
-          } else {
-            self.consecutiveYesCount = 0
-          }
-
-          let validated = self.consecutiveYesCount >= self.requiredConsensus
-
-          print("[StepValidator]   Raw response: \"\(response)\"")
-          print("[StepValidator]   Parsed as: \(isYes ? "YES" : "NO") | Consecutive YES: \(self.consecutiveYesCount)/\(self.requiredConsensus)")
-          print("[StepValidator]   Validated: \(validated) | Inference time: \(String(format: "%.0f", elapsed * 1000))ms")
-          print("[StepValidator] ──────────────────────────────────")
-
-          // Only emit if still on the same step (user might have advanced)
-          if self.currentStepIndex == stepIndex {
-            self.emitValidation(stepIndex: stepIndex, validated: validated, checking: !validated, response: response, prompt: prompt)
-          }
+          self.emitValidation(stepIndex: stepIndex, validated: false, checking: false, response: "\(response) (\(elapsedMs)ms)", prompt: prompt)
         } catch {
           print("[StepValidator] Inference error: \(error.localizedDescription)")
           self.emitValidation(stepIndex: stepIndex, validated: false, checking: false, response: "ERROR: \(error.localizedDescription)", prompt: prompt)
-          self.isProcessing = false
         }
       }
     }
@@ -97,15 +81,85 @@ final class StepValidator: MLModelConsumer {
   func configure(stepIndex: Int, description: String) {
     currentStepIndex = stepIndex
     currentPrompt = description
-    consecutiveYesCount = 0
     print("[StepValidator] Configured for step \(stepIndex): \(description)")
   }
 
   func reset() {
     currentStepIndex = 0
     currentPrompt = ""
-    consecutiveYesCount = 0
     isEnabled = false
+    debugFramesSaved = 0
+  }
+
+  // MARK: - Image Preprocessing
+
+  /// Fix aspect ratio (un-squish 4:3 → 16:9), center-crop 60%, and upscale to 1024px wide.
+  /// The Meta glasses camera is natively 16:9 but the stream may deliver squished 640x480.
+  private func preprocessForVLM(_ cgImage: CGImage) -> CGImage {
+    let srcW = CGFloat(cgImage.width)
+    let srcH = CGFloat(cgImage.height)
+
+    // Step 1: Fix aspect ratio — if image is squished from 16:9 to 4:3
+    let nativeAspect: CGFloat = 16.0 / 9.0
+    let currentAspect = srcW / srcH
+    let correctedH: CGFloat
+    if currentAspect < nativeAspect - 0.05 {
+      correctedH = srcW / nativeAspect
+    } else {
+      correctedH = srcH
+    }
+
+    // Step 2: Center-crop 60% of the frame
+    let cropFraction: CGFloat = 0.6
+    let cropW = srcW * cropFraction
+    let cropH = correctedH * cropFraction
+    let cropX = (srcW - cropW) / 2.0
+    let cropYCorrected = (correctedH - cropH) / 2.0
+    let cropYOriginal = cropYCorrected * (srcH / correctedH)
+    let cropHOriginal = cropH * (srcH / correctedH)
+
+    let cropRect = CGRect(x: cropX, y: cropYOriginal, width: cropW, height: cropHOriginal)
+    let cropped = cgImage.cropping(to: cropRect) ?? cgImage
+
+    // Step 3: Upscale to 1024px wide with correct aspect ratio
+    let targetW = 1024
+    let scale = CGFloat(targetW) / CGFloat(cropped.width)
+    let croppedCorrectedH = cropH
+    let targetH = Int(croppedCorrectedH * scale * (CGFloat(cropped.width) / cropW))
+
+    let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+    guard let ctx = CGContext(
+      data: nil,
+      width: targetW,
+      height: targetH,
+      bitsPerComponent: 8,
+      bytesPerRow: 0,
+      space: colorSpace,
+      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+      return cropped
+    }
+
+    ctx.interpolationQuality = .high
+    ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: targetW, height: targetH))
+
+    return ctx.makeImage() ?? cropped
+  }
+
+  // MARK: - Debug
+
+  private func saveDebugFrame(_ cgImage: CGImage) {
+    let uiImage = UIImage(cgImage: cgImage)
+    PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+      guard status == .authorized || status == .limited else { return }
+      PHPhotoLibrary.shared().performChanges({
+        PHAssetChangeRequest.creationRequestForAsset(from: uiImage)
+      }) { success, _ in
+        if success {
+          print("[StepValidator] DEBUG: Processed frame saved to Photos (\(cgImage.width)x\(cgImage.height))")
+        }
+      }
+    }
   }
 
   // MARK: - Event Emission

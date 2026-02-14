@@ -91,5 +91,16 @@ RCT_EXTERN_METHOD(startStepValidation:(nonnull NSNumber *)stepIndex
 RCT_EXTERN_METHOD(stopStepValidation:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(checkStep:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// VLM Model Selection
+RCT_EXTERN_METHOD(getAvailableVLMModels:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(setVLMModel:(NSString *)modelKey
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end
 

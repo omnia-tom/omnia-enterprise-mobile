@@ -1143,6 +1143,10 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
           validator.configure(stepIndex: stepIdx, description: desc)
           validator.isEnabled = true
 
+          // Disable barcode to free resources for VLM (hand pose stays on)
+          self.mlPipeline?.isBarcodeEnabled = false
+          print("[MetaWearables] Disabled barcode detection for VLM performance")
+
           print("[MetaWearables] Step validation started for step \(stepIdx): \(desc)")
           resolve(["success": true])
         }
@@ -1161,10 +1165,53 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         self.mlPipeline?.removeConsumer(named: validator.modelName)
         self.stepValidator = nil
       }
+      // Re-enable barcode detection
+      self.mlPipeline?.isBarcodeEnabled = true
+      print("[MetaWearables] Re-enabled barcode detection")
+
       FastVLMService.shared.unloadModel()
       print("[MetaWearables] Step validation stopped")
     }
     resolve(["success": true])
+  }
+
+  @objc
+  func getAvailableVLMModels(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    if #available(iOS 18.2, *) {
+      let models = FastVLMService.availableModelsList()
+      let current = FastVLMService.shared.currentModelKey
+      resolve(["models": models, "current": current])
+    } else {
+      resolve(["models": [], "current": ""])
+    }
+  }
+
+  @objc
+  func setVLMModel(_ modelKey: NSString, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    if #available(iOS 18.2, *) {
+      let key = modelKey as String
+      FastVLMService.shared.setModel(key: key)
+      print("[MetaWearables] VLM model set to: \(key)")
+
+      // Reload the model with the new selection
+      Task {
+        do {
+          try await FastVLMService.shared.loadModel()
+          resolve(["success": true, "model": key])
+        } catch {
+          reject("VLM_LOAD_ERROR", "Failed to load model \(key): \(error.localizedDescription)", error)
+        }
+      }
+    } else {
+      resolve(["success": false, "reason": "iOS 18.2+ required"])
+    }
+  }
+
+  @objc
+  func checkStep(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    // In continuous mode, checkStep is a no-op — VLM runs automatically at ~1fps.
+    // Kept for API compatibility.
+    resolve(["success": true, "mode": "continuous"])
   }
 
   // MARK: - Utility

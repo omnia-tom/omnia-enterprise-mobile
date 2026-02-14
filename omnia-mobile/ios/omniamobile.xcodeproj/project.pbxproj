@@ -28,8 +28,8 @@
 		1FAE65F42F3F01D900106D98 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65F32F3F01D900106D98 /* MLXLLM */; };
 		1FAE65F62F3F01D900106D98 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65F52F3F01D900106D98 /* MLXLMCommon */; };
 		1FAE65F82F3F01D900106D98 /* MLXVLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65F72F3F01D900106D98 /* MLXVLM */; };
-		1FAE65FA2F3F045B00106D98 /* FastVLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65F92F3F045B00106D98 /* FastVLMService.swift */; };
-		1FAE65FC2F3F047100106D98 /* StepValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65FB2F3F047100106D98 /* StepValidator.swift */; };
+		1FAE66012F40C87600106D98 /* FastVLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65FF2F40C87600106D98 /* FastVLMService.swift */; };
+		1FAE66022F40C87600106D98 /* StepValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE66002F40C87600106D98 /* StepValidator.swift */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		629B8CD18B98B4AAE7D7C62D /* libPods-omniamobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FB5D2DF71CCA0B62A9C2A75 /* libPods-omniamobile.a */; };
 		85B5724E8C9464124DB8A1E5 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C8D831C425A594831373957 /* ExpoModulesProvider.swift */; };
@@ -53,8 +53,8 @@
 		1FAE65DD2F3EF34700106D98 /* MLProcessingPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLProcessingPipeline.swift; sourceTree = "<group>"; };
 		1FAE65DE2F3EF34700106D98 /* omniamobile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = omniamobile.entitlements; sourceTree = "<group>"; };
 		1FAE65DF2F3EF34700106D98 /* StreamingRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingRecorder.swift; sourceTree = "<group>"; };
-		1FAE65F92F3F045B00106D98 /* FastVLMService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FastVLMService.swift; sourceTree = "<group>"; };
-		1FAE65FB2F3F047100106D98 /* StepValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StepValidator.swift; sourceTree = "<group>"; };
+		1FAE65FF2F40C87600106D98 /* FastVLMService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FastVLMService.swift; sourceTree = "<group>"; };
+		1FAE66002F40C87600106D98 /* StepValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StepValidator.swift; sourceTree = "<group>"; };
 		4C8D831C425A594831373957 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-omniamobile/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		61C18486CAD6D280C89C3D6C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = omniamobile/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = omniamobile/SplashScreen.storyboard; sourceTree = "<group>"; };
@@ -92,8 +92,8 @@
 		13B07FAE1A68108700A75B9A /* omniamobile */ = {
 			isa = PBXGroup;
 			children = (
-				1FAE65FB2F3F047100106D98 /* StepValidator.swift */,
-				1FAE65F92F3F045B00106D98 /* FastVLMService.swift */,
+				1FAE65FF2F40C87600106D98 /* FastVLMService.swift */,
+				1FAE66002F40C87600106D98 /* StepValidator.swift */,
 				1FAE65DA2F3EF34700106D98 /* MetaFrameView.swift */,
 				1FAE65DB2F3EF34700106D98 /* MetaFrameViewManager.m */,
 				1FAE65DC2F3EF34700106D98 /* MetaFrameViewManager.swift */,
@@ -387,17 +387,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1FAE65FC2F3F047100106D98 /* StepValidator.swift in Sources */,
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
 				85B5724E8C9464124DB8A1E5 /* ExpoModulesProvider.swift in Sources */,
 				1F776F0D2EF25EF00048F66C /* MetaWearablesModule.swift in Sources */,
-				1FAE65FA2F3F045B00106D98 /* FastVLMService.swift in Sources */,
 				1F776F0E2EF25EF00048F66C /* MetaWearablesModule.m in Sources */,
 				1FAE65E02F3EF34700106D98 /* MLProcessingPipeline.swift in Sources */,
 				1FAE65E12F3EF34700106D98 /* MetaFrameView.swift in Sources */,
 				1FAE65E22F3EF34700106D98 /* MetaFrameViewManager.m in Sources */,
 				1FAE65E32F3EF34700106D98 /* MetaFrameViewManager.swift in Sources */,
 				1FAE65E42F3EF34700106D98 /* StreamingRecorder.swift in Sources */,
+				1FAE66012F40C87600106D98 /* FastVLMService.swift in Sources */,
+				1FAE66022F40C87600106D98 /* StepValidator.swift in Sources */,
 				1FAE65D92F3EF31900106D98 /* FrameDistributor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
