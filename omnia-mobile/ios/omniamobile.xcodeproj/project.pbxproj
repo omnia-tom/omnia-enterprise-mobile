@@ -13,6 +13,23 @@
 		1F776F022EF24FE50048F66C /* MWDATMockDevice in Frameworks */ = {isa = PBXBuildFile; productRef = 1F776F012EF24FE50048F66C /* MWDATMockDevice */; };
 		1F776F0D2EF25EF00048F66C /* MetaWearablesModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F776F0C2EF25EF00048F66C /* MetaWearablesModule.swift */; };
 		1F776F0E2EF25EF00048F66C /* MetaWearablesModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 1F776F0B2EF25EF00048F66C /* MetaWearablesModule.m */; };
+		1FAE65D92F3EF31900106D98 /* FrameDistributor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65D82F3EF31900106D98 /* FrameDistributor.swift */; };
+		1FAE65E02F3EF34700106D98 /* MLProcessingPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65DD2F3EF34700106D98 /* MLProcessingPipeline.swift */; };
+		1FAE65E12F3EF34700106D98 /* MetaFrameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65DA2F3EF34700106D98 /* MetaFrameView.swift */; };
+		1FAE65E22F3EF34700106D98 /* MetaFrameViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65DB2F3EF34700106D98 /* MetaFrameViewManager.m */; };
+		1FAE65E32F3EF34700106D98 /* MetaFrameViewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65DC2F3EF34700106D98 /* MetaFrameViewManager.swift */; };
+		1FAE65E42F3EF34700106D98 /* StreamingRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65DF2F3EF34700106D98 /* StreamingRecorder.swift */; };
+		1FAE65E72F3F01B500106D98 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65E62F3F01B500106D98 /* MLX */; };
+		1FAE65E92F3F01B500106D98 /* MLXFFT in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65E82F3F01B500106D98 /* MLXFFT */; };
+		1FAE65EB2F3F01B500106D98 /* MLXFast in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65EA2F3F01B500106D98 /* MLXFast */; };
+		1FAE65ED2F3F01B500106D98 /* MLXLinalg in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65EC2F3F01B500106D98 /* MLXLinalg */; };
+		1FAE65EF2F3F01B500106D98 /* MLXNN in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65EE2F3F01B500106D98 /* MLXNN */; };
+		1FAE65F22F3F01D900106D98 /* MLXEmbedders in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65F12F3F01D900106D98 /* MLXEmbedders */; };
+		1FAE65F42F3F01D900106D98 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65F32F3F01D900106D98 /* MLXLLM */; };
+		1FAE65F62F3F01D900106D98 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65F52F3F01D900106D98 /* MLXLMCommon */; };
+		1FAE65F82F3F01D900106D98 /* MLXVLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65F72F3F01D900106D98 /* MLXVLM */; };
+		1FAE66012F40C87600106D98 /* FastVLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65FF2F40C87600106D98 /* FastVLMService.swift */; };
+		1FAE66022F40C87600106D98 /* StepValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE66002F40C87600106D98 /* StepValidator.swift */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		629B8CD18B98B4AAE7D7C62D /* libPods-omniamobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FB5D2DF71CCA0B62A9C2A75 /* libPods-omniamobile.a */; };
 		85B5724E8C9464124DB8A1E5 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C8D831C425A594831373957 /* ExpoModulesProvider.swift */; };
@@ -29,6 +46,15 @@
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = omniamobile/Info.plist; sourceTree = "<group>"; };
 		1F776F0B2EF25EF00048F66C /* MetaWearablesModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = MetaWearablesModule.m; path = omniamobile/MetaWearablesModule.m; sourceTree = "<group>"; };
 		1F776F0C2EF25EF00048F66C /* MetaWearablesModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MetaWearablesModule.swift; path = omniamobile/MetaWearablesModule.swift; sourceTree = "<group>"; };
+		1FAE65D82F3EF31900106D98 /* FrameDistributor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameDistributor.swift; sourceTree = "<group>"; };
+		1FAE65DA2F3EF34700106D98 /* MetaFrameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetaFrameView.swift; sourceTree = "<group>"; };
+		1FAE65DB2F3EF34700106D98 /* MetaFrameViewManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MetaFrameViewManager.m; sourceTree = "<group>"; };
+		1FAE65DC2F3EF34700106D98 /* MetaFrameViewManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetaFrameViewManager.swift; sourceTree = "<group>"; };
+		1FAE65DD2F3EF34700106D98 /* MLProcessingPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLProcessingPipeline.swift; sourceTree = "<group>"; };
+		1FAE65DE2F3EF34700106D98 /* omniamobile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = omniamobile.entitlements; sourceTree = "<group>"; };
+		1FAE65DF2F3EF34700106D98 /* StreamingRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingRecorder.swift; sourceTree = "<group>"; };
+		1FAE65FF2F40C87600106D98 /* FastVLMService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FastVLMService.swift; sourceTree = "<group>"; };
+		1FAE66002F40C87600106D98 /* StepValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StepValidator.swift; sourceTree = "<group>"; };
 		4C8D831C425A594831373957 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-omniamobile/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		61C18486CAD6D280C89C3D6C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = omniamobile/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = omniamobile/SplashScreen.storyboard; sourceTree = "<group>"; };
@@ -44,10 +70,19 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1FAE65F82F3F01D900106D98 /* MLXVLM in Frameworks */,
 				629B8CD18B98B4AAE7D7C62D /* libPods-omniamobile.a in Frameworks */,
+				1FAE65ED2F3F01B500106D98 /* MLXLinalg in Frameworks */,
 				1F776F002EF24FE50048F66C /* MWDATCore in Frameworks */,
+				1FAE65EF2F3F01B500106D98 /* MLXNN in Frameworks */,
+				1FAE65F22F3F01D900106D98 /* MLXEmbedders in Frameworks */,
 				1F776F022EF24FE50048F66C /* MWDATMockDevice in Frameworks */,
+				1FAE65E72F3F01B500106D98 /* MLX in Frameworks */,
+				1FAE65EB2F3F01B500106D98 /* MLXFast in Frameworks */,
 				1F776EFE2EF24FE50048F66C /* MWDATCamera in Frameworks */,
+				1FAE65F42F3F01D900106D98 /* MLXLLM in Frameworks */,
+				1FAE65F62F3F01D900106D98 /* MLXLMCommon in Frameworks */,
+				1FAE65E92F3F01B500106D98 /* MLXFFT in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -57,6 +92,14 @@
 		13B07FAE1A68108700A75B9A /* omniamobile */ = {
 			isa = PBXGroup;
 			children = (
+				1FAE65FF2F40C87600106D98 /* FastVLMService.swift */,
+				1FAE66002F40C87600106D98 /* StepValidator.swift */,
+				1FAE65DA2F3EF34700106D98 /* MetaFrameView.swift */,
+				1FAE65DB2F3EF34700106D98 /* MetaFrameViewManager.m */,
+				1FAE65DC2F3EF34700106D98 /* MetaFrameViewManager.swift */,
+				1FAE65DD2F3EF34700106D98 /* MLProcessingPipeline.swift */,
+				1FAE65DE2F3EF34700106D98 /* omniamobile.entitlements */,
+				1FAE65DF2F3EF34700106D98 /* StreamingRecorder.swift */,
 				1F776F0B2EF25EF00048F66C /* MetaWearablesModule.m */,
 				1F776F0C2EF25EF00048F66C /* MetaWearablesModule.swift */,
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
@@ -66,6 +109,7 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				61C18486CAD6D280C89C3D6C /* PrivacyInfo.xcprivacy */,
+				1FAE65D82F3EF31900106D98 /* FrameDistributor.swift */,
 			);
 			name = omniamobile;
 			sourceTree = "<group>";
@@ -192,6 +236,8 @@
 			mainGroup = 83CBB9F61A601CBA00E9B192;
 			packageReferences = (
 				1F776EFC2EF24FE50048F66C /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */,
+				1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */,
+				1FAE65F02F3F01D900106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 			);
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
 			projectDirPath = "";
@@ -345,6 +391,14 @@
 				85B5724E8C9464124DB8A1E5 /* ExpoModulesProvider.swift in Sources */,
 				1F776F0D2EF25EF00048F66C /* MetaWearablesModule.swift in Sources */,
 				1F776F0E2EF25EF00048F66C /* MetaWearablesModule.m in Sources */,
+				1FAE65E02F3EF34700106D98 /* MLProcessingPipeline.swift in Sources */,
+				1FAE65E12F3EF34700106D98 /* MetaFrameView.swift in Sources */,
+				1FAE65E22F3EF34700106D98 /* MetaFrameViewManager.m in Sources */,
+				1FAE65E32F3EF34700106D98 /* MetaFrameViewManager.swift in Sources */,
+				1FAE65E42F3EF34700106D98 /* StreamingRecorder.swift in Sources */,
+				1FAE66012F40C87600106D98 /* FastVLMService.swift in Sources */,
+				1FAE66022F40C87600106D98 /* StepValidator.swift in Sources */,
+				1FAE65D92F3EF31900106D98 /* FrameDistributor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -366,7 +420,7 @@
 					"FB_SONARKIT_ENABLED=1",
 				);
 				INFOPLIST_FILE = omniamobile/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -379,7 +433,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.omnia.mobileenterprise;
-				PRODUCT_NAME = "Omnia";
+				PRODUCT_NAME = Omnia;
 				SWIFT_OBJC_BRIDGING_HEADER = "omniamobile/omniamobile-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -398,7 +452,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 279PV9XKZ2;
 				INFOPLIST_FILE = omniamobile/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -411,7 +465,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.omnia.mobileenterprise;
-				PRODUCT_NAME = "Omnia";
+				PRODUCT_NAME = Omnia;
 				SWIFT_OBJC_BRIDGING_HEADER = "omniamobile/omniamobile-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -569,6 +623,22 @@
 				minimumVersion = 0.3.0;
 			};
 		};
+		1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.30.6;
+			};
+		};
+		1FAE65F02F3F01D900106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.30.3;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -586,6 +656,51 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 1F776EFC2EF24FE50048F66C /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
 			productName = MWDATMockDevice;
+		};
+		1FAE65E62F3F01B500106D98 /* MLX */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */;
+			productName = MLX;
+		};
+		1FAE65E82F3F01B500106D98 /* MLXFFT */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */;
+			productName = MLXFFT;
+		};
+		1FAE65EA2F3F01B500106D98 /* MLXFast */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */;
+			productName = MLXFast;
+		};
+		1FAE65EC2F3F01B500106D98 /* MLXLinalg */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */;
+			productName = MLXLinalg;
+		};
+		1FAE65EE2F3F01B500106D98 /* MLXNN */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */;
+			productName = MLXNN;
+		};
+		1FAE65F12F3F01D900106D98 /* MLXEmbedders */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1FAE65F02F3F01D900106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXEmbedders;
+		};
+		1FAE65F32F3F01D900106D98 /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1FAE65F02F3F01D900106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLLM;
+		};
+		1FAE65F52F3F01D900106D98 /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1FAE65F02F3F01D900106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLMCommon;
+		};
+		1FAE65F72F3F01D900106D98 /* MLXVLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1FAE65F02F3F01D900106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXVLM;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

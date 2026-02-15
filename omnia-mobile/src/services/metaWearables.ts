@@ -1,4 +1,5 @@
 import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
+import { elevenLabsTTS } from './elevenLabsTTS';
 
 const { MetaWearablesModule } = NativeModules;
 
@@ -25,10 +26,19 @@ export interface MetaConnectionStatus {
 }
 
 export interface MetaVideoFrame {
-  data: string; // Base64 encoded video frame
   timestamp: number;
   width: number;
   height: number;
+  frameNumber: number;
+  data?: string; // deprecated — only present for capturePhoto. Frames now render via NativeFrameView.
+}
+
+export interface StreamingStats {
+  fps: number;
+  totalFrames: number;
+  droppedFrames: number;
+  isRecording: boolean;
+  recordingDuration: number;
 }
 
 export interface MetaPhoto {
@@ -43,6 +53,51 @@ export interface MetaBarcode {
   data: string; // Barcode payload/value
   confidence: number; // Detection confidence (0-1)
   timestamp: number;
+}
+
+export interface HandJoint {
+  name: string;       // "wrist", "thumbCMC", "indexTip", etc.
+  x: number;          // 0-1 normalized, left-origin
+  y: number;          // 0-1 normalized, top-origin (pre-flipped)
+  confidence: number; // 0-1
+}
+
+export interface DetectedHand {
+  chirality: 'left' | 'right' | 'unknown';
+  joints: HandJoint[];
+}
+
+export interface HandPoseData {
+  hands: DetectedHand[];
+  timestamp: number;
+  frameWidth: number;
+  frameHeight: number;
+}
+
+export interface MetaRecordedVideo {
+  success: boolean;
+  filePath: string; // Path to the saved video file
+  frameCount: number; // Number of frames recorded
+  duration: number; // Duration in seconds
+}
+
+export interface VoiceCommand {
+  command: 'next' | 'repeat' | 'done' | 'start';
+  transcript: string;
+}
+
+export interface StepValidation {
+  stepIndex: number;
+  validated: boolean;
+  checking: boolean;
+  response?: string;
+  prompt?: string;
+}
+
+export interface VLMModelInfo {
+  key: string;
+  label: string;
+  size: string;
 }
 
 class MetaWearablesService {
@@ -89,6 +144,22 @@ class MetaWearablesService {
 
     metaWearablesEmitter.addListener('onBarcodeDetected', (barcode: MetaBarcode) => {
       this.emit('barcodeDetected', barcode);
+    });
+
+    metaWearablesEmitter.addListener('onHandPoseDetected', (data: HandPoseData) => {
+      this.emit('handPoseDetected', data);
+    });
+
+    metaWearablesEmitter.addListener('onVoiceCommand', (command: VoiceCommand) => {
+      this.emit('voiceCommand', command);
+    });
+
+    metaWearablesEmitter.addListener('onStreamingStats', (stats: StreamingStats) => {
+      this.emit('streamingStats', stats);
+    });
+
+    metaWearablesEmitter.addListener('onStepValidation', (data: StepValidation) => {
+      this.emit('stepValidation', data);
     });
 
     metaWearablesEmitter.addListener('onError', (error: { code: string; message: string }) => {
@@ -253,6 +324,116 @@ class MetaWearablesService {
    */
   getCurrentDevice(): MetaDevice | null {
     return this.currentDevice;
+  }
+
+  /**
+   * Start recording video from stream frames
+   * Must be called while video streaming is active
+   */
+  async startRecording(): Promise<void> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.startRecording();
+  }
+
+  /**
+   * Stop recording and save video file
+   * Returns information about the saved video
+   */
+  async stopRecording(): Promise<MetaRecordedVideo> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.stopRecording();
+  }
+
+  /**
+   * Speak an instruction via ElevenLabs TTS
+   */
+  async speakInstruction(text: string): Promise<void> {
+    return elevenLabsTTS.speak(text);
+  }
+
+  /**
+   * Start voice recognition for voice commands (next, repeat, done, start)
+   */
+  async startVoiceRecognition(): Promise<void> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.startVoiceRecognition();
+  }
+
+  /**
+   * Stop voice recognition
+   */
+  async stopVoiceRecognition(): Promise<void> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.stopVoiceRecognition();
+  }
+
+  /**
+   * Pre-download and load the FastVLM model for step validation.
+   * Best called from TaskDetail screen so it's ready by recording time.
+   */
+  async preloadVLM(): Promise<void> {
+    if (!this.isAvailable) return;
+    return MetaWearablesModule.preloadVLM();
+  }
+
+  /**
+   * Start VLM-based validation for a recording step.
+   * The model will analyze frames at ~1fps and emit 'stepValidation' events.
+   */
+  async startStepValidation(stepIndex: number, description: string): Promise<void> {
+    if (!this.isAvailable) return;
+    return MetaWearablesModule.startStepValidation(stepIndex, description);
+  }
+
+  /**
+   * Stop step validation and unload the VLM model to free memory.
+   */
+  async stopStepValidation(): Promise<void> {
+    if (!this.isAvailable) return;
+    return MetaWearablesModule.stopStepValidation();
+  }
+
+  /**
+   * Trigger a single-shot VLM check on the current frame.
+   * Result arrives via 'stepValidation' event.
+   */
+  async checkStep(): Promise<void> {
+    if (!this.isAvailable) return;
+    return MetaWearablesModule.checkStep();
+  }
+
+  /**
+   * Get available VLM models and the currently selected one.
+   */
+  async getAvailableVLMModels(): Promise<{ models: VLMModelInfo[]; current: string }> {
+    if (!this.isAvailable) return { models: [], current: '' };
+    return MetaWearablesModule.getAvailableVLMModels();
+  }
+
+  /**
+   * Switch to a different VLM model. Unloads current model and loads the new one.
+   */
+  async setVLMModel(modelKey: string): Promise<void> {
+    if (!this.isAvailable) return;
+    return MetaWearablesModule.setVLMModel(modelKey);
+  }
+
+  /**
+   * Enable or disable hand pose detection
+   */
+  async setHandPoseEnabled(enabled: boolean): Promise<void> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.setHandPoseEnabled(enabled);
   }
 
   /**

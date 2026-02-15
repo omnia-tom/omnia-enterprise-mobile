@@ -50,5 +50,57 @@ RCT_EXTERN_METHOD(getDeviceInfo:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(getConnectionStatus:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+// Video Recording
+RCT_EXTERN_METHOD(startRecording:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(stopRecording:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// Hand Pose Detection
+RCT_EXTERN_METHOD(setHandPoseEnabled:(BOOL)enabled
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// Text-to-Speech (Audio Guidance)
+RCT_EXTERN_METHOD(speakInstruction:(NSString *)text
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// Audio Data Playback (ElevenLabs TTS)
+RCT_EXTERN_METHOD(playAudioData:(NSString *)base64String
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// Voice Recognition
+RCT_EXTERN_METHOD(startVoiceRecognition:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(stopVoiceRecognition:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// Step Validation (FastVLM)
+RCT_EXTERN_METHOD(preloadVLM:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(startStepValidation:(nonnull NSNumber *)stepIndex
+                  description:(NSString *)description
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(stopStepValidation:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(checkStep:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// VLM Model Selection
+RCT_EXTERN_METHOD(getAvailableVLMModels:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(setVLMModel:(NSString *)modelKey
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end
 

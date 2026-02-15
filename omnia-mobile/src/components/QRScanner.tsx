@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 40,
     height: 40,
-    borderColor: '#6366F1',
+    borderColor: '#FFFFFF',
   },
   topLeft: {
     top: 0,
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8,
   },
   instructions: {
-    color: '#1F2937',
+    color: '#F0F0F5',
     fontSize: 16,
     fontWeight: '600',
     marginTop: 32,
@@ -140,13 +140,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   text: {
-    color: '#1F2937',
+    color: '#F0F0F5',
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 8,
   },
   subtext: {
-    color: '#6B7280',
+    color: '#8E8E93',
     fontSize: 14,
   },
 });

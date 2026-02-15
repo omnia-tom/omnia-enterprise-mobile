@@ -720,6 +720,13 @@ eas submit --platform android
    npx expo start
    ```
 
+## Additional Documentation
+
+- **[Pick Pack Seeding Guide](PICK_PACK_SEEDING.md)**: How to seed pick pack orders for all users
+- **[Meta Wearables Setup](META_WEARABLES_SETUP.md)**: Setup guide for Meta smart glasses
+- **[TestFlight Deployment](TESTFLIGHT_DEPLOYMENT.md)**: iOS deployment guide
+- **[Production Build](PRODUCTION_BUILD.md)**: Production build instructions
+
 ## Support
 
 For questions or issues:

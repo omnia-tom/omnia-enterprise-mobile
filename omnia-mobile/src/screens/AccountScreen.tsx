@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { signOut } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
+import { colors } from '../theme';
+import MeshBackground from '../components/MeshBackground';
+import GlassCard from '../components/GlassCard';
 
 interface UserData {
   email: string;
@@ -73,13 +75,9 @@ export default function AccountScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.container}
-    >
-      <StatusBar style="dark" />
+    <View style={styles.container}>
+      <MeshBackground variant="warm" />
+      <StatusBar style="light" />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header */}
@@ -94,19 +92,19 @@ export default function AccountScreen() {
             }}
             style={styles.backButton}
           >
-            <Text style={styles.backButtonText}>← Back</Text>
+            <Text style={styles.backButtonText}>{'‹'} Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Account</Text>
         </View>
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6366F1" />
+            <ActivityIndicator size="large" color={colors.accent} />
           </View>
         ) : (
           <>
             {/* User Info Card */}
-            <View style={styles.card}>
+            <GlassCard style={styles.card}>
               <Text style={styles.cardTitle}>Personal Information</Text>
 
               <View style={styles.infoRow}>
@@ -129,11 +127,11 @@ export default function AccountScreen() {
                   </Text>
                 </View>
               </View>
-            </View>
+            </GlassCard>
 
             {/* Organization Info Card */}
             {organization && (
-              <View style={styles.card}>
+              <GlassCard style={styles.card}>
                 <Text style={styles.cardTitle}>Organization</Text>
 
                 <View style={styles.infoRow}>
@@ -145,7 +143,7 @@ export default function AccountScreen() {
                   <Text style={styles.infoLabel}>Subdomain:</Text>
                   <Text style={styles.infoValue}>{organization.subdomain}</Text>
                 </View>
-              </View>
+              </GlassCard>
             )}
 
             {/* Sign Out Button */}
@@ -155,13 +153,14 @@ export default function AccountScreen() {
           </>
         )}
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   scrollView: {
     flex: 1,
@@ -177,14 +176,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   backButtonText: {
-    color: '#6366F1',
+    color: colors.accent,
     fontSize: 16,
     fontWeight: '600',
   },
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   loadingContainer: {
     flex: 1,
@@ -193,22 +192,13 @@ const styles = StyleSheet.create({
     paddingTop: 100,
   },
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 16,
   },
   infoRow: {
@@ -219,31 +209,31 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
     width: 100,
   },
   infoValue: {
     fontSize: 14,
-    color: '#1F2937',
+    color: colors.textPrimary,
     flex: 1,
   },
   roleBadge: {
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    backgroundColor: colors.accentMuted,
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.4)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
   roleText: {
     fontSize: 12,
-    color: '#6366F1',
+    color: colors.accent,
     fontWeight: '600',
   },
   signOutButton: {
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    backgroundColor: 'rgba(255, 69, 58, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 107, 107, 0.3)',
+    borderColor: 'rgba(255, 69, 58, 0.3)',
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
@@ -251,7 +241,7 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   signOutText: {
-    color: '#FF6B6B',
+    color: colors.destructive,
     fontSize: 16,
     fontWeight: '600',
   },

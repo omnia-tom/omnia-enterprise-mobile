@@ -10,11 +10,13 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { LoginFormData, LoginError } from '../types';
+import { colors } from '../theme';
+import GlassCard from '../components/GlassCard';
+import MeshBackground from '../components/MeshBackground';
 
 export default function LoginScreen() {
   const [formData, setFormData] = useState<LoginFormData>({
@@ -25,7 +27,6 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    // Validate inputs
     if (!formData.email || !formData.password) {
       Alert.alert('Error', 'Please enter both email and password');
       return;
@@ -35,13 +36,11 @@ export default function LoginScreen() {
 
     try {
       await signInWithEmailAndPassword(auth, formData.email.trim(), formData.password);
-      // Navigation will be handled automatically by auth state listener
     } catch (error: any) {
       console.error('Login error:', error);
 
       let errorMessage = 'An error occurred during login';
 
-      // Handle specific Firebase auth errors
       switch (error.code) {
         case 'auth/invalid-email':
           errorMessage = 'Invalid email address';
@@ -72,13 +71,9 @@ export default function LoginScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.container}
-    >
-      <StatusBar style="dark" />
+    <View style={styles.container}>
+      <MeshBackground variant="warm" />
+      <StatusBar style="light" />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -87,22 +82,17 @@ export default function LoginScreen() {
         <View style={styles.content}>
           {/* Logo/Header */}
           <View style={styles.header}>
-            <LinearGradient
-              colors={['#6366F1', '#8B5CF6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.logoGradient}
-            >
-              <Text style={styles.logo}>OMNIA</Text>
-            </LinearGradient>
-            <Text style={styles.subtitle}>Enterprise Mobile</Text>
+            <View style={styles.logoBadge}>
+              <Text style={styles.logo}>SpecTask</Text>
+            </View>
+            <Text style={styles.subtitle}>Learn by doing tasks</Text>
           </View>
 
           {/* Login Card */}
-          <View style={styles.card}>
+          <GlassCard style={styles.card}>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.description}>
-              Sign in with your Omnia Enterprise credentials
+              Sign in to get started
             </Text>
 
             {/* Email Input */}
@@ -111,7 +101,7 @@ export default function LoginScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="email@company.com"
-                placeholderTextColor="#6B7280"
+                placeholderTextColor={colors.textTertiary}
                 value={formData.email}
                 onChangeText={(text) => setFormData({ ...formData, email: text })}
                 keyboardType="email-address"
@@ -127,7 +117,7 @@ export default function LoginScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="Enter your password"
-                placeholderTextColor="#6B7280"
+                placeholderTextColor={colors.textTertiary}
                 value={formData.password}
                 onChangeText={(text) => setFormData({ ...formData, password: text })}
                 secureTextEntry={!showPassword}
@@ -143,34 +133,30 @@ export default function LoginScreen() {
               disabled={loading}
               style={styles.buttonContainer}
             >
-              <LinearGradient
-                colors={['#6366F1', '#8B5CF6']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.button, loading && styles.buttonDisabled]}
-              >
+              <View style={[styles.button, loading && styles.buttonDisabled]}>
                 {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color="#09090F" />
                 ) : (
                   <Text style={styles.buttonText}>Sign In</Text>
                 )}
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
 
             {/* Help Text */}
             <Text style={styles.helpText}>
               Use the same credentials as the web portal
             </Text>
-          </View>
+          </GlassCard>
         </View>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   keyboardView: {
     flex: 1,
@@ -184,7 +170,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 48,
   },
-  logoGradient: {
+  logoBadge: {
+    backgroundColor: colors.accent,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
@@ -192,36 +179,27 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#09090F',
     letterSpacing: 2,
   },
   subtitle: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginTop: 8,
     fontWeight: '600',
   },
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
     padding: 24,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   description: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 24,
   },
   inputContainer: {
@@ -230,23 +208,24 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.4)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   buttonContainer: {
     marginTop: 8,
     marginBottom: 16,
   },
   button: {
+    backgroundColor: colors.accent,
     borderRadius: 8,
     padding: 16,
     alignItems: 'center',
@@ -255,13 +234,13 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: '#09090F',
     fontSize: 16,
     fontWeight: '600',
   },
   helpText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textTertiary,
     textAlign: 'center',
   },
 });

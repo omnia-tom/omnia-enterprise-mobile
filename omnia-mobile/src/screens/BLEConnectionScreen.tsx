@@ -10,7 +10,6 @@ import {
   PermissionsAndroid,
   Platform,
   TextInput,
-  Image,
   AppState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,7 +29,9 @@ import {
 import { storeConnectedDevices, sendMessageToGlasses } from '../services/glassesMessaging';
 import { chatAPI } from '../services/chatApi';
 import { ArmConnectionState, GlassesConnectionState } from '../types';
-import { metaWearablesService, MetaDevice } from '../services/metaWearables';
+import { metaWearablesService, MetaDevice, HandPoseData } from '../services/metaWearables';
+import NativeFrameView from '../components/NativeFrameView';
+import HandPoseOverlay from '../components/HandPoseOverlay';
 
 interface BLEConnectionScreenParams {
   deviceId: string;
@@ -113,8 +114,18 @@ export default function BLEConnectionScreen() {
   const [metaConnected, setMetaConnected] = useState(false);
   const [metaStreaming, setMetaStreaming] = useState(false);
   const [metaDevices, setMetaDevices] = useState<MetaDevice[]>([]);
-  const [currentVideoFrame, setCurrentVideoFrame] = useState<string | null>(null);
+  const [isVideoStreaming, setIsVideoStreaming] = useState(false);
   const [lastBarcode, setLastBarcode] = useState<{ type: string; data: string; timestamp: number } | null>(null);
+
+  // Hand tracking state
+  const [handPoseData, setHandPoseData] = useState<HandPoseData | null>(null);
+  const [handTrackingEnabled, setHandTrackingEnabled] = useState(true);
+  const [handOverlaySize, setHandOverlaySize] = useState({ width: 0, height: 0 });
+
+  // Video recording state
+  const [isVideoRecording, setIsVideoRecording] = useState(false);
+  const [lastRecordedVideo, setLastRecordedVideo] = useState<{ filePath: string; frameCount: number; duration: number } | null>(null);
+  const [autoRecordOnStream, setAutoRecordOnStream] = useState(true); // Auto-start recording when streaming
 
   // Check device type from Firestore
   useEffect(() => {
@@ -1624,8 +1635,8 @@ export default function BLEConnectionScreen() {
         });
 
         metaWearablesService.addEventListener('videoFrame', (frame: any) => {
-          // Update video frame for display
-          setCurrentVideoFrame(frame.data);
+          // Track streaming state — frames render natively via NativeFrameView
+          setIsVideoStreaming(true);
         });
 
         metaWearablesService.addEventListener('barcodeDetected', (barcode: any) => {
@@ -1641,6 +1652,10 @@ export default function BLEConnectionScreen() {
 
           // TODO: Handle barcode detection (e.g., lookup product, show info, etc.)
           // You can add custom logic here to handle detected barcodes
+        });
+
+        metaWearablesService.addEventListener('handPoseDetected', (data: HandPoseData) => {
+          setHandPoseData(data);
         });
 
         metaWearablesService.addEventListener('error', (error: any) => {
@@ -1753,6 +1768,14 @@ export default function BLEConnectionScreen() {
       await metaWearablesService.startVideoStream();
       addLog('✅ Video streaming started');
 
+      // Auto-start recording if enabled
+      if (autoRecordOnStream) {
+        // Small delay to ensure stream is fully initialized
+        setTimeout(() => {
+          startVideoRecording();
+        }, 1000);
+      }
+
       // Set status to online when streaming starts (actual connectivity confirmed)
       try {
         const deviceDocRef = doc(db, 'devices', deviceId);
@@ -1774,10 +1797,20 @@ export default function BLEConnectionScreen() {
 
   const stopMetaStreaming = async () => {
     try {
+      console.log('[BLE] stopMetaStreaming called, isVideoRecording:', isVideoRecording);
+
+      // Auto-stop recording if active
+      if (isVideoRecording) {
+        console.log('[BLE] Stopping video recording before stopping stream...');
+        await stopVideoRecording();
+      } else {
+        console.log('[BLE] No video recording active to stop');
+      }
+
       addLog('⏹️ Stopping video stream...');
       await metaWearablesService.stopVideoStream();
       setMetaStreaming(false);
-      setCurrentVideoFrame(null);
+      setIsVideoStreaming(false);
       addLog('✅ Video streaming stopped');
 
       // Set status to offline when streaming stops
@@ -1794,6 +1827,47 @@ export default function BLEConnectionScreen() {
     } catch (error: any) {
       console.error('[BLEConnectionScreen] Error stopping stream:', error);
       addLog(`❌ Error stopping stream: ${error.message}`);
+    }
+  };
+
+  const startVideoRecording = async () => {
+    try {
+      addLog('🔴 Starting video recording...');
+      await metaWearablesService.startRecording();
+      setIsVideoRecording(true);
+      addLog('✅ Video recording started');
+    } catch (error: any) {
+      console.error('[BLEConnectionScreen] Error starting recording:', error);
+      addLog(`❌ Recording error: ${error.message}`);
+      Alert.alert('Recording Error', error.message);
+    }
+  };
+
+  const stopVideoRecording = async () => {
+    try {
+      console.log('[BLE] stopVideoRecording called');
+      addLog('⏹️ Stopping video recording...');
+      console.log('[BLE] Calling metaWearablesService.stopRecording()...');
+      const result = await metaWearablesService.stopRecording();
+      console.log('[BLE] Recording stopped, result:', result);
+      setIsVideoRecording(false);
+      setLastRecordedVideo(result);
+      addLog(`✅ Video saved: ${result.frameCount} frames, ${result.duration.toFixed(1)}s`);
+      addLog(`📁 File path: ${result.filePath}`);
+
+      Alert.alert(
+        'Video Saved',
+        `Recording saved successfully!\n\n` +
+        `Frames: ${result.frameCount}\n` +
+        `Duration: ${result.duration.toFixed(1)}s\n\n` +
+        `Path: ${result.filePath}`,
+        [{ text: 'OK' }]
+      );
+    } catch (error: any) {
+      console.error('[BLEConnectionScreen] Error stopping recording:', error);
+      addLog(`❌ Error saving video: ${error.message}`);
+      setIsVideoRecording(false);
+      Alert.alert('Recording Error', error.message);
     }
   };
 
@@ -2074,17 +2148,37 @@ export default function BLEConnectionScreen() {
   // Render Meta Wearables UI if it's a Meta device
   if (isMetaWearable) {
     // Fullscreen streaming mode
-    if (metaStreaming && currentVideoFrame) {
+    if (metaStreaming && isVideoStreaming) {
       return (
         <View style={styles.fullscreenContainer}>
           <StatusBar style="light" />
 
-          {/* Fullscreen Video */}
-          <Image
-            source={{ uri: `data:image/jpeg;base64,${currentVideoFrame}` }}
-            style={styles.fullscreenVideo}
-            resizeMode="cover"
-          />
+          {/* Fullscreen Video — rendered natively, no bridge traffic */}
+          {NativeFrameView ? (
+            <NativeFrameView style={styles.fullscreenVideo} isActive={true} contentMode="cover" />
+          ) : (
+            <View style={[styles.fullscreenVideo, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+              <Text style={{ color: '#fff' }}>Native frame view unavailable</Text>
+            </View>
+          )}
+
+          {/* Hand Pose Overlay */}
+          {handTrackingEnabled && handPoseData && (
+            <View
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+              onLayout={(e) => {
+                const { width, height } = e.nativeEvent.layout;
+                setHandOverlaySize({ width, height });
+              }}
+            >
+              <HandPoseOverlay
+                handPoseData={handPoseData}
+                containerWidth={handOverlaySize.width}
+                containerHeight={handOverlaySize.height}
+              />
+            </View>
+          )}
 
           {/* Barcode Detection Overlay */}
           {lastBarcode && (
@@ -2109,12 +2203,60 @@ export default function BLEConnectionScreen() {
 
           {/* Floating Controls */}
           <View style={styles.floatingControls}>
+            {/* Recording status indicator */}
+            {isVideoRecording && (
+              <View style={{ marginBottom: 12, backgroundColor: 'rgba(239, 68, 68, 0.9)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600', marginBottom: 2 }}>🔴 Recording</Text>
+                <Text style={{ color: '#FFFFFF', fontSize: 11, opacity: 0.9 }}>📹 Video + 🎤 Audio</Text>
+              </View>
+            )}
+
+            {/* Recording toggle button */}
+            <TouchableOpacity
+              onPress={isVideoRecording ? stopVideoRecording : startVideoRecording}
+              style={[styles.floatingButton, { marginBottom: 12 }]}
+            >
+              <LinearGradient
+                colors={isVideoRecording ? ['rgba(239, 68, 68, 0.9)', 'rgba(220, 38, 38, 0.9)'] : ['rgba(16, 185, 129, 0.9)', 'rgba(5, 150, 105, 0.9)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.floatingButtonGradient}
+              >
+                <Text style={styles.floatingButtonText}>
+                  {isVideoRecording ? '⏹ Stop Recording' : '🔴 Start Recording'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Hand tracking toggle button */}
+            <TouchableOpacity
+              onPress={() => {
+                const newEnabled = !handTrackingEnabled;
+                setHandTrackingEnabled(newEnabled);
+                if (!newEnabled) setHandPoseData(null);
+                metaWearablesService.setHandPoseEnabled(newEnabled).catch(() => {});
+              }}
+              style={[styles.floatingButton, { marginBottom: 12 }]}
+            >
+              <LinearGradient
+                colors={handTrackingEnabled ? ['rgba(139, 92, 246, 0.9)', 'rgba(109, 40, 217, 0.9)'] : ['rgba(107, 114, 128, 0.9)', 'rgba(75, 85, 99, 0.9)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.floatingButtonGradient}
+              >
+                <Text style={styles.floatingButtonText}>
+                  {handTrackingEnabled ? 'Hands: ON' : 'Hands: OFF'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Stop streaming button */}
             <TouchableOpacity
               onPress={stopMetaStreaming}
               style={styles.floatingButton}
             >
               <LinearGradient
-                colors={['rgba(239, 68, 68, 0.9)', 'rgba(220, 38, 38, 0.9)']}
+                colors={['rgba(107, 114, 128, 0.9)', 'rgba(75, 85, 99, 0.9)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.floatingButtonGradient}
@@ -2141,12 +2283,12 @@ export default function BLEConnectionScreen() {
     // Normal connection UI
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
+        colors={['#14141F', '#0F0F18', '#0D0D12']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={styles.container}
       >
-        <StatusBar style="dark" />
+        <StatusBar style="light" />
 
         {/* Header */}
         <View style={styles.header}>
@@ -2184,7 +2326,7 @@ export default function BLEConnectionScreen() {
                 </Text>
                 <TouchableOpacity onPress={startMetaConnection} style={[styles.scanButton, {marginTop: 12}]}>
                   <LinearGradient
-                    colors={['#6366F1', '#8B5CF6']}
+                    colors={['#FFFFFF', 'rgba(255, 255, 255, 0.15)']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.scanButtonGradient}
@@ -2224,16 +2366,78 @@ export default function BLEConnectionScreen() {
                   Stream live video from your glasses
                 </Text>
 
-                <TouchableOpacity onPress={startMetaStreaming} style={styles.sendTestButton}>
-                  <LinearGradient
-                    colors={['#6366F1', '#8B5CF6']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.sendTestButtonGradient}
-                  >
-                    <Text style={styles.sendTestButtonText}>📹 Start Streaming</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                {!metaStreaming && (
+                  <View>
+                    {/* Auto-record toggle */}
+                    <TouchableOpacity
+                      onPress={() => setAutoRecordOnStream(!autoRecordOnStream)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: autoRecordOnStream ? 'rgba(48, 209, 88, 0.1)' : 'rgba(255, 255, 255, 0.06)',
+                        padding: 12,
+                        borderRadius: 8,
+                        marginBottom: 16,
+                        borderWidth: 1,
+                        borderColor: autoRecordOnStream ? '#30D158' : 'rgba(255, 255, 255, 0.08)',
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 4,
+                          backgroundColor: autoRecordOnStream ? '#30D158' : '#636366',
+                          marginRight: 12,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {autoRecordOnStream && <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' }}>✓</Text>}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#F0F0F5', marginBottom: 2 }}>
+                          Auto-start recording
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#8E8E93' }}>
+                          Automatically record video + audio when streaming starts
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={startMetaStreaming} style={styles.sendTestButton}>
+                      <LinearGradient
+                        colors={['#FFFFFF', 'rgba(255, 255, 255, 0.15)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.sendTestButtonGradient}
+                      >
+                        <Text style={styles.sendTestButtonText}>📹 Start Streaming</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {metaStreaming && (
+                  <View>
+                    <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.06)', padding: 12, borderRadius: 8, marginBottom: 12 }}>
+                      <Text style={[styles.infoText, { color: '#FFFFFF', textAlign: 'center' }]}>
+                        📹 Streaming active - video preview is fullscreen
+                      </Text>
+                    </View>
+
+                    {lastRecordedVideo && (
+                      <View style={{ backgroundColor: 'rgba(48, 209, 88, 0.1)', padding: 12, borderRadius: 8, marginBottom: 12 }}>
+                        <Text style={[styles.infoText, { color: '#30D158', fontWeight: '600', marginBottom: 4 }]}>
+                          ✅ Last recording saved to Photos
+                        </Text>
+                        <Text style={[styles.infoText, { fontSize: 12 }]}>
+                          {lastRecordedVideo.frameCount} frames • {lastRecordedVideo.duration.toFixed(1)}s
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
             )}
           </View>
@@ -2245,12 +2449,12 @@ export default function BLEConnectionScreen() {
   // Render BLE UI for Even Realities G1
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#E0E7FF', '#EDE9FE']}
+      colors={['#14141F', '#0F0F18', '#0D0D12']}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
       style={styles.container}
     >
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
       {/* Header */}
       <View style={styles.header}>
@@ -2327,7 +2531,7 @@ export default function BLEConnectionScreen() {
                     Fully: {connectionState.isFullyConnected ? '✓' : '✗'}
                   </Text>
                   {connectionState.isFullyConnected && (
-                    <Text style={[styles.debugText, { color: '#10B981', marginTop: 4 }]}>
+                    <Text style={[styles.debugText, { color: '#30D158', marginTop: 4 }]}>
                       🎉 Both arms connected! Scroll down for test message button.
                     </Text>
                   )}
@@ -2335,13 +2539,13 @@ export default function BLEConnectionScreen() {
                   {(batteryStatus.caseBattery !== null || batteryStatus.glassesState) && (
                     <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(99, 102, 241, 0.2)' }}>
                       {batteryStatus.caseBattery !== null && (
-                        <Text style={[styles.debugText, { color: '#6366F1' }]}>
+                        <Text style={[styles.debugText, { color: '#FFFFFF' }]}>
                           🔋 Case Battery: {batteryStatus.caseBattery}%
                         </Text>
                       )}
                       {batteryStatus.glassesState && (
                         <Text style={[styles.debugText, {
-                          color: batteryStatus.glassesState === 'on' ? '#10B981' : '#EF4444',
+                          color: batteryStatus.glassesState === 'on' ? '#30D158' : '#FF453A',
                           marginTop: 4
                         }]}>
                           👓 Glasses: {batteryStatus.glassesState.toUpperCase()}
@@ -2353,7 +2557,7 @@ export default function BLEConnectionScreen() {
               )}
               {/* Show offline status message when glasses are off */}
               {batteryStatus.glassesState === 'off' && (
-                <Text style={[styles.debugText, { color: '#EF4444' }]}>
+                <Text style={[styles.debugText, { color: '#FF453A' }]}>
                   👓 Status: OFFLINE (Turn on glasses to connect)
                 </Text>
               )}
@@ -2384,7 +2588,7 @@ export default function BLEConnectionScreen() {
                   value={testMessage}
                   onChangeText={setTestMessage}
                   placeholder="Enter message..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#636366"
                 />
                 <TouchableOpacity
                   onPress={sendTestMessage}
@@ -2392,7 +2596,7 @@ export default function BLEConnectionScreen() {
                   style={styles.sendTestButton}
                 >
                   <LinearGradient
-                    colors={['#6366F1', '#8B5CF6']}
+                    colors={['#FFFFFF', 'rgba(255, 255, 255, 0.15)']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={[
@@ -2413,7 +2617,7 @@ export default function BLEConnectionScreen() {
                   onPress={clearDisplays}
                   style={[styles.sendTestButton, { marginTop: 12 }]}
                 >
-                  <View style={[styles.sendTestButtonGradient, { backgroundColor: '#EF4444' }]}>
+                  <View style={[styles.sendTestButtonGradient, { backgroundColor: '#FF453A' }]}>
                     <Text style={styles.sendTestButtonText}>Clear Displays</Text>
                   </View>
                 </TouchableOpacity>
@@ -2446,7 +2650,7 @@ export default function BLEConnectionScreen() {
 
         {!initialized && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6366F1" />
+            <ActivityIndicator size="large" color="#FFFFFF" />
             <Text style={styles.loadingText}>Initializing Bluetooth...</Text>
           </View>
         )}
@@ -2462,7 +2666,7 @@ export default function BLEConnectionScreen() {
             {!scanning && !connecting && (
               <TouchableOpacity onPress={startScan} style={styles.scanButton}>
                 <LinearGradient
-                  colors={['#6366F1', '#8B5CF6']}
+                  colors={['#FFFFFF', 'rgba(255, 255, 255, 0.15)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.scanButtonGradient}
@@ -2476,7 +2680,7 @@ export default function BLEConnectionScreen() {
 
             {(scanning || connecting) && (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#6366F1" />
+                <ActivityIndicator size="large" color="#FFFFFF" />
                 <Text style={styles.loadingText}>
                   {scanning ? 'Scanning for devices...' : 'Connecting...'}
                 </Text>
@@ -2547,7 +2751,7 @@ export default function BLEConnectionScreen() {
                           </View>
                         </View>
                         {connecting && (
-                          <ActivityIndicator size="small" color="#6366F1" />
+                          <ActivityIndicator size="small" color="#FFFFFF" />
                         )}
                       </View>
                     </TouchableOpacity>
@@ -2578,13 +2782,13 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 16,
-    color: '#6366F1',
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#F0F0F5',
     flex: 1,
   },
   scrollView: {
@@ -2598,14 +2802,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: '#6366F1',
+    borderColor: '#FFFFFF',
     padding: 20,
     marginBottom: 24,
   },
   statusCardTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#F0F0F5',
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -2625,12 +2829,12 @@ const styles = StyleSheet.create({
   },
   armCardConnected: {
     backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    borderColor: '#4CAF50',
+    borderColor: '#30D158',
   },
   armLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#F0F0F5',
     marginBottom: 8,
   },
   connectedIndicator: {
@@ -2642,23 +2846,23 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#30D158',
     marginRight: 6,
   },
   connectedText: {
     fontSize: 12,
-    color: '#4CAF50',
+    color: '#30D158',
     fontWeight: '600',
   },
   armDeviceName: {
     fontSize: 11,
-    color: '#6B7280',
+    color: '#8E8E93',
     marginBottom: 8,
     textAlign: 'center',
   },
   armNotConnected: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: '#636366',
     fontStyle: 'italic',
   },
   testMessageSection: {
@@ -2670,7 +2874,7 @@ const styles = StyleSheet.create({
   testMessageLabel: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#F0F0F5',
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -2686,12 +2890,12 @@ const styles = StyleSheet.create({
   },
   targetArmsLabel: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#8E8E93',
     fontWeight: '600',
     marginRight: 8,
   },
   targetArmBadge: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#FFFFFF',
     borderRadius: 4,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -2709,7 +2913,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
-    color: '#1F2937',
+    color: '#F0F0F5',
     marginBottom: 12,
   },
   sendTestButton: {
@@ -2737,7 +2941,7 @@ const styles = StyleSheet.create({
   logTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#8E8E93',
     marginBottom: 8,
   },
   logScroll: {
@@ -2748,7 +2952,7 @@ const styles = StyleSheet.create({
   },
   logText: {
     fontSize: 11,
-    color: '#374151',
+    color: '#8E8E93',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     marginBottom: 4,
   },
@@ -2766,7 +2970,7 @@ const styles = StyleSheet.create({
   },
   instructions: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#8E8E93',
     marginBottom: 24,
     textAlign: 'center',
   },
@@ -2802,20 +3006,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#6B7280',
+    color: '#8E8E93',
     fontSize: 14,
     marginTop: 12,
   },
   devicesTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#F0F0F5',
     marginBottom: 8,
     marginTop: 8,
   },
   devicesSubtitle: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#8E8E93',
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -2857,17 +3061,17 @@ const styles = StyleSheet.create({
   deviceCardName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#F0F0F5',
     marginBottom: 4,
   },
   deviceCardId: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#8E8E93',
     marginBottom: 2,
   },
   deviceCardRssi: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#8E8E93',
   },
   deviceNameRow: {
     flexDirection: 'row',
@@ -2875,7 +3079,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   evenDeviceCard: {
-    borderColor: '#8B5CF6',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     borderWidth: 2,
     backgroundColor: 'rgba(145, 105, 205, 0.14)',
   },
@@ -2898,7 +3102,7 @@ const styles = StyleSheet.create({
   },
   deviceCardDistance: {
     fontSize: 12,
-    color: '#6366F1',
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   videoContainer: {
@@ -2916,7 +3120,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#8E8E93',
     textAlign: 'center',
   },
   fullscreenContainer: {

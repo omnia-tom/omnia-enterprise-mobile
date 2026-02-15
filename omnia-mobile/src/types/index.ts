@@ -1,5 +1,7 @@
 import { User } from 'firebase/auth';
 
+export * from './tasks';
+
 // Navigation types
 export type RootStackParamList = {
   Login: undefined;
@@ -17,12 +19,15 @@ export type RootStackParamList = {
     deviceName: string;
     personaId: string;
   };
+  TaskDetail: { taskId: string };
+  Recording: { taskId: string };
+  Account: undefined;
 };
 
 // Tab Navigator types
 export type TabParamList = {
-  Home: undefined;
-  PickPack: undefined;
+  Tasks: undefined;
+  Submissions: undefined;
 };
 
 // Auth types
