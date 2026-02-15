@@ -6,6 +6,7 @@ import Vision
 import AVFoundation
 import Photos
 import Speech
+import VideoToolbox
 
 @objc(MetaWearablesModule)
 class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
@@ -28,6 +29,9 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
 
   // Frame counter (for logging)
   private var frameCounter: Int = 0
+
+  // Background queue for frame extraction (frees main thread)
+  private let frameExtractionQueue = DispatchQueue(label: "com.spectask.frameExtraction", qos: .userInteractive)
 
   // Track announced UPC codes to prevent re-announcing the same code
   private var announcedUPCs: Set<String> = []
@@ -481,22 +485,40 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
 
       print("[MetaWearables] Subscribing to video frame publisher...")
       videoFrameListenerToken = streamSession?.videoFramePublisher.listen { [weak self] videoFrame in
-        Task { @MainActor [weak self] in
+        guard let self = self else { return }
+
+        self.frameExtractionQueue.async { [weak self] in
           guard let self = self else { return }
 
           self.frameCounter += 1
+          let frameNum = self.frameCounter
 
-          if self.frameCounter == 1 || self.frameCounter % 100 == 0 {
-            print("[MetaWearables] Video frame #\(self.frameCounter) received")
+          if frameNum == 1 || frameNum % 100 == 0 {
+            print("[MetaWearables] Video frame #\(frameNum) received")
           }
 
+          let timestamp = Date().timeIntervalSince1970
+
+          // Fast path: extract CVPixelBuffer (zero-copy) + CGImage from sample buffer
+          if let pixelBuffer = CMSampleBufferGetImageBuffer(videoFrame.sampleBuffer) {
+            var cgImage: CGImage?
+            let vtStatus = VTCreateCGImageFromCVPixelBuffer(pixelBuffer, options: nil, imageOut: &cgImage)
+
+            if vtStatus == noErr, let cgImage = cgImage {
+              let width = CVPixelBufferGetWidth(pixelBuffer)
+              let height = CVPixelBufferGetHeight(pixelBuffer)
+
+              FrameDistributor.shared.distributeFrame(cgImage, pixelBuffer: pixelBuffer, timestamp: timestamp, width: width, height: height)
+              return
+            }
+          }
+
+          // Fallback: use makeUIImage() if CMSampleBufferGetImageBuffer returns nil
           if let image = videoFrame.makeUIImage(), let cgImage = image.cgImage {
-            let timestamp = Date().timeIntervalSince1970
             let width = Int(image.size.width)
             let height = Int(image.size.height)
 
-            // Push to FrameDistributor — handles display, ML, recording, and JS metadata
-            FrameDistributor.shared.distributeFrame(cgImage, timestamp: timestamp, width: width, height: height)
+            FrameDistributor.shared.distributeFrame(cgImage, pixelBuffer: nil, timestamp: timestamp, width: width, height: height)
           }
         }
       }
@@ -1143,9 +1165,13 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
           validator.configure(stepIndex: stepIdx, description: desc)
           validator.isEnabled = true
 
-          // Disable barcode to free resources for VLM (hand pose stays on)
+          // Disable barcode to free resources for VLM
           self.mlPipeline?.isBarcodeEnabled = false
-          print("[MetaWearables] Disabled barcode detection for VLM performance")
+
+          // Strip down to bare-bones: stop stats emission, throttle JS metadata
+          FrameDistributor.shared.stopStatsEmission()
+          FrameDistributor.shared.setJSMetadataRate(everyNFrames: 150)  // ~1 event per 10s
+          print("[MetaWearables] Stripped processes for VLM: barcode off, stats off, metadata throttled")
 
           print("[MetaWearables] Step validation started for step \(stepIdx): \(desc)")
           resolve(["success": true])
@@ -1165,9 +1191,11 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         self.mlPipeline?.removeConsumer(named: validator.modelName)
         self.stepValidator = nil
       }
-      // Re-enable barcode detection
+      // Restore processes
       self.mlPipeline?.isBarcodeEnabled = true
-      print("[MetaWearables] Re-enabled barcode detection")
+      FrameDistributor.shared.startStatsEmission()
+      FrameDistributor.shared.setJSMetadataRate(everyNFrames: 1)
+      print("[MetaWearables] Restored barcode, stats, and metadata rate")
 
       FastVLMService.shared.unloadModel()
       print("[MetaWearables] Step validation stopped")

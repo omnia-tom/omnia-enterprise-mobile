@@ -1,5 +1,6 @@
 import AVFoundation
 import Photos
+import VideoToolbox
 
 /// Writes video frames to disk in real-time using AVAssetWriter.
 /// Memory usage is O(1) — a single reusable CVPixelBuffer instead of storing thousands of UIImages.
@@ -153,6 +154,73 @@ class StreamingRecorder {
         }
       } else {
         self.droppedFrameCount += 1
+      }
+    }
+  }
+
+  // MARK: - Write Frame from CVPixelBuffer (zero-copy fast path)
+
+  /// Appends a CVPixelBuffer directly when format and dimensions match. Falls back to CGImage conversion otherwise.
+  func writeFrameFromPixelBuffer(_ srcBuffer: CVPixelBuffer, timestamp: TimeInterval) {
+    guard isCurrentlyRecording else { return }
+
+    writerQueue.async { [weak self] in
+      guard let self = self,
+            let writer = self.assetWriter,
+            let input = self.videoInput,
+            let adaptor = self.pixelBufferAdaptor,
+            writer.status == .writing else { return }
+
+      // Start session on first frame
+      if !self.sessionStarted {
+        let cmTime = CMTime(seconds: timestamp, preferredTimescale: 600)
+        writer.startSession(atSourceTime: cmTime)
+        self.sessionStarted = true
+      }
+
+      guard input.isReadyForMoreMediaData else {
+        self.droppedFrameCount += 1
+        return
+      }
+
+      let presentationTime = CMTime(seconds: timestamp, preferredTimescale: 600)
+
+      // Check if format and dimensions match — append directly if BGRA and correct size
+      let srcFormat = CVPixelBufferGetPixelFormatType(srcBuffer)
+      let srcWidth = CVPixelBufferGetWidth(srcBuffer)
+      let srcHeight = CVPixelBufferGetHeight(srcBuffer)
+
+      if srcFormat == kCVPixelFormatType_32BGRA && srcWidth == self.videoWidth && srcHeight == self.videoHeight {
+        // Direct append — AVAssetWriter copies internally per Apple docs
+        if adaptor.append(srcBuffer, withPresentationTime: presentationTime) {
+          self.frameCount += 1
+          if self.frameCount % 100 == 0 {
+            let duration = Date().timeIntervalSince1970 - self.startTime
+            print("[StreamingRecorder] \(self.frameCount) frames written (\(String(format: "%.1f", duration))s), \(self.droppedFrameCount) dropped")
+          }
+        } else {
+          self.droppedFrameCount += 1
+        }
+      } else {
+        // Format mismatch (e.g. YUV): convert via CGImage fallback
+        var cgImage: CGImage?
+        let vtStatus = VTCreateCGImageFromCVPixelBuffer(srcBuffer, options: nil, imageOut: &cgImage)
+
+        guard vtStatus == noErr, let image = cgImage,
+              let pixelBuffer = self.createPixelBuffer(from: image) else {
+          self.droppedFrameCount += 1
+          return
+        }
+
+        if adaptor.append(pixelBuffer, withPresentationTime: presentationTime) {
+          self.frameCount += 1
+          if self.frameCount % 100 == 0 {
+            let duration = Date().timeIntervalSince1970 - self.startTime
+            print("[StreamingRecorder] \(self.frameCount) frames written (\(String(format: "%.1f", duration))s), \(self.droppedFrameCount) dropped")
+          }
+        } else {
+          self.droppedFrameCount += 1
+        }
       }
     }
   }

@@ -54,12 +54,12 @@ final class StepValidator: MLModelConsumer {
           // Pre-process: fix aspect ratio, center-crop, upscale
           let processed = self.preprocessForVLM(cgImage)
 
-          // Save first debug frame to Photos for inspection
-          if self.debugFramesSaved < 1 {
-            self.debugFramesSaved += 1
-            self.saveDebugFrame(processed)
-            print("[StepValidator] Raw: \(cgImage.width)x\(cgImage.height) → Processed: \(processed.width)x\(processed.height)")
-          }
+          // DEBUG: uncomment to save processed frame to Photos for inspection
+          // if self.debugFramesSaved < 1 {
+          //   self.debugFramesSaved += 1
+          //   self.saveDebugFrame(processed)
+          //   print("[StepValidator] Raw: \(cgImage.width)x\(cgImage.height) → Processed: \(processed.width)x\(processed.height)")
+          // }
 
           let startTime = CFAbsoluteTimeGetCurrent()
           let response = try await FastVLMService.shared.predict(image: processed, prompt: vlmPrompt)

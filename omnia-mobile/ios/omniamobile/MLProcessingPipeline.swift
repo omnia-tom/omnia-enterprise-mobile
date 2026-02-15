@@ -55,14 +55,14 @@ class MLProcessingPipeline {
     if isBarcodeEnabled && frameNumber % barcodeEveryN == 0 && !isBarcodeProcessing {
       isBarcodeProcessing = true
       let cgImage = metadata.cgImage
-      let timestamp = metadata.timestamp
+      let pixelBuffer = metadata.pixelBuffer
       barcodeQueue.async { [weak self] in
         guard let self = self else { return }
         defer { self.isBarcodeProcessing = false }
 
-        // Sharpness check before barcode
+        // Sharpness check before barcode (uses CGImage)
         guard self.isImageSharp(cgImage) else { return }
-        self.detectBarcodes(in: cgImage)
+        self.detectBarcodes(in: cgImage, pixelBuffer: pixelBuffer)
       }
     }
 
@@ -70,13 +70,14 @@ class MLProcessingPipeline {
     if isHandPoseEnabled && frameNumber % handPoseEveryN == 0 && !isHandPoseProcessing {
       isHandPoseProcessing = true
       let cgImage = metadata.cgImage
+      let pixelBuffer = metadata.pixelBuffer
       let timestamp = metadata.timestamp
       let width = metadata.width
       let height = metadata.height
       handPoseQueue.async { [weak self] in
         guard let self = self else { return }
         defer { self.isHandPoseProcessing = false }
-        self.detectHandPose(in: cgImage, timestamp: timestamp, width: width, height: height)
+        self.detectHandPose(in: cgImage, pixelBuffer: pixelBuffer, timestamp: timestamp, width: width, height: height)
       }
     }
 
@@ -115,7 +116,7 @@ class MLProcessingPipeline {
 
   // MARK: - Barcode Detection
 
-  private func detectBarcodes(in cgImage: CGImage) {
+  private func detectBarcodes(in cgImage: CGImage, pixelBuffer: CVPixelBuffer?) {
     let request = VNDetectBarcodesRequest { [weak self] request, error in
       guard let self = self else { return }
 
@@ -170,7 +171,14 @@ class MLProcessingPipeline {
     request.regionOfInterest = CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
     request.symbologies = [.upce, .ean8, .ean13]
 
-    let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+    // Use CVPixelBuffer directly when available (zero-copy to Vision/ANE)
+    let handler: VNImageRequestHandler
+    if let pb = pixelBuffer {
+      handler = VNImageRequestHandler(cvPixelBuffer: pb, options: [:])
+    } else {
+      handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+    }
+
     do {
       try handler.perform([request])
     } catch {
@@ -180,11 +188,17 @@ class MLProcessingPipeline {
 
   // MARK: - Hand Pose Detection
 
-  private func detectHandPose(in cgImage: CGImage, timestamp: TimeInterval, width: Int, height: Int) {
+  private func detectHandPose(in cgImage: CGImage, pixelBuffer: CVPixelBuffer?, timestamp: TimeInterval, width: Int, height: Int) {
     let request = VNDetectHumanHandPoseRequest()
     request.maximumHandCount = 2
 
-    let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+    // Use CVPixelBuffer directly when available (zero-copy to Vision/ANE)
+    let handler: VNImageRequestHandler
+    if let pb = pixelBuffer {
+      handler = VNImageRequestHandler(cvPixelBuffer: pb, options: [:])
+    } else {
+      handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+    }
     do {
       try handler.perform([request])
     } catch {
