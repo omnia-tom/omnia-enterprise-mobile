@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import CoreImage
 import React
 
 /// MLModelConsumer that validates recording steps on-demand (single-shot).
@@ -25,6 +26,7 @@ final class StepValidator: MLModelConsumer {
   private var isProcessing = false
   private var pendingCheck = false  // single-shot flag
   private let validationQueue = DispatchQueue(label: "com.spectask.stepValidator", qos: .userInitiated)
+  private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
   var onCheckComplete: (() -> Void)?  // Called on main thread when check finishes
 
   // MARK: - MLModelConsumer
@@ -61,8 +63,10 @@ final class StepValidator: MLModelConsumer {
           print("[StepValidator]   Image: \(cgImage.width)x\(cgImage.height)")
           print("[StepValidator]   Looking for: \(prompt)")
 
+          let sharpened = self.sharpenForVLM(cgImage)
+
           let startTime = CFAbsoluteTimeGetCurrent()
-          let response = try await FastVLMService.shared.predict(image: cgImage, prompt: vlmPrompt)
+          let response = try await FastVLMService.shared.predict(image: sharpened, prompt: vlmPrompt)
           let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
 
           print("[StepValidator]   VLM says: \"\(response)\" (\(elapsedMs)ms)")
@@ -106,6 +110,21 @@ final class StepValidator: MLModelConsumer {
     currentPrompt = ""
     pendingCheck = false
     isEnabled = false
+  }
+
+  // MARK: - Image Sharpening
+
+  /// Apply luminance sharpening to improve VLM text recognition accuracy.
+  private func sharpenForVLM(_ cgImage: CGImage) -> CGImage {
+    let ci = CIImage(cgImage: cgImage)
+    guard let filter = CIFilter(name: "CISharpenLuminance") else { return cgImage }
+    filter.setValue(ci, forKey: kCIInputImageKey)
+    filter.setValue(0.6, forKey: kCIInputSharpnessKey)
+    guard let output = filter.outputImage,
+          let result = Self.ciContext.createCGImage(output, from: output.extent) else {
+      return cgImage
+    }
+    return result
   }
 
   // MARK: - Event Emission

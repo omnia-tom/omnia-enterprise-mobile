@@ -13,7 +13,7 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { typography, spacing, useThemeColors } from '../theme';
 import { RootStackParamList, Task } from '../types';
-import { getTaskById, formatCents } from '../services/taskData';
+import { getTaskById } from '../services/taskData';
 import { metaWearablesService } from '../services/metaWearables';
 import GlassCard from '../components/GlassCard';
 import MeshBackground from '../components/MeshBackground';
@@ -114,12 +114,7 @@ export default function TaskDetailScreen() {
         {/* Info row */}
         <GlassCard style={styles.infoRow}>
           <View style={styles.infoCol}>
-            <Text style={[styles.infoValue, { color: colors.earning }]}>{formatCents(task.payoutCents)}</Text>
-            <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Payout</Text>
-          </View>
-          <View style={[styles.infoDivider, { backgroundColor: colors.separator }]} />
-          <View style={styles.infoCol}>
-            <Text style={[styles.infoValue, { color: colors.earning }]}>{task.requiredDuration.minSeconds / 60}-{task.requiredDuration.maxSeconds / 60} min</Text>
+            <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{task.requiredDuration.minSeconds / 60}-{task.requiredDuration.maxSeconds / 60} min</Text>
             <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Duration</Text>
           </View>
           <View style={[styles.infoDivider, { backgroundColor: colors.separator }]} />

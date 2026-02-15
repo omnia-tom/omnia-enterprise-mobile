@@ -85,14 +85,14 @@ export default function LoginScreen() {
             <View style={styles.logoBadge}>
               <Text style={styles.logo}>SpecTask</Text>
             </View>
-            <Text style={styles.subtitle}>Earn by doing tasks</Text>
+            <Text style={styles.subtitle}>Learn by doing tasks</Text>
           </View>
 
           {/* Login Card */}
           <GlassCard style={styles.card}>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.description}>
-              Sign in to start earning
+              Sign in to get started
             </Text>
 
             {/* Email Input */}

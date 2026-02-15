@@ -17,14 +17,94 @@ import { auth } from '../services/firebase';
 import { typography, spacing, useThemeColors } from '../theme';
 import { RootStackParamList, Task, Submission } from '../types';
 import { getTaskById, addSubmission } from '../services/taskData';
-import { metaWearablesService, MetaVideoFrame, HandPoseData, VoiceCommand, StepValidation } from '../services/metaWearables';
+import { metaWearablesService, MetaVideoFrame, HandPoseData, VoiceCommand, StepValidation, VLMModelInfo } from '../services/metaWearables';
 import HandPoseOverlay from '../components/HandPoseOverlay';
 import NativeFrameView from '../components/NativeFrameView';
+import MeshBackground from '../components/MeshBackground';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Recording'>;
 type Route = RouteProp<RootStackParamList, 'Recording'>;
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const CONFETTI_COLORS = ['#30D158', '#FFFFFF', '#5E5CE6', '#FF9F0A', '#64D2FF', '#BF5AF2', '#FF6482'];
+const CONFETTI_COUNT = 60;
+
+function ConfettiOverlay() {
+  const pieces = useRef(
+    Array.from({ length: CONFETTI_COUNT }, () => {
+      const size = 5 + Math.random() * 9;
+      const isRect = Math.random() > 0.4;
+      return {
+        x: SCREEN_WIDTH * 0.05 + Math.random() * SCREEN_WIDTH * 0.9,
+        width: size,
+        height: isRect ? size * (0.4 + Math.random() * 0.3) : size,
+        color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+        borderRadius: isRect ? 1.5 : size / 2,
+        delay: Math.random() * 800,
+        duration: 2500 + Math.random() * 2000,
+        drift: (Math.random() - 0.5) * 120,
+        startRotation: Math.random() * 360,
+        endRotation: 360 + Math.random() * 720,
+        anim: new Animated.Value(0),
+      };
+    })
+  ).current;
+
+  useEffect(() => {
+    pieces.forEach(p => {
+      Animated.timing(p.anim, {
+        toValue: 1,
+        duration: p.duration,
+        delay: p.delay,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, []);
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {pieces.map((p, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: p.x,
+            top: -20,
+            width: p.width,
+            height: p.height,
+            backgroundColor: p.color,
+            borderRadius: p.borderRadius,
+            transform: [
+              {
+                translateY: p.anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, SCREEN_HEIGHT + 60],
+                }),
+              },
+              {
+                translateX: p.anim.interpolate({
+                  inputRange: [0, 0.3, 0.7, 1],
+                  outputRange: [0, p.drift * 0.4, p.drift, p.drift * 0.8],
+                }),
+              },
+              {
+                rotate: p.anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [`${p.startRotation}deg`, `${p.endRotation}deg`],
+                }),
+              },
+            ],
+            opacity: p.anim.interpolate({
+              inputRange: [0, 0.1, 0.75, 1],
+              outputRange: [0, 1, 1, 0],
+            }),
+          }}
+        />
+      ))}
+    </View>
+  );
+}
 
 type RecordingPhase = 'preview' | 'instructions' | 'recording' | 'review';
 
@@ -50,11 +130,15 @@ export default function RecordingScreen() {
   const [vlmModelState, setVlmModelState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [vlmModelError, setVlmModelError] = useState<string | null>(null);
   const [vlmLog, setVlmLog] = useState<Array<{ time: string; msg: string; color?: string }>>([]);
+  const [vlmModels, setVlmModels] = useState<VLMModelInfo[]>([]);
+  const [vlmCurrentModel, setVlmCurrentModel] = useState<string>('qwen2vl2b');
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [modelSwitching, setModelSwitching] = useState(false);
 
   const addVlmLog = (msg: string, color?: string) => {
     const now = new Date();
     const time = `${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-    setVlmLog(prev => [...prev.slice(-19), { time, msg, color }]);
+    setVlmLog(prev => [...prev.slice(-4), { time, msg, color }]);
     setTimeout(() => vlmLogScrollRef.current?.scrollToEnd({ animated: true }), 50);
   };
 
@@ -71,6 +155,7 @@ export default function RecordingScreen() {
   const startRecordingRef = useRef<() => void>(() => {});
   const stopRecordingRef = useRef<() => void>(() => {});
   const vlmLogScrollRef = useRef<ScrollView>(null);
+  const reviewCheckScale = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadTask();
@@ -82,13 +167,34 @@ export default function RecordingScreen() {
     };
   }, []);
 
+  // Animate checkmark when entering review
+  useEffect(() => {
+    if (phase === 'review') {
+      reviewCheckScale.setValue(0);
+      Animated.spring(reviewCheckScale, {
+        toValue: 1,
+        tension: 40,
+        friction: 5,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [phase]);
+
   const preloadModel = async () => {
+    // Fetch available models
+    try {
+      const { models, current } = await metaWearablesService.getAvailableVLMModels();
+      if (models.length > 0) setVlmModels(models);
+      if (current) setVlmCurrentModel(current);
+    } catch {}
+
     setVlmModelState('loading');
-    addVlmLog('Loading FastVLM model...', '#FF9F0A');
+    const modelLabel = vlmModels.find(m => m.key === vlmCurrentModel)?.label || 'FastVLM';
+    addVlmLog(`Loading ${modelLabel}...`, '#FF9F0A');
     try {
       await metaWearablesService.preloadVLM();
       setVlmModelState('ready');
-      addVlmLog('FastVLM model loaded OK', '#30D158');
+      addVlmLog(`${modelLabel} loaded OK`, '#30D158');
     } catch (err: any) {
       setVlmModelState('error');
       setVlmModelError(err?.message || 'Unknown error');
@@ -105,7 +211,7 @@ export default function RecordingScreen() {
   const startStream = async () => {
     try {
       await metaWearablesService.startVideoStream();
-      await metaWearablesService.setHandPoseEnabled(true);
+      await metaWearablesService.setHandPoseEnabled(false);
 
       metaWearablesService.addEventListener('videoFrame', handleVideoFrame);
       metaWearablesService.addEventListener('handPoseDetected', handleHandPose);
@@ -171,26 +277,16 @@ export default function RecordingScreen() {
   const handleStepValidation = useCallback((data: StepValidation) => {
     setVlmChecking(data.checking);
     if (data.checking && !data.response) {
-      addVlmLog(`Step ${data.stepIndex}: analyzing frame...`, '#FF9F0A');
+      addVlmLog('Analyzing image...', '#FF9F0A');
     }
     if (data.response) {
-      const isYes = data.response.toUpperCase().includes('YES');
-      const color = data.response.startsWith('ERROR') ? '#FF453A' : data.validated ? '#30D158' : isYes ? '#FF9F0A' : '#8E8E93';
-      addVlmLog(`Step ${data.stepIndex}: "${data.response}" ${data.validated ? '(VALIDATED)' : ''}`, color);
-    }
-    if (data.response || data.prompt) {
+      const isError = data.response.startsWith('ERROR');
+      const color = isError ? '#FF453A' : '#30D158';
+      addVlmLog(`VLM: ${data.response}`, color);
       setVlmStatus({
-        response: data.response || '...',
+        response: data.response,
         prompt: data.prompt || '',
-        validated: data.validated,
-      });
-    }
-    if (data.validated) {
-      setStepValidations(prev => {
-        const next = [...prev];
-        next[data.stepIndex] = true;
-        stepValidationsRef.current = next;
-        return next;
+        validated: false,
       });
     }
   }, []);
@@ -230,7 +326,7 @@ export default function RecordingScreen() {
       setPhase('recording');
       setElapsedSeconds(0);
       setCurrentStep(0);
-      addVlmLog(`Recording started. Model: ${vlmModelState}`);
+      addVlmLog(`Recording started. Model: ${vlmModels.find(m => m.key === vlmCurrentModel)?.label || vlmCurrentModel}`);
 
       // Initialize step validations array
       const validArr = new Array(task?.instructions.length || 0).fill(false);
@@ -310,30 +406,25 @@ export default function RecordingScreen() {
       "We'll guide you through the steps. Say 'next' for the next step, 'repeat' to hear again, or 'done' when complete."
     );
 
-    // Step-by-step with voice commands + VLM validation
+    // Step-by-step with voice commands + continuous VLM
     for (let i = 0; i < task.instructions.length; i++) {
       if (!isRecordingRef.current) break;
       audioStepRef.current = i;
       setCurrentStep(i);
 
-      // Start VLM validation for this step
-      addVlmLog(`Starting validation for step ${i}: "${task.instructions[i].substring(0, 40)}..."`);
-      metaWearablesService.startStepValidation(i, task.instructions[i]).then(() => {
-        addVlmLog(`Step ${i} validation started OK`, '#30D158');
-      }).catch((err) => {
-        console.warn('[RecordingScreen] VLM startStepValidation error:', err);
-        addVlmLog(`Step ${i} validation FAILED: ${err?.message || err}`, '#FF453A');
-        setVlmStatus({ response: `ERROR: ${err?.message || err}`, prompt: task.instructions[i], validated: false });
+      // Start continuous VLM evaluation for this step
+      metaWearablesService.startStepValidation(i, task.instructions[i]).catch((err) => {
+        addVlmLog(`VLM setup error: ${err?.message || err}`, '#FF453A');
       });
 
       await speakAndResumeVoice(task.instructions[i]);
 
       if (!isRecordingRef.current) break;
 
-      // Wait for voice command or auto-advance after 8s
+      // Wait for voice command OR auto-advance after 10 seconds
       const cmd = await Promise.race([
         waitForVoiceCommand(),
-        new Promise<string>(resolve => setTimeout(() => resolve('timeout'), 8000)),
+        new Promise<string>(resolve => setTimeout(() => resolve('timeout'), 12000)),
       ]);
 
       if (cmd === 'repeat') {
@@ -344,7 +435,13 @@ export default function RecordingScreen() {
         stopRecording();
         return;
       }
-      // 'next' or 'timeout' → proceed to next step
+      if (cmd === 'timeout' || cmd === 'next') {
+        if (i + 1 < task.instructions.length) {
+          addVlmLog(`Step ${i + 1} complete → Next: "${task.instructions[i + 1].substring(0, 45)}"`, '#FFFFFF');
+        } else {
+          addVlmLog('All steps complete', '#30D158');
+        }
+      }
     }
 
     // All steps done — notify
@@ -387,6 +484,29 @@ export default function RecordingScreen() {
   startRecordingRef.current = startRecording;
   stopRecordingRef.current = stopRecording;
 
+  const handleSwitchModel = async (key: string) => {
+    if (key === vlmCurrentModel) {
+      setShowModelPicker(false);
+      return;
+    }
+    setShowModelPicker(false);
+    setModelSwitching(true);
+    setVlmModelState('loading');
+    const label = vlmModels.find(m => m.key === key)?.label || key;
+    addVlmLog(`Switching to ${label}...`, '#FF9F0A');
+    try {
+      await metaWearablesService.setVLMModel(key);
+      setVlmCurrentModel(key);
+      setVlmModelState('ready');
+      addVlmLog(`${label} loaded OK`, '#30D158');
+    } catch (err: any) {
+      setVlmModelState('error');
+      setVlmModelError(err?.message || 'Unknown error');
+      addVlmLog(`Switch failed: ${err?.message || err}`, '#FF453A');
+    }
+    setModelSwitching(false);
+  };
+
   const handleSubmit = async () => {
     if (!task || !recordedVideo) return;
     const user = auth.currentUser;
@@ -401,7 +521,6 @@ export default function RecordingScreen() {
       videoFilePath: recordedVideo.filePath,
       duration: recordedVideo.duration,
       frameCount: recordedVideo.frameCount,
-      payoutCents: task.payoutCents,
       submittedAt: new Date(),
     };
 
@@ -429,36 +548,84 @@ export default function RecordingScreen() {
   const handsDetected = handPoseData && handPoseData.hands.length > 0;
   const minDurationMet = task ? elapsedSeconds >= task.requiredDuration.minSeconds : false;
 
-  // Review phase
+  // Review / Completion phase
   if (phase === 'review' && recordedVideo) {
+    const totalSteps = task?.instructions.length || 0;
+
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.container}>
         <StatusBar style={theme.statusBarStyle} />
-        <View style={[styles.reviewContainer, { backgroundColor: colors.background }]}>
-          <View style={styles.reviewThumbnail}>
-            <View style={styles.reviewOverlay}>
-              <Text style={styles.reviewDuration}>{formatTime(Math.round(recordedVideo.duration))}</Text>
-              <Text style={styles.reviewFrames}>{recordedVideo.frameCount} frames</Text>
+        <MeshBackground variant="balanced" />
+        <ConfettiOverlay />
+
+        <ScrollView
+          contentContainerStyle={[
+            styles.reviewScroll,
+            { paddingTop: insets.top + 32, paddingBottom: Math.max(insets.bottom, 20) + 20 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Animated checkmark */}
+          <Animated.View style={[styles.reviewCheckCircle, { transform: [{ scale: reviewCheckScale }] }]}>
+            <Text style={styles.reviewCheckMark}>{'✓'}</Text>
+          </Animated.View>
+
+          <Text style={styles.rvTitle}>Recording Complete</Text>
+          <Text style={styles.rvSubtitle}>{task?.title}</Text>
+
+          {/* Stats row */}
+          <View style={styles.rvStatsRow}>
+            <View style={styles.rvStat}>
+              <Text style={styles.rvStatValue}>{formatTime(Math.round(recordedVideo.duration))}</Text>
+              <Text style={styles.rvStatLabel}>Duration</Text>
+            </View>
+            <View style={styles.rvStatDivider} />
+            <View style={styles.rvStat}>
+              <Text style={styles.rvStatValue}>{recordedVideo.frameCount.toLocaleString()}</Text>
+              <Text style={styles.rvStatLabel}>Frames</Text>
+            </View>
+            <View style={styles.rvStatDivider} />
+            <View style={styles.rvStat}>
+              <Text style={styles.rvStatValue}>{totalSteps}/{totalSteps}</Text>
+              <Text style={styles.rvStatLabel}>Steps</Text>
             </View>
           </View>
 
-          <Text style={[styles.reviewTitle, { color: colors.textPrimary }]}>Recording Complete</Text>
-          <Text style={[styles.reviewSubtitle, { color: colors.textSecondary }]}>{task?.title}</Text>
-          {stepValidations.length > 0 && (
-            <Text style={[styles.reviewValidation, { color: colors.textSecondary }]}>
-              {stepValidations.filter(Boolean).length}/{stepValidations.length} steps verified
-            </Text>
+          {/* Steps breakdown card */}
+          {task && task.instructions.length > 0 && (
+            <View style={styles.rvStepsCard}>
+              <Text style={styles.rvStepsTitle}>Steps Completed</Text>
+              {task.instructions.map((instruction, i) => (
+                <View key={i} style={styles.rvStepRow}>
+                  <View style={styles.rvStepCheck}>
+                    <Text style={styles.rvStepCheckText}>{'✓'}</Text>
+                  </View>
+                  <Text style={styles.rvStepText} numberOfLines={2}>{instruction}</Text>
+                </View>
+              ))}
+            </View>
           )}
 
-          <View style={styles.reviewActions}>
-            <TouchableOpacity style={[styles.reRecordButton, { borderColor: colors.accent }]} onPress={handleReRecord}>
-              <Text style={[styles.reRecordText, { color: colors.accent }]}>Re-record</Text>
+          {/* VLM model used */}
+          {vlmCurrentModel && (
+            <View style={styles.rvModelBadge}>
+              <View style={styles.rvModelDot} />
+              <Text style={styles.rvModelText}>
+                Analyzed with {vlmModels.find(m => m.key === vlmCurrentModel)?.label || vlmCurrentModel}
+              </Text>
+            </View>
+          )}
+
+          {/* Actions */}
+          <View style={styles.rvActions}>
+            <TouchableOpacity style={styles.rvReRecordButton} onPress={handleReRecord}>
+              <Text style={styles.rvReRecordText}>Re-record</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.submitButton, { backgroundColor: colors.accent }]} onPress={handleSubmit} activeOpacity={0.8}>
-              <Text style={styles.submitText}>Submit</Text>
+            <TouchableOpacity style={styles.rvSubmitButton} onPress={handleSubmit} activeOpacity={0.8}>
+              <Text style={styles.rvSubmitText}>Submit Recording</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </View>
     );
   }
@@ -507,7 +674,7 @@ export default function RecordingScreen() {
       {/* VLM + Step info panel (always visible during recording) */}
       {phase === 'recording' && task && (
         <View style={styles.vlmPanel}>
-          {/* Model status row */}
+          {/* Model status row — tap model name to switch */}
           <View style={styles.vlmPanelStatusRow}>
             <View style={[
               styles.vlmBadgeDot,
@@ -518,25 +685,59 @@ export default function RecordingScreen() {
                 '#8E8E93'
               }
             ]} />
-            <Text style={styles.vlmPanelStatusText}>
-              {vlmModelState === 'loading' ? 'FastVLM loading...' :
-               vlmModelState === 'ready' ? 'FastVLM ready' :
-               vlmModelState === 'error' ? `Model error: ${vlmModelError}` :
-               'FastVLM idle'}
-            </Text>
+            <TouchableOpacity
+              onPress={() => setShowModelPicker(!showModelPicker)}
+              disabled={modelSwitching}
+              style={styles.modelNameButton}
+            >
+              <Text style={styles.vlmPanelStatusText}>
+                {vlmModelState === 'loading'
+                  ? `${vlmModels.find(m => m.key === vlmCurrentModel)?.label || 'Model'} loading...`
+                  : vlmModelState === 'ready'
+                  ? `${vlmModels.find(m => m.key === vlmCurrentModel)?.label || 'FastVLM'} ready`
+                  : vlmModelState === 'error'
+                  ? `Error: ${vlmModelError}`
+                  : 'VLM idle'}
+              </Text>
+              <Text style={styles.modelSwitchHint}>{showModelPicker ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
           </View>
+
+          {/* Model picker dropdown */}
+          {showModelPicker && vlmModels.length > 0 && (
+            <View style={styles.modelPickerDropdown}>
+              {vlmModels.map(model => (
+                <TouchableOpacity
+                  key={model.key}
+                  style={[
+                    styles.modelPickerItem,
+                    model.key === vlmCurrentModel && styles.modelPickerItemActive,
+                  ]}
+                  onPress={() => handleSwitchModel(model.key)}
+                >
+                  <Text style={[
+                    styles.modelPickerLabel,
+                    model.key === vlmCurrentModel && styles.modelPickerLabelActive,
+                  ]}>
+                    {model.label}
+                  </Text>
+                  <Text style={styles.modelPickerSize}>{model.size}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           {/* Step dots */}
           {currentStep >= 0 && (
             <>
               <View style={styles.stepDotsRow}>
                 {task.instructions.map((_, i) => {
-                  const isValidated = stepValidations[i];
+                  const isPast = i < currentStep;
                   const isCurrent = i === currentStep && currentStep < task.instructions.length;
 
                   return (
                     <View key={i} style={styles.stepDotWrapper}>
-                      {isValidated ? (
+                      {isPast ? (
                         <View style={[styles.stepDot, styles.stepDotValidated]}>
                           <Text style={styles.stepDotCheck}>{'✓'}</Text>
                         </View>
@@ -559,12 +760,11 @@ export default function RecordingScreen() {
             </>
           )}
 
-          {/* VLM Debug Log */}
+          {/* Continuous VLM Log */}
           <View style={styles.vlmLogContainer}>
-            <Text style={styles.vlmLogTitle}>VLM Log</Text>
             <ScrollView ref={vlmLogScrollRef} style={styles.vlmLogScroll} nestedScrollEnabled>
               {vlmLog.length === 0 && (
-                <Text style={styles.vlmLogEntry}>No VLM events yet...</Text>
+                <Text style={styles.vlmLogEntry}>VLM analyzing continuously...</Text>
               )}
               {vlmLog.map((entry, idx) => (
                 <Text key={idx} style={[styles.vlmLogEntry, entry.color ? { color: entry.color } : undefined]}>
@@ -593,9 +793,11 @@ export default function RecordingScreen() {
             }
           ]} />
           <Text style={styles.vlmBadgeText}>
-            {vlmModelState === 'loading' ? 'FastVLM loading...' :
-             vlmModelState === 'ready' ? 'FastVLM ready' :
-             `FastVLM error: ${vlmModelError}`}
+            {vlmModelState === 'loading'
+              ? `${vlmModels.find(m => m.key === vlmCurrentModel)?.label || 'Model'} loading...`
+              : vlmModelState === 'ready'
+              ? `${vlmModels.find(m => m.key === vlmCurrentModel)?.label || 'FastVLM'} ready`
+              : `Error: ${vlmModelError}`}
           </Text>
         </View>
       )}
@@ -720,7 +922,7 @@ const styles = StyleSheet.create({
   // Unified VLM + Steps panel (during recording)
   vlmPanel: {
     position: 'absolute',
-    top: 110,
+    top: 160,
     left: 12,
     right: 12,
     backgroundColor: 'rgba(0,0,0,0.7)',
@@ -738,6 +940,48 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     fontSize: 11,
     fontWeight: '600',
+  },
+  modelNameButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  modelSwitchHint: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 8,
+    marginLeft: 4,
+  },
+  modelPickerDropdown: {
+    backgroundColor: 'rgba(30,30,40,0.95)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    overflow: 'hidden',
+  },
+  modelPickerItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  modelPickerItemActive: {
+    backgroundColor: 'rgba(48, 209, 88, 0.15)',
+  },
+  modelPickerLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  modelPickerLabelActive: {
+    color: '#30D158',
+    fontWeight: '700',
+  },
+  modelPickerSize: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 11,
   },
   vlmResultSection: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -770,18 +1014,26 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.1)',
     paddingTop: 8,
-    maxHeight: 120,
+    gap: 6,
   },
-  vlmLogTitle: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 10,
+  checkButton: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  checkButtonDisabled: {
+    opacity: 0.4,
+  },
+  checkButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 4,
   },
   vlmLogScroll: {
-    maxHeight: 100,
+    maxHeight: 70,
   },
   vlmLogEntry: {
     color: 'rgba(255,255,255,0.6)',
@@ -972,72 +1224,167 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  // Review
-  reviewContainer: {
+  // Review / Completion
+  reviewScroll: {
+    flexGrow: 1,
+    alignItems: 'center',
+    paddingHorizontal: spacing.screenPadding,
+  },
+  reviewCheckCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#30D158',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowColor: '#30D158',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+  },
+  reviewCheckMark: {
+    color: '#FFFFFF',
+    fontSize: 42,
+    fontWeight: '700',
+    marginTop: -2,
+  },
+  rvTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#F0F0F5',
+    letterSpacing: -0.4,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  rvSubtitle: {
+    fontSize: 17,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: 28,
+    textAlign: 'center',
+  },
+  rvStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    marginBottom: 24,
+    width: '100%',
+  },
+  rvStat: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.screenPadding,
   },
-  reviewThumbnail: {
-    width: 280,
-    height: 200,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 24,
-    backgroundColor: '#000',
-  },
-  reviewOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  reviewDuration: {
-    color: '#FFFFFF',
-    fontSize: 32,
+  rvStatValue: {
+    color: '#F0F0F5',
+    fontSize: 22,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
-  reviewFrames: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
+  rvStatLabel: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 12,
+    fontWeight: '500',
     marginTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  reviewTitle: {
-    ...typography.title1,
-    marginBottom: 4,
+  rvStatDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  reviewSubtitle: {
-    ...typography.callout,
-    marginBottom: 8,
+  rvStepsCard: {
+    width: '100%',
+    backgroundColor: '#1C1C23',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
   },
-  reviewValidation: {
-    ...typography.caption1,
-    marginBottom: 24,
+  rvStepsTitle: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
   },
-  reviewActions: {
+  rvStepRow: {
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'flex-start',
+    marginBottom: 10,
   },
-  reRecordButton: {
+  rvStepCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(48, 209, 88, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    marginTop: 1,
+  },
+  rvStepCheckText: {
+    color: '#30D158',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  rvStepText: {
+    flex: 1,
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  rvModelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 28,
+  },
+  rvModelDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#5E5CE6',
+    marginRight: 8,
+  },
+  rvModelText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  rvActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  rvReRecordButton: {
     flex: 1,
     paddingVertical: 16,
     borderRadius: 14,
     borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
   },
-  reRecordText: {
+  rvReRecordText: {
     fontSize: 17,
     fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
   },
-  submitButton: {
+  rvSubmitButton: {
     flex: 1,
     paddingVertical: 16,
     borderRadius: 14,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
   },
-  submitText: {
+  rvSubmitText: {
     color: '#09090F',
     fontSize: 17,
     fontWeight: '600',

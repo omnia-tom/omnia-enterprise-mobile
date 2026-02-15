@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Task } from '../types/tasks';
 import { typography, spacing, useThemeColors } from '../theme';
-import { formatCents } from '../services/taskData';
+
 import GlassCard from './GlassCard';
 
 interface TaskCardProps {
@@ -28,7 +28,6 @@ export default function TaskCard({ task, onPress }: TaskCardProps) {
             <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>{task.title}</Text>
             <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={1}>{task.description}</Text>
           </View>
-          <Text style={[styles.payout, { color: colors.earning }]}>{formatCents(task.payoutCents)}</Text>
         </View>
 
         <View style={styles.metaRow}>
@@ -83,10 +82,6 @@ const styles = StyleSheet.create({
   },
   description: {
     ...typography.callout,
-  },
-  payout: {
-    ...typography.title1,
-    flexShrink: 0,
   },
   metaRow: {
     flexDirection: 'row',

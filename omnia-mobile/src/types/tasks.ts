@@ -28,7 +28,7 @@ export interface Submission {
   videoFilePath: string;
   duration: number;
   frameCount: number;
-  payoutCents: number;
+  payoutCents?: number;
   submittedAt: Date;
   reviewedAt?: Date;
   rejectionReason?: string;

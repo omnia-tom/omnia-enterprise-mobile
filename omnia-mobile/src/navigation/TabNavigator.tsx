@@ -31,9 +31,9 @@ export default function TabNavigator() {
         name="Submissions"
         component={SubmissionsScreen}
         options={{
-          tabBarLabel: 'Earnings',
+          tabBarLabel: 'History',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon icon="💰" color={color} size={size} />
+            <TabIcon icon="📋" color={color} size={size} />
           ),
         }}
       />

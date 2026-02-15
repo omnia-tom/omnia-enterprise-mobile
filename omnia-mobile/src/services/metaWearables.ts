@@ -94,6 +94,12 @@ export interface StepValidation {
   prompt?: string;
 }
 
+export interface VLMModelInfo {
+  key: string;
+  label: string;
+  size: string;
+}
+
 class MetaWearablesService {
   private isAvailable: boolean;
   private currentDevice: MetaDevice | null = null;
@@ -393,6 +399,31 @@ class MetaWearablesService {
   async stopStepValidation(): Promise<void> {
     if (!this.isAvailable) return;
     return MetaWearablesModule.stopStepValidation();
+  }
+
+  /**
+   * Trigger a single-shot VLM check on the current frame.
+   * Result arrives via 'stepValidation' event.
+   */
+  async checkStep(): Promise<void> {
+    if (!this.isAvailable) return;
+    return MetaWearablesModule.checkStep();
+  }
+
+  /**
+   * Get available VLM models and the currently selected one.
+   */
+  async getAvailableVLMModels(): Promise<{ models: VLMModelInfo[]; current: string }> {
+    if (!this.isAvailable) return { models: [], current: '' };
+    return MetaWearablesModule.getAvailableVLMModels();
+  }
+
+  /**
+   * Switch to a different VLM model. Unloads current model and loads the new one.
+   */
+  async setVLMModel(modelKey: string): Promise<void> {
+    if (!this.isAvailable) return;
+    return MetaWearablesModule.setVLMModel(modelKey);
   }
 
   /**

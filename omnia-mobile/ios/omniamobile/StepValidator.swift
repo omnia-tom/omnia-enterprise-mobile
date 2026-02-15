@@ -27,6 +27,7 @@ final class StepValidator: MLModelConsumer {
   private var isProcessing = false
   private let validationQueue = DispatchQueue(label: "com.spectask.stepValidator", qos: .userInitiated)
   private var debugFramesSaved = 0
+  private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
   // MARK: - MLModelConsumer
 
@@ -61,8 +62,10 @@ final class StepValidator: MLModelConsumer {
           //   print("[StepValidator] Raw: \(cgImage.width)x\(cgImage.height) → Processed: \(processed.width)x\(processed.height)")
           // }
 
+          let sharpened = self.sharpenForVLM(processed)
+
           let startTime = CFAbsoluteTimeGetCurrent()
-          let response = try await FastVLMService.shared.predict(image: processed, prompt: vlmPrompt)
+          let response = try await FastVLMService.shared.predict(image: sharpened, prompt: vlmPrompt)
           let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
 
           print("[StepValidator] Step \(stepIndex) | VLM: \"\(response)\" (\(elapsedMs)ms)")
@@ -144,6 +147,21 @@ final class StepValidator: MLModelConsumer {
     ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: targetW, height: targetH))
 
     return ctx.makeImage() ?? cropped
+  }
+
+  // MARK: - Image Sharpening
+
+  /// Apply luminance sharpening to improve VLM text recognition accuracy.
+  private func sharpenForVLM(_ cgImage: CGImage) -> CGImage {
+    let ci = CIImage(cgImage: cgImage)
+    guard let filter = CIFilter(name: "CISharpenLuminance") else { return cgImage }
+    filter.setValue(ci, forKey: kCIInputImageKey)
+    filter.setValue(0.6, forKey: kCIInputSharpnessKey)
+    guard let output = filter.outputImage,
+          let result = Self.ciContext.createCGImage(output, from: output.extent) else {
+      return cgImage
+    }
+    return result
   }
 
   // MARK: - Debug

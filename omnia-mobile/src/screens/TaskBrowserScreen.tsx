@@ -17,7 +17,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { typography, spacing, useThemeColors } from '../theme';
 import { Task, TaskCategory, RootStackParamList } from '../types';
-import { getAvailableTasks, getUserSubmissions, getTotalEarnings, formatCents } from '../services/taskData';
+import { getAvailableTasks } from '../services/taskData';
 import TaskCard from '../components/TaskCard';
 import GlassPill from '../components/GlassPill';
 import GlassCard from '../components/GlassCard';
@@ -38,13 +38,11 @@ export default function TaskBrowserScreen() {
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<TaskCategory | 'all'>('all');
   const [loading, setLoading] = useState(true);
-  const [totalEarningsCents, setTotalEarningsCents] = useState(0);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
   const [userInitials, setUserInitials] = useState('');
 
   useEffect(() => {
     loadTasks();
-    loadEarnings();
     loadProfile();
   }, []);
 
@@ -61,13 +59,6 @@ export default function TaskBrowserScreen() {
     setTasks(data);
     setFilteredTasks(data);
     setLoading(false);
-  };
-
-  const loadEarnings = async () => {
-    const user = auth.currentUser;
-    if (!user) return;
-    const subs = await getUserSubmissions(user.uid);
-    setTotalEarningsCents(getTotalEarnings(subs));
   };
 
   const loadProfile = () => {
@@ -149,21 +140,6 @@ export default function TaskBrowserScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Earnings pill */}
-      <TouchableOpacity
-        onPress={() => navigation.getParent()?.navigate('Submissions')}
-        style={styles.earningsPillWrap}
-      >
-        <GlassPill tintColor="rgba(48, 209, 88, 0.12)">
-          <View style={styles.earningsPillInner}>
-            <View style={[styles.earningsDot, { backgroundColor: colors.earning }]} />
-            <Text style={[styles.earningsText, { color: colors.earning }]}>
-              You've earned {formatCents(totalEarningsCents)}
-            </Text>
-          </View>
-        </GlassPill>
-      </TouchableOpacity>
-
       {/* Category filter */}
       <ScrollView
         horizontal
@@ -228,25 +204,6 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  earningsPillWrap: {
-    alignSelf: 'flex-start',
-    marginHorizontal: spacing.screenPadding,
-    marginBottom: 16,
-  },
-  earningsPillInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  earningsDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  earningsText: {
-    ...typography.callout,
-    fontWeight: '500',
   },
   filterList: {
     flexShrink: 0,

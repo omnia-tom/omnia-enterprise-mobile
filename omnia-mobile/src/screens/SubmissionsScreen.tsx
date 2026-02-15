@@ -12,7 +12,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { auth } from '../services/firebase';
 import { typography, spacing, useThemeColors } from '../theme';
 import { Submission, SubmissionStatus } from '../types';
-import { getUserSubmissions, getTotalEarnings, formatCents } from '../services/taskData';
+import { getUserSubmissions } from '../services/taskData';
 import GlassCard from '../components/GlassCard';
 import GlassPill from '../components/GlassPill';
 import MeshBackground from '../components/MeshBackground';
@@ -53,7 +53,6 @@ export default function SubmissionsScreen() {
   };
 
   const filtered = filter === 'all' ? submissions : submissions.filter(s => s.status === filter);
-  const totalEarned = getTotalEarnings(submissions);
   const approvedCount = submissions.filter(s => s.status === 'approved').length;
   const approvalRate = submissions.length > 0
     ? Math.round((approvedCount / submissions.length) * 100)
@@ -75,7 +74,6 @@ export default function SubmissionsScreen() {
       <GlassCard style={styles.subCard}>
         <View style={styles.subTopRow}>
           <Text style={[styles.subTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.taskTitle}</Text>
-          <Text style={[styles.subPayout, { color: colors.earning }]}>{formatCents(item.payoutCents)}</Text>
         </View>
         <View style={styles.subMeta}>
           <Text style={[styles.subDate, { color: colors.textTertiary }]}>{formatDate(item.submittedAt)}</Text>
@@ -100,11 +98,6 @@ export default function SubmissionsScreen() {
 
       {/* Summary card */}
       <GlassCard style={styles.summaryCard}>
-        <View style={styles.summaryCol}>
-          <Text style={[styles.summaryValue, { color: colors.earning }]}>{formatCents(totalEarned)}</Text>
-          <Text style={[styles.summaryLabel, { color: colors.textTertiary }]}>Total Earned</Text>
-        </View>
-        <View style={[styles.summaryDivider, { backgroundColor: colors.separator }]} />
         <View style={styles.summaryCol}>
           <Text style={[styles.summaryValueDefault, { color: colors.textPrimary }]}>{submissions.length}</Text>
           <Text style={[styles.summaryLabel, { color: colors.textTertiary }]}>Submitted</Text>
@@ -179,9 +172,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  summaryValue: {
-    ...typography.money,
-  },
   summaryValueDefault: {
     ...typography.title1,
   },
@@ -224,9 +214,6 @@ const styles = StyleSheet.create({
     ...typography.title2,
     flex: 1,
     marginRight: 12,
-  },
-  subPayout: {
-    ...typography.title1,
   },
   subMeta: {
     flexDirection: 'row',
