@@ -3,6 +3,7 @@ import { Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import TaskBrowserScreen from '../screens/TaskBrowserScreen';
 import SubmissionsScreen from '../screens/SubmissionsScreen';
+import BenchmarkingScreen from '../screens/BenchmarkingScreen';
 import GlassTabBar from '../components/GlassTabBar';
 import { colors } from '../theme';
 
@@ -34,6 +35,16 @@ export default function TabNavigator() {
           tabBarLabel: 'History',
           tabBarIcon: ({ color, size }) => (
             <TabIcon icon="📋" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Benchmarking"
+        component={BenchmarkingScreen}
+        options={{
+          tabBarLabel: 'Benchmark',
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon icon="⚡" color={color} size={size} />
           ),
         }}
       />

@@ -8,6 +8,15 @@ protocol MLModelConsumer: AnyObject {
   var processEveryNFrames: Int { get }
   var isEnabled: Bool { get set }
   func process(cgImage: CGImage, timestamp: TimeInterval, width: Int, height: Int)
+  /// Optional: receive CVPixelBuffer alongside CGImage for zero-copy Vision/ANE paths
+  func process(cgImage: CGImage, pixelBuffer: CVPixelBuffer?, timestamp: TimeInterval, width: Int, height: Int)
+}
+
+extension MLModelConsumer {
+  /// Default: forward to the CGImage-only method (backward compatible)
+  func process(cgImage: CGImage, pixelBuffer: CVPixelBuffer?, timestamp: TimeInterval, width: Int, height: Int) {
+    process(cgImage: cgImage, timestamp: timestamp, width: width, height: height)
+  }
 }
 
 /// Manages all CPU-intensive ML inference on background queues with frame skipping
@@ -90,6 +99,7 @@ class MLProcessingPipeline {
       if frameNumber % consumer.processEveryNFrames == 0 {
         consumer.process(
           cgImage: metadata.cgImage,
+          pixelBuffer: metadata.pixelBuffer,
           timestamp: metadata.timestamp,
           width: metadata.width,
           height: metadata.height

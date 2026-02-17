@@ -28,6 +28,7 @@ export type RootStackParamList = {
 export type TabParamList = {
   Tasks: undefined;
   Submissions: undefined;
+  Benchmarking: undefined;
 };
 
 // Auth types

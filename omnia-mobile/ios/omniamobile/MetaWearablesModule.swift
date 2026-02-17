@@ -69,6 +69,9 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
   // Step validation (FastVLM)
   private var stepValidator: Any?  // StepValidator (iOS 18.2+)
 
+  // Hand tracking benchmark
+  private var handTrackingBenchmark: HandTrackingBenchmark?
+
   override static func requiresMainQueueSetup() -> Bool {
     return true
   }
@@ -86,7 +89,9 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
       "onHandPoseDetected",
       "onVoiceCommand",
       "onStreamingStats",
-      "onStepValidation"
+      "onStepValidation",
+      "onBenchmarkTestTick",
+      "onBenchmarkTestComplete"
     ]
   }
 
@@ -1240,6 +1245,125 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
     // In continuous mode, checkStep is a no-op — VLM runs automatically at ~1fps.
     // Kept for API compatibility.
     resolve(["success": true, "mode": "continuous"])
+  }
+
+  // MARK: - Hand Tracking Benchmark
+
+  @objc
+  func startIndividualBenchmark(_ scenarioId: NSNumber, durationSeconds: NSNumber, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else {
+        reject("ERROR", "Module deallocated", nil)
+        return
+      }
+
+      guard let pipeline = self.mlPipeline else {
+        reject("NO_PIPELINE", "ML pipeline not active. Start video stream first.", nil)
+        return
+      }
+
+      let sid = scenarioId.intValue
+      let dur = durationSeconds.intValue
+
+      let benchmark = HandTrackingBenchmark()
+      benchmark.eventEmitter = self
+      self.handTrackingBenchmark = benchmark
+
+      // Validate scenarioId
+      guard benchmark.scenarios.contains(where: { $0.id == sid }) else {
+        reject("INVALID_SCENARIO", "Invalid scenarioId: \(sid)", nil)
+        return
+      }
+
+      pipeline.registerConsumer(benchmark)
+      benchmark.startIndividualTest(scenarioId: sid, durationSeconds: dur)
+
+      print("[MetaWearables] Individual benchmark started: scenario \(sid) for \(dur)s")
+      resolve(["success": true])
+    }
+  }
+
+  @objc
+  func stopIndividualBenchmark(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else {
+        reject("ERROR", "Module deallocated", nil)
+        return
+      }
+
+      if let benchmark = self.handTrackingBenchmark {
+        benchmark.stop()
+        self.mlPipeline?.removeConsumer(named: benchmark.modelName)
+        self.handTrackingBenchmark = nil
+      }
+
+      print("[MetaWearables] Individual benchmark stopped")
+      resolve(["success": true])
+    }
+  }
+
+  @objc
+  func getSystemState(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    resolve(HandTrackingBenchmark.getSystemState())
+  }
+
+  @objc
+  func listBenchmarkFiles(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    let benchmark = self.handTrackingBenchmark ?? HandTrackingBenchmark()
+    resolve(benchmark.listBenchmarkFiles())
+  }
+
+  @objc
+  func deleteBenchmarkFile(_ path: String, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    let benchmark = self.handTrackingBenchmark ?? HandTrackingBenchmark()
+    let success = benchmark.deleteBenchmarkFile(path: path)
+    if success {
+      resolve(["success": true])
+    } else {
+      reject("DELETE_FAILED", "Failed to delete file: \(path)", nil)
+    }
+  }
+
+  @objc
+  func shareBenchmarkFile(_ path: String, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    let fileURL = URL(fileURLWithPath: path)
+
+    guard FileManager.default.fileExists(atPath: path) else {
+      reject("FILE_NOT_FOUND", "File not found: \(path)", nil)
+      return
+    }
+
+    DispatchQueue.main.async {
+      guard let rootVC = UIApplication.shared.delegate?.window??.rootViewController else {
+        reject("NO_VIEW_CONTROLLER", "Cannot present share sheet", nil)
+        return
+      }
+
+      // Walk to topmost presented controller
+      var topVC = rootVC
+      while let presented = topVC.presentedViewController {
+        topVC = presented
+      }
+
+      let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+
+      // iPad support
+      if let popover = activityVC.popoverPresentationController {
+        popover.sourceView = topVC.view
+        popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
+        popover.permittedArrowDirections = []
+      }
+
+      activityVC.completionWithItemsHandler = { _, completed, _, error in
+        if let error = error {
+          reject("SHARE_ERROR", error.localizedDescription, error)
+        } else {
+          resolve(["success": true, "completed": completed])
+        }
+      }
+
+      topVC.present(activityVC, animated: true, completion: nil)
+    }
   }
 
   // MARK: - Utility

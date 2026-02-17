@@ -100,6 +100,66 @@ export interface VLMModelInfo {
   size: string;
 }
 
+export interface BenchmarkTestTick {
+  elapsed: number;
+  total: number;
+  frameCount: number;
+  avgInferenceMs: number;
+  avgE2eMs: number;
+  thermalState: string;
+  batteryLevel: number;
+}
+
+export interface BenchmarkTestComplete {
+  scenarioId: number;
+  label: string;
+  framesProcessed: number;
+  durationSeconds: number;
+  avgInferenceMs: number;
+  p50InferenceMs: number;
+  p95InferenceMs: number;
+  avgE2eMs: number;
+  throughputFps: number;
+  avgConfidence: number;
+  avgJitterPx: number;
+  thermalStart: string;
+  thermalEnd: string;
+  batteryStart: number;
+  batteryEnd: number;
+  filePath: string;
+}
+
+export interface SystemState {
+  thermalState: string;
+  batteryLevel: number;
+  memoryMB: number;
+}
+
+export interface BenchmarkFile {
+  name: string;
+  path: string;
+  sizeKB: number;
+  date: string;
+}
+
+export interface BenchmarkScenarioConfig {
+  id: number;
+  label: string;
+  computeUnit: string;
+  inputFormat: string;
+  maxHands: number;
+}
+
+export const BENCHMARK_SCENARIOS: BenchmarkScenarioConfig[] = [
+  { id: 1, label: 'CPU | PixelBuffer | 2 Hands', computeUnit: 'CPU', inputFormat: 'CVPixelBuffer', maxHands: 2 },
+  { id: 2, label: 'Auto | PixelBuffer | 2 Hands', computeUnit: 'Auto', inputFormat: 'CVPixelBuffer', maxHands: 2 },
+  { id: 3, label: 'ANE | PixelBuffer | 2 Hands', computeUnit: 'ANE', inputFormat: 'CVPixelBuffer', maxHands: 2 },
+  { id: 4, label: 'GPU | PixelBuffer | 2 Hands', computeUnit: 'GPU', inputFormat: 'CVPixelBuffer', maxHands: 2 },
+  { id: 5, label: 'Auto | CGImage | 2 Hands', computeUnit: 'Auto', inputFormat: 'CGImage', maxHands: 2 },
+  { id: 6, label: 'Auto | PixelBuffer | 1 Hand', computeUnit: 'Auto', inputFormat: 'CVPixelBuffer', maxHands: 1 },
+  { id: 7, label: 'CPU | CGImage | 1 Hand', computeUnit: 'CPU', inputFormat: 'CGImage', maxHands: 1 },
+];
+
 class MetaWearablesService {
   private isAvailable: boolean;
   private currentDevice: MetaDevice | null = null;
@@ -160,6 +220,14 @@ class MetaWearablesService {
 
     metaWearablesEmitter.addListener('onStepValidation', (data: StepValidation) => {
       this.emit('stepValidation', data);
+    });
+
+    metaWearablesEmitter.addListener('onBenchmarkTestTick', (data: BenchmarkTestTick) => {
+      this.emit('benchmarkTestTick', data);
+    });
+
+    metaWearablesEmitter.addListener('onBenchmarkTestComplete', (data: BenchmarkTestComplete) => {
+      this.emit('benchmarkTestComplete', data);
     });
 
     metaWearablesEmitter.addListener('onError', (error: { code: string; message: string }) => {
@@ -424,6 +492,62 @@ class MetaWearablesService {
   async setVLMModel(modelKey: string): Promise<void> {
     if (!this.isAvailable) return;
     return MetaWearablesModule.setVLMModel(modelKey);
+  }
+
+  /**
+   * Start an individual benchmark test for a specific scenario.
+   * Runs live inference for durationSeconds. Results arrive via
+   * 'benchmarkTestTick' (1/sec) and 'benchmarkTestComplete' events.
+   */
+  async startIndividualBenchmark(scenarioId: number, durationSeconds: number = 60): Promise<void> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.startIndividualBenchmark(scenarioId, durationSeconds);
+  }
+
+  /**
+   * Stop the currently running individual benchmark test.
+   */
+  async stopIndividualBenchmark(): Promise<void> {
+    if (!this.isAvailable) {
+      throw new Error('Meta Wearables SDK is not available on this platform');
+    }
+    return MetaWearablesModule.stopIndividualBenchmark();
+  }
+
+  /**
+   * Get current system state (thermal, battery, memory).
+   */
+  async getSystemState(): Promise<SystemState> {
+    if (!this.isAvailable) {
+      return { thermalState: 'unknown', batteryLevel: -1, memoryMB: 0 };
+    }
+    return MetaWearablesModule.getSystemState();
+  }
+
+  /**
+   * List all saved benchmark CSV files.
+   */
+  async listBenchmarkFiles(): Promise<BenchmarkFile[]> {
+    if (!this.isAvailable) return [];
+    return MetaWearablesModule.listBenchmarkFiles();
+  }
+
+  /**
+   * Delete a benchmark CSV file by path.
+   */
+  async deleteBenchmarkFile(path: string): Promise<void> {
+    if (!this.isAvailable) return;
+    return MetaWearablesModule.deleteBenchmarkFile(path);
+  }
+
+  /**
+   * Share a benchmark CSV file using the native iOS share sheet (AirDrop, etc).
+   */
+  async shareBenchmarkFile(path: string): Promise<void> {
+    if (!this.isAvailable) return;
+    return MetaWearablesModule.shareBenchmarkFile(path);
   }
 
   /**
