@@ -19,8 +19,10 @@ export default function QRScanner({ onScan }: QRScannerProps) {
     getCameraPermissions();
   }, []);
 
-  const handleBarCodeScanned = ({ data }: { data: string }) => {
+  const handleBarCodeScanned = (event: { data?: string } | string) => {
     if (!scanned) {
+      const data = typeof event === 'string' ? event : (event?.data ?? '');
+      if (!data) return;
       setScanned(true);
       onScan(data);
 
@@ -130,12 +132,12 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8,
   },
   instructions: {
-    color: '#F0F0F5',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
     marginTop: 32,
     textAlign: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(55, 55, 60, 0.95)',
     padding: 16,
     borderRadius: 8,
   },

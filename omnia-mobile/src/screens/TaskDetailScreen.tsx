@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -25,7 +26,7 @@ export default function TaskDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
-  const { taskId } = route.params;
+  const { taskId, sopContent, procedureId, stationId } = route.params;
   const theme = useThemeColors();
   const { colors, categoryConfig, difficultyConfig } = theme;
 
@@ -85,7 +86,7 @@ export default function TaskDetailScreen() {
     );
   }
 
-  const category = categoryConfig[task.category] || categoryConfig.household;
+  const category = categoryConfig?.[task?.category] ?? categoryConfig?.household ?? { icon: 'construct-outline', tint: 'rgba(255, 255, 255, 0.08)', label: 'Task' };
   const difficulty = difficultyConfig[task.difficulty] || difficultyConfig.beginner;
   const progress = task.maxSubmissions > 0 ? task.currentSubmissions / task.maxSubmissions : 0;
 
@@ -106,9 +107,20 @@ export default function TaskDetailScreen() {
       >
         {/* Hero */}
         <View style={styles.hero}>
-          <Text style={styles.heroEmoji}>{category.emoji}</Text>
+          <View style={styles.heroIconWrap}>
+            <Ionicons
+              name={(category?.icon ?? 'construct-outline') as any}
+              size={40}
+              color={colors.accent}
+            />
+          </View>
           <Text style={[styles.heroCategory, { color: colors.textTertiary }]}>{category.label}</Text>
           <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>{task.title}</Text>
+          {stationId && procedureId && (
+            <Text style={[styles.stationBadge, { color: colors.textTertiary }]}>
+              Station {stationId} · {procedureId}
+            </Text>
+          )}
         </View>
 
         {/* Info row */}
@@ -145,17 +157,27 @@ export default function TaskDetailScreen() {
           ))}
         </View>
 
-        {/* Instructions */}
+        {/* Instructions - SOP from QR scan takes precedence over task instructions */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recording Instructions</Text>
-          {task.instructions.map((step, i) => (
-            <View key={i} style={styles.stepItem}>
-              <View style={[styles.stepNumber, { backgroundColor: colors.accentMuted }]}>
-                <Text style={[styles.stepNumberText, { color: colors.accent }]}>{i + 1}</Text>
-              </View>
-              <Text style={[styles.stepText, { color: colors.textPrimary }]}>{step}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+            {sopContent ? 'Assembly SOP (from workstation QR)' : 'Recording Instructions'}
+          </Text>
+          {sopContent ? (
+            <View style={styles.sopContainer}>
+              <Text style={[styles.sopText, { color: colors.textSecondary }]} selectable>
+                {sopContent}
+              </Text>
             </View>
-          ))}
+          ) : (
+            task.instructions.map((step, i) => (
+              <View key={i} style={styles.stepItem}>
+                <View style={[styles.stepNumber, { backgroundColor: colors.accentMuted }]}>
+                  <Text style={[styles.stepNumberText, { color: colors.accent }]}>{i + 1}</Text>
+                </View>
+                <Text style={[styles.stepText, { color: colors.textPrimary }]}>{step}</Text>
+              </View>
+            ))
+          )}
         </View>
 
         {/* Progress */}
@@ -211,15 +233,22 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.screenPadding,
+    paddingTop: 24,
+    paddingBottom: 48,
   },
   hero: {
     alignItems: 'center',
     marginBottom: spacing.sectionGap,
     marginTop: 8,
   },
-  heroEmoji: {
-    fontSize: 48,
-    marginBottom: 8,
+  heroIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   heroCategory: {
     ...typography.caption1,
@@ -230,6 +259,10 @@ const styles = StyleSheet.create({
   heroTitle: {
     ...typography.display,
     textAlign: 'center',
+  },
+  stationBadge: {
+    ...typography.caption1,
+    marginTop: 8,
   },
   infoRow: {
     flexDirection: 'row',
@@ -309,6 +342,18 @@ const styles = StyleSheet.create({
     ...typography.body,
     flex: 1,
     paddingTop: 3,
+  },
+  sopContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  sopText: {
+    ...typography.body,
+    lineHeight: 24,
+    fontSize: 14,
   },
   progressLabel: {
     ...typography.callout,

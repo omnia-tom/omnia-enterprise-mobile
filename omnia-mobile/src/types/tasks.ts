@@ -1,4 +1,19 @@
-export type TaskCategory = 'kitchen' | 'warehouse' | 'household' | 'office' | 'workshop' | 'outdoor' | 'personal_care';
+export type TaskCategory =
+  | 'kitchen'
+  | 'warehouse'
+  | 'household'
+  | 'office'
+  | 'workshop'
+  | 'outdoor'
+  | 'personal_care'
+  // Dakkota assembly domains (from workers_instructions)
+  | 'front_bumper_grille'
+  | 'front_fascia'
+  | 'rear_bumper'
+  | 'front_suspension'
+  | 'rear_suspension'
+  | 'overhead_systems'
+  | 'tire_wheel';
 export type TaskDifficulty = 'beginner' | 'intermediate' | 'advanced';
 
 export interface Task {

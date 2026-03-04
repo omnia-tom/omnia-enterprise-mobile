@@ -1030,6 +1030,10 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
             command = "done"
           } else if word == "start" || word == "begin" {
             command = "start"
+          } else if word == "yes" || word == "yeah" || word == "yep" {
+            command = "yes"
+          } else if word == "no" || word == "nope" {
+            command = "no"
           }
 
           if let cmd = command {

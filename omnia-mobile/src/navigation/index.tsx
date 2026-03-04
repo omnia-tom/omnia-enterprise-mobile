@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef, CommonActions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/LoginScreen';
 import PairingScreen from '../screens/PairingScreen';
@@ -8,6 +8,8 @@ import ChatScreen from '../screens/ChatScreen';
 import TaskDetailScreen from '../screens/TaskDetailScreen';
 import RecordingScreen from '../screens/RecordingScreen';
 import MainScreen from '../screens/MainScreen';
+import ConsentScreen from '../screens/ConsentScreen';
+import WorkstationSelectScreen from '../screens/WorkstationSelectScreen';
 import TabNavigator from './TabNavigator';
 import { RootStackParamList } from '../types';
 
@@ -26,14 +28,22 @@ export default function Navigation({ isAuthenticated }: NavigationProps) {
       if (isAuthenticated) {
         navigationRef.current.navigate('MainTabs' as any);
       } else {
-        navigationRef.current.navigate('Login');
+        // Reset stack to Login so user can sign in; clears MainTabs/Account/etc.
+        navigationRef.current.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          })
+        );
       }
     }
   }, [isAuthenticated]);
 
+  // Start on Login when signed out; MainTabs when signed in (avoids brief Login flash for cached users).
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
+        initialRouteName={isAuthenticated ? 'MainTabs' : 'Login'}
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: '#0D0D12' },
@@ -70,6 +80,14 @@ export default function Navigation({ isAuthenticated }: NavigationProps) {
         <Stack.Screen
           name="Chat"
           component={ChatScreen}
+        />
+        <Stack.Screen
+          name="Consent"
+          component={ConsentScreen}
+        />
+        <Stack.Screen
+          name="WorkstationSelect"
+          component={WorkstationSelectScreen}
         />
       </Stack.Navigator>
     </NavigationContainer>

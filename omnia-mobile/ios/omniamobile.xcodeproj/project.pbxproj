@@ -19,17 +19,9 @@
 		1FAE65E22F3EF34700106D98 /* MetaFrameViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65DB2F3EF34700106D98 /* MetaFrameViewManager.m */; };
 		1FAE65E32F3EF34700106D98 /* MetaFrameViewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65DC2F3EF34700106D98 /* MetaFrameViewManager.swift */; };
 		1FAE65E42F3EF34700106D98 /* StreamingRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65DF2F3EF34700106D98 /* StreamingRecorder.swift */; };
-		1FAE65E72F3F01B500106D98 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65E62F3F01B500106D98 /* MLX */; };
-		1FAE65E92F3F01B500106D98 /* MLXFFT in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65E82F3F01B500106D98 /* MLXFFT */; };
-		1FAE65EB2F3F01B500106D98 /* MLXFast in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65EA2F3F01B500106D98 /* MLXFast */; };
-		1FAE65ED2F3F01B500106D98 /* MLXLinalg in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65EC2F3F01B500106D98 /* MLXLinalg */; };
-		1FAE65EF2F3F01B500106D98 /* MLXNN in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65EE2F3F01B500106D98 /* MLXNN */; };
-		1FAE65F22F3F01D900106D98 /* MLXEmbedders in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65F12F3F01D900106D98 /* MLXEmbedders */; };
-		1FAE65F42F3F01D900106D98 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65F32F3F01D900106D98 /* MLXLLM */; };
-		1FAE65F62F3F01D900106D98 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65F52F3F01D900106D98 /* MLXLMCommon */; };
-		1FAE65F82F3F01D900106D98 /* MLXVLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE65F72F3F01D900106D98 /* MLXVLM */; };
 		1FAE66012F40C87600106D98 /* FastVLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE65FF2F40C87600106D98 /* FastVLMService.swift */; };
 		1FAE66022F40C87600106D98 /* StepValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FAE66002F40C87600106D98 /* StepValidator.swift */; };
+		1FAE66052F40C87700106D98 /* MLXVLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1FAE66042F40C87700106D98 /* MLXVLM */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		629B8CD18B98B4AAE7D7C62D /* libPods-omniamobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FB5D2DF71CCA0B62A9C2A75 /* libPods-omniamobile.a */; };
 		85B5724E8C9464124DB8A1E5 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C8D831C425A594831373957 /* ExpoModulesProvider.swift */; };
@@ -70,19 +62,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1FAE65F82F3F01D900106D98 /* MLXVLM in Frameworks */,
 				629B8CD18B98B4AAE7D7C62D /* libPods-omniamobile.a in Frameworks */,
-				1FAE65ED2F3F01B500106D98 /* MLXLinalg in Frameworks */,
 				1F776F002EF24FE50048F66C /* MWDATCore in Frameworks */,
-				1FAE65EF2F3F01B500106D98 /* MLXNN in Frameworks */,
-				1FAE65F22F3F01D900106D98 /* MLXEmbedders in Frameworks */,
 				1F776F022EF24FE50048F66C /* MWDATMockDevice in Frameworks */,
-				1FAE65E72F3F01B500106D98 /* MLX in Frameworks */,
-				1FAE65EB2F3F01B500106D98 /* MLXFast in Frameworks */,
 				1F776EFE2EF24FE50048F66C /* MWDATCamera in Frameworks */,
-				1FAE65F42F3F01D900106D98 /* MLXLLM in Frameworks */,
-				1FAE65F62F3F01D900106D98 /* MLXLMCommon in Frameworks */,
-				1FAE65E92F3F01B500106D98 /* MLXFFT in Frameworks */,
+				1FAE66052F40C87700106D98 /* MLXVLM in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -236,8 +220,7 @@
 			mainGroup = 83CBB9F61A601CBA00E9B192;
 			packageReferences = (
 				1F776EFC2EF24FE50048F66C /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */,
-				1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */,
-				1FAE65F02F3F01D900106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				1FAE66032F40C87700106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 			);
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
 			projectDirPath = "";
@@ -355,9 +338,15 @@
 			);
 			inputPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-omniamobile/Pods-omniamobile-resources.sh",
+				"${PODS_CONFIGURATION_BUILD_DIR}/AppAuth/AppAuthCore_Privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/EXConstants.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/ExpoConstants_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoFileSystem/ExpoFileSystem_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/GTMAppAuth/GTMAppAuth_Privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/GTMSessionFetcher/GTMSessionFetcher_Core_Privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/GoogleSignIn/GoogleSignIn.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/GoogleUtilities/GoogleUtilities_Privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/PromisesObjC/FBLPromises_Privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/RNCAsyncStorage/RNCAsyncStorage_resources.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/React-Core_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
@@ -366,9 +355,15 @@
 			);
 			name = "[CP] Copy Pods Resources";
 			outputPaths = (
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/AppAuthCore_Privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXConstants.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoConstants_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoFileSystem_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GTMAppAuth_Privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GTMSessionFetcher_Core_Privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleSignIn.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleUtilities_Privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/FBLPromises_Privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RNCAsyncStorage_resources.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-Core_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
@@ -623,19 +618,11 @@
 				minimumVersion = 0.3.0;
 			};
 		};
-		1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ml-explore/mlx-swift";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.30.6;
-			};
-		};
-		1FAE65F02F3F01D900106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
+		1FAE66032F40C87700106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
 			requirement = {
-				kind = upToNextMajorVersion;
+				kind = upToNextMinorVersion;
 				minimumVersion = 2.30.3;
 			};
 		};
@@ -657,49 +644,9 @@
 			package = 1F776EFC2EF24FE50048F66C /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
 			productName = MWDATMockDevice;
 		};
-		1FAE65E62F3F01B500106D98 /* MLX */ = {
+		1FAE66042F40C87700106D98 /* MLXVLM */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */;
-			productName = MLX;
-		};
-		1FAE65E82F3F01B500106D98 /* MLXFFT */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */;
-			productName = MLXFFT;
-		};
-		1FAE65EA2F3F01B500106D98 /* MLXFast */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */;
-			productName = MLXFast;
-		};
-		1FAE65EC2F3F01B500106D98 /* MLXLinalg */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */;
-			productName = MLXLinalg;
-		};
-		1FAE65EE2F3F01B500106D98 /* MLXNN */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1FAE65E52F3F01B500106D98 /* XCRemoteSwiftPackageReference "mlx-swift" */;
-			productName = MLXNN;
-		};
-		1FAE65F12F3F01D900106D98 /* MLXEmbedders */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1FAE65F02F3F01D900106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
-			productName = MLXEmbedders;
-		};
-		1FAE65F32F3F01D900106D98 /* MLXLLM */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1FAE65F02F3F01D900106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
-			productName = MLXLLM;
-		};
-		1FAE65F52F3F01D900106D98 /* MLXLMCommon */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1FAE65F02F3F01D900106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
-			productName = MLXLMCommon;
-		};
-		1FAE65F72F3F01D900106D98 /* MLXVLM */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1FAE65F02F3F01D900106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			package = 1FAE66032F40C87700106D98 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXVLM;
 		};
 /* End XCSwiftPackageProductDependency section */

@@ -10,10 +10,12 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
-import { Auth } from 'firebase/auth';
+import { Auth, signOut } from 'firebase/auth';
 import { auth as firebaseAuth, db } from '../services/firebase';
 import { metaWearablesService } from '../services/metaWearables';
 import { colors } from '../theme';
@@ -57,6 +59,7 @@ interface Device {
 
 export default function MainScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
   const [loadingPhoto, setLoadingPhoto] = useState(true);
   const [userInitials, setUserInitials] = useState<string>('');
@@ -289,8 +292,14 @@ export default function MainScreen() {
     navigation.navigate('Pairing' as never);
   };
 
-  const handleAccountPress = () => {
-    navigation.navigate('Account' as never);
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      // onAuthStateChanged will fire and Navigation will redirect to Login
+    } catch (error) {
+      console.error('Sign out error:', error);
+      Alert.alert('Sign Out Failed', 'Could not sign out. Please try again.');
+    }
   };
 
   const handleDevicePress = (device: Device) => {
@@ -378,38 +387,47 @@ export default function MainScreen() {
       <MeshBackground variant="warm" />
       <StatusBar style="light" />
 
-      {/* Profile Icon - Top Right */}
-      <TouchableOpacity style={styles.profileButton} onPress={handleAccountPress}>
-        <View style={styles.profileIcon}>
-          {loadingPhoto ? (
-            <ActivityIndicator size="small" color={colors.accent} />
-          ) : profilePhotoUrl ? (
-            <Image
-              source={{ uri: profilePhotoUrl }}
-              style={styles.profileImage}
-              resizeMode="cover"
-              onError={() => {
-                setProfilePhotoUrl(null);
-              }}
-            />
-          ) : (
-            <Text style={styles.profileIconText}>{userInitials}</Text>
-          )}
-        </View>
+      {/* Back button - Account screen */}
+      <TouchableOpacity style={[styles.backButton, { top: insets.top + 8 }]} onPress={() => (navigation as any).goBack()}>
+        <Text style={styles.backButtonText}>← Back</Text>
       </TouchableOpacity>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(100, insets.top + 56) }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.welcomeText}>Welcome to</Text>
-          <Text style={styles.appName}>SpecTask</Text>
-          <Text style={styles.subtitle}>Manage your smart glasses devices</Text>
+          <Text style={styles.welcomeText}>My Account</Text>
+          <Text style={styles.appName}>Devices & Settings</Text>
+          <Text style={styles.subtitle}>Manage your smart glasses and pairing</Text>
+        </View>
+
+        {/* Profile / Admin info */}
+        <View style={styles.profileInfoCard}>
+          <View style={styles.profileInfoRow}>
+            <Ionicons name="person-outline" size={18} color={colors.textSecondary} />
+            <Text style={styles.profileInfoLabel}>Role</Text>
+            <Text style={styles.profileInfoValue}>Supervisor</Text>
+          </View>
+          <View style={styles.profileInfoRow}>
+            <Ionicons name="location-outline" size={18} color={colors.textSecondary} />
+            <Text style={styles.profileInfoLabel}>Last workstation</Text>
+            <Text style={styles.profileInfoValue}>FBG-001</Text>
+          </View>
+          <View style={styles.profileInfoRow}>
+            <Ionicons name="glasses-outline" size={18} color={colors.textSecondary} />
+            <Text style={styles.profileInfoLabel}>Last use of glasses</Text>
+            <Text style={styles.profileInfoValue}>Today, 2:45 PM</Text>
+          </View>
+          <View style={[styles.profileInfoRow, styles.profileInfoRowLast]}>
+            <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
+            <Text style={styles.profileInfoLabel}>Shift</Text>
+            <Text style={styles.profileInfoValue}>Day shift (6:00 AM – 2:30 PM)</Text>
+          </View>
         </View>
 
         {/* Pair New Device Button - Always visible */}
@@ -417,6 +435,23 @@ export default function MainScreen() {
           <View style={styles.pairButtonInner}>
             <Text style={styles.pairButtonText}>Pair New Device</Text>
           </View>
+        </TouchableOpacity>
+
+        {/* Dakkota Assembly - Meta Catalyst grant flow */}
+        <TouchableOpacity
+          onPress={() => (navigation as any).navigate('Consent')}
+          style={styles.dakkotaButton}
+        >
+          <View style={styles.dakkotaButtonInner}>
+            <Text style={styles.dakkotaButtonText}>Dakkota Assembly</Text>
+            <Text style={styles.dakkotaButtonSubtext}>Workstation scan • Audio consent</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Sign Out - for testing Login flow */}
+        <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
+          <Ionicons name="log-out-outline" size={18} color={colors.accent} />
+          <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 
         {/* Devices List */}
@@ -649,11 +684,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  profileButton: {
+  backButton: {
     position: 'absolute',
-    top: 60,
-    right: 24,
+    left: 24,
     zIndex: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  backButtonText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.accent,
   },
   profileIcon: {
     width: 44,
@@ -680,7 +721,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 24,
-    paddingTop: 80,
     paddingBottom: 32,
   },
   header: {
@@ -701,6 +741,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
   },
+  profileInfoCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  profileInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  profileInfoRowLast: {
+    borderBottomWidth: 0,
+  },
+  profileInfoLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginLeft: 10,
+    flex: 1,
+  },
+  profileInfoValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
   pairButton: {
     marginBottom: 24,
   },
@@ -713,6 +782,44 @@ const styles = StyleSheet.create({
   pairButtonText: {
     color: '#09090F',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  dakkotaButton: {
+    marginBottom: 24,
+  },
+  dakkotaButtonInner: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  dakkotaButtonText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dakkotaButtonSubtext: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 8,
+    padding: 14,
+    marginBottom: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  signOutText: {
+    color: colors.accent,
+    fontSize: 15,
     fontWeight: '600',
   },
   loadingContainer: {

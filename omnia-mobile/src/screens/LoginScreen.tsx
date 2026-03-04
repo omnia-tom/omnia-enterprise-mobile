@@ -9,14 +9,19 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Image,
+  ScrollView,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '../services/firebase';
-import { LoginFormData, LoginError } from '../types';
+import { LoginFormData } from '../types';
 import { colors } from '../theme';
 import GlassCard from '../components/GlassCard';
 import MeshBackground from '../components/MeshBackground';
+
+const dakkotaLogo = require('../assets/dakkota-logo.png');
+const omniaLogoWhite = require('../assets/omnia-logo-white.png');
 
 export default function LoginScreen() {
   const [formData, setFormData] = useState<LoginFormData>({
@@ -24,7 +29,34 @@ export default function LoginScreen() {
     password: '',
   });
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
+      const webClientId = process.env.GOOGLE_WEB_CLIENT_ID;
+      if (!webClientId || webClientId === 'your_web_client_id') {
+        Alert.alert('Setup Required', 'Google Sign-In is not configured. Add GOOGLE_WEB_CLIENT_ID to your .env file.');
+        return;
+      }
+      GoogleSignin.configure({ webClientId, offlineAccess: true });
+      setGoogleLoading(true);
+      const response = await GoogleSignin.signIn();
+      if (response.type !== 'success' || !response.data?.idToken) {
+        setGoogleLoading(false);
+        return; // user cancelled
+      }
+      const credential = GoogleAuthProvider.credential(response.data.idToken);
+      await signInWithCredential(auth, credential);
+    } catch (error: unknown) {
+      setGoogleLoading(false);
+      const msg = error instanceof Error ? error.message : 'Google Sign-In failed';
+      Alert.alert('Sign-In Failed', msg);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!formData.email || !formData.password) {
@@ -79,23 +111,25 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
       >
-        <View style={styles.content}>
-          {/* Logo/Header */}
-          <View style={styles.header}>
-            <View style={styles.logoBadge}>
-              <Text style={styles.logo}>SpecTask</Text>
-            </View>
-            <Text style={styles.subtitle}>Learn by doing tasks</Text>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Dakkota Logo at top */}
+          <View style={styles.dakkotaHeader}>
+            <Image source={dakkotaLogo} style={styles.dakkotaLogo} resizeMode="contain" />
           </View>
 
-          {/* Login Card */}
-          <GlassCard style={styles.card}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.description}>
-              Sign in to get started
-            </Text>
+          <View style={styles.content}>
+            {/* Login Card */}
+            <GlassCard style={styles.card}>
+              <Text style={styles.title}>Welcome Back</Text>
+              <Text style={styles.description}>
+                Sign in to get started
+              </Text>
 
-            {/* Email Input */}
+              {/* Email Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Email</Text>
               <TextInput
@@ -130,14 +164,29 @@ export default function LoginScreen() {
             {/* Login Button */}
             <TouchableOpacity
               onPress={handleLogin}
-              disabled={loading}
+              disabled={loading || googleLoading}
               style={styles.buttonContainer}
             >
-              <View style={[styles.button, loading && styles.buttonDisabled]}>
+              <View style={[styles.button, (loading || googleLoading) && styles.buttonDisabled]}>
                 {loading ? (
                   <ActivityIndicator color="#09090F" />
                 ) : (
                   <Text style={styles.buttonText}>Sign In</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {/* Google Sign-In */}
+            <TouchableOpacity
+              onPress={handleGoogleSignIn}
+              disabled={loading || googleLoading}
+              style={styles.googleButtonContainer}
+            >
+              <View style={[styles.googleButton, (loading || googleLoading) && styles.buttonDisabled]}>
+                {googleLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.googleButtonText}>Sign in with Google</Text>
                 )}
               </View>
             </TouchableOpacity>
@@ -148,6 +197,13 @@ export default function LoginScreen() {
             </Text>
           </GlassCard>
         </View>
+
+          {/* Powered by Omnia - bottom center */}
+          <View style={styles.omniaFooter}>
+            <Text style={styles.poweredBy}>powered by</Text>
+            <Image source={omniaLogoWhite} style={styles.omniaLogo} resizeMode="contain" />
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -161,10 +217,39 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 24,
+    paddingBottom: 32,
+  },
+  dakkotaHeader: {
+    alignItems: 'center',
+    paddingTop: 48,
+    paddingBottom: 24,
+  },
+  dakkotaLogo: {
+    width: 200,
+    height: 48,
+  },
   content: {
     flex: 1,
     justifyContent: 'center',
-    padding: 24,
+    minHeight: 320,
+  },
+  omniaFooter: {
+    alignItems: 'center',
+    paddingTop: 32,
+    paddingBottom: 24,
+  },
+  poweredBy: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginBottom: 8,
+    textTransform: 'lowercase',
+  },
+  omniaLogo: {
+    width: 80,
+    height: 24,
   },
   header: {
     alignItems: 'center',
@@ -222,7 +307,23 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: 8,
+    marginBottom: 12,
+  },
+  googleButtonContainer: {
     marginBottom: 16,
+  },
+  googleButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+  },
+  googleButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   button: {
     backgroundColor: colors.accent,

@@ -9,6 +9,8 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -25,8 +27,18 @@ import MeshBackground from '../components/MeshBackground';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const ALL_CATEGORIES: (TaskCategory | 'all')[] = [
-  'all', 'kitchen', 'warehouse', 'household', 'office', 'workshop', 'outdoor', 'personal_care',
+const WELCOME_SEEN_KEY = '@specTask_welcomeSeen';
+
+// Dakkota assembly categories (from workers_instructions)
+const ASSEMBLY_CATEGORIES: (TaskCategory | 'all')[] = [
+  'all',
+  'front_bumper_grille',
+  'front_fascia',
+  'rear_bumper',
+  'front_suspension',
+  'rear_suspension',
+  'overhead_systems',
+  'tire_wheel',
 ];
 
 export default function TaskBrowserScreen() {
@@ -38,12 +50,16 @@ export default function TaskBrowserScreen() {
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<TaskCategory | 'all'>('all');
   const [loading, setLoading] = useState(true);
+  const [showWelcome, setShowWelcome] = useState<boolean>(true);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
   const [userInitials, setUserInitials] = useState('');
 
   useEffect(() => {
     loadTasks();
     loadProfile();
+    AsyncStorage.getItem(WELCOME_SEEN_KEY).then((val) => {
+      setShowWelcome(val !== 'true'); // Show welcome if not yet seen
+    });
   }, []);
 
   useEffect(() => {
@@ -94,6 +110,11 @@ export default function TaskBrowserScreen() {
     navigation.navigate('TaskDetail', { taskId: task.id });
   }, [navigation]);
 
+  const handleGetStarted = useCallback(() => {
+    AsyncStorage.setItem(WELCOME_SEEN_KEY, 'true');
+    setShowWelcome(false);
+  }, []);
+
   const renderCategoryPill = (cat: TaskCategory | 'all') => {
     const isActive = selectedCategory === cat;
     if (cat === 'all') {
@@ -106,16 +127,40 @@ export default function TaskBrowserScreen() {
       );
     }
     const config = categoryConfig[cat];
+    const iconName = (config as { icon?: string })?.icon || 'ellipse-outline';
     return (
       <TouchableOpacity key={cat} onPress={() => setSelectedCategory(cat)}>
-        <GlassPill active={isActive} style={styles.pill}>
+        <GlassPill active={isActive} style={[styles.pill, styles.pillWithIcon]}>
+          <Ionicons name={iconName as any} size={16} color={isActive ? '#FFFFFF' : colors.textSecondary} />
           <Text style={[styles.pillText, { color: isActive ? '#FFFFFF' : colors.textSecondary }]}>
-            {config.emoji} {config.label}
+            {config?.label}
           </Text>
         </GlassPill>
       </TouchableOpacity>
     );
   };
+
+  // Welcome to SpecTask screen — shown before task list on first visit
+  if (showWelcome === true) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <MeshBackground variant="cool" />
+        <StatusBar style={theme.statusBarStyle} />
+        <View style={styles.welcomeContent}>
+          <Text style={[styles.welcomeTitle, { color: colors.textPrimary }]}>Welcome to SpecTask</Text>
+          <Text style={[styles.welcomeSubtitle, { color: colors.textSecondary }]}>
+            Your assembly tasks are ready. Select a station below to view step-by-step instructions and record your procedure.
+          </Text>
+          <TouchableOpacity
+            onPress={handleGetStarted}
+            style={[styles.getStartedButton, { backgroundColor: colors.accent }]}
+          >
+            <Text style={[styles.getStartedText, { color: '#0D0D12' }]}>Get Started</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -147,7 +192,7 @@ export default function TaskBrowserScreen() {
         contentContainerStyle={styles.filterRow}
         style={styles.filterList}
       >
-        {ALL_CATEGORIES.map(cat => renderCategoryPill(cat))}
+        {ASSEMBLY_CATEGORIES.map(cat => renderCategoryPill(cat))}
       </ScrollView>
 
       {/* Task list */}
@@ -214,8 +259,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     gap: 8,
   },
-  pill: {
-    // GlassPill handles padding
+  pill: {},
+  pillWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   pillText: {
     ...typography.caption1,
@@ -231,5 +279,30 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...typography.body,
+  },
+  welcomeContent: {
+    flex: 1,
+    paddingHorizontal: spacing.screenPadding,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  welcomeTitle: {
+    ...typography.display,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  welcomeSubtitle: {
+    ...typography.body,
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  getStartedButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  getStartedText: {
+    ...typography.title2,
   },
 });

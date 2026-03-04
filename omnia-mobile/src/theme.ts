@@ -113,14 +113,23 @@ export const spacing = {
 };
 
 // ── Category config ────────────────────────────────────────────
-export const categoryConfig: Record<string, { emoji: string; tint: string; label: string }> = {
-  kitchen: { emoji: '🍳', tint: 'rgba(255, 159, 10, 0.12)', label: 'Kitchen' },
-  warehouse: { emoji: '📦', tint: 'rgba(100, 210, 255, 0.12)', label: 'Warehouse' },
-  household: { emoji: '🏠', tint: 'rgba(48, 209, 88, 0.12)', label: 'Household' },
-  office: { emoji: '💼', tint: 'rgba(255, 255, 255, 0.08)', label: 'Office' },
-  workshop: { emoji: '🔧', tint: 'rgba(255, 159, 10, 0.12)', label: 'Workshop' },
-  outdoor: { emoji: '🌿', tint: 'rgba(48, 209, 88, 0.12)', label: 'Outdoor' },
-  personal_care: { emoji: '✨', tint: 'rgba(255, 69, 58, 0.12)', label: 'Personal Care' },
+// icon: Ionicons name (outline variant for enterprise look)
+export const categoryConfig: Record<string, { icon: string; tint: string; label: string }> = {
+  kitchen: { icon: 'restaurant-outline', tint: 'rgba(255, 159, 10, 0.12)', label: 'Kitchen' },
+  warehouse: { icon: 'cube-outline', tint: 'rgba(100, 210, 255, 0.12)', label: 'Warehouse' },
+  household: { icon: 'home-outline', tint: 'rgba(48, 209, 88, 0.12)', label: 'Household' },
+  office: { icon: 'briefcase-outline', tint: 'rgba(255, 255, 255, 0.08)', label: 'Office' },
+  workshop: { icon: 'construct-outline', tint: 'rgba(255, 159, 10, 0.12)', label: 'Workshop' },
+  outdoor: { icon: 'leaf-outline', tint: 'rgba(48, 209, 88, 0.12)', label: 'Outdoor' },
+  personal_care: { icon: 'sparkles-outline', tint: 'rgba(255, 69, 58, 0.12)', label: 'Personal Care' },
+  // Dakkota assembly (professional icons)
+  front_bumper_grille: { icon: 'car-outline', tint: 'rgba(100, 210, 255, 0.15)', label: 'Front Bumper & Grille' },
+  front_fascia: { icon: 'square-outline', tint: 'rgba(100, 210, 255, 0.15)', label: 'Front Fascia' },
+  rear_bumper: { icon: 'car-sport-outline', tint: 'rgba(80, 80, 90, 0.2)', label: 'Rear Bumper' },
+  front_suspension: { icon: 'construct-outline', tint: 'rgba(255, 159, 10, 0.15)', label: 'Front Suspension' },
+  rear_suspension: { icon: 'git-merge-outline', tint: 'rgba(255, 159, 10, 0.15)', label: 'Rear Suspension' },
+  overhead_systems: { icon: 'hardware-chip-outline', tint: 'rgba(48, 209, 88, 0.15)', label: 'Overhead Systems' },
+  tire_wheel: { icon: 'disc-outline', tint: 'rgba(48, 209, 88, 0.15)', label: 'Tire & Wheel Assembly' },
 };
 
 // Backward-compat alias

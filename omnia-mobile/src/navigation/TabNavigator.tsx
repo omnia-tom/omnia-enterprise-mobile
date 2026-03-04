@@ -1,7 +1,8 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import TaskBrowserScreen from '../screens/TaskBrowserScreen';
+import DakkotaHomeScreen from '../screens/DakkotaHomeScreen';
 import SubmissionsScreen from '../screens/SubmissionsScreen';
 import GlassTabBar from '../components/GlassTabBar';
 import { colors } from '../theme';
@@ -18,12 +19,12 @@ export default function TabNavigator() {
       }}
     >
       <Tab.Screen
-        name="Tasks"
-        component={TaskBrowserScreen}
+        name="Home"
+        component={DakkotaHomeScreen}
         options={{
-          tabBarLabel: 'Tasks',
+          tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon icon="🎯" color={color} size={size} />
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
@@ -33,18 +34,10 @@ export default function TabNavigator() {
         options={{
           tabBarLabel: 'History',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon icon="📋" color={color} size={size} />
+            <Ionicons name="document-text-outline" size={size} color={color} />
           ),
         }}
       />
     </Tab.Navigator>
-  );
-}
-
-function TabIcon({ icon, color, size }: { icon: string; color: string; size: number }) {
-  return (
-    <Text style={{ fontSize: size, opacity: color === colors.accent ? 1 : 0.6 }}>
-      {icon}
-    </Text>
   );
 }

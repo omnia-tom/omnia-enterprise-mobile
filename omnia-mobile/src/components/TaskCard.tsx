@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Task } from '../types/tasks';
 import { typography, spacing, useThemeColors } from '../theme';
-
 import GlassCard from './GlassCard';
 
 interface TaskCardProps {
@@ -10,19 +10,22 @@ interface TaskCardProps {
   onPress: (task: Task) => void;
 }
 
+const DEFAULT_CATEGORY = { icon: 'construct-outline' as const, tint: 'rgba(255, 255, 255, 0.08)', label: 'Task' };
+
 export default function TaskCard({ task, onPress }: TaskCardProps) {
   const theme = useThemeColors();
   const { colors, categoryConfig, difficultyConfig } = theme;
-  const category = categoryConfig[task.category] || categoryConfig.household;
+  const category = categoryConfig?.[task?.category] ?? categoryConfig?.household ?? DEFAULT_CATEGORY;
+  const iconName = category?.icon ?? 'construct-outline';
   const difficulty = difficultyConfig[task.difficulty] || difficultyConfig.beginner;
   const progress = task.maxSubmissions > 0 ? task.currentSubmissions / task.maxSubmissions : 0;
 
   return (
     <TouchableOpacity onPress={() => onPress(task)} activeOpacity={0.7}>
-      <GlassCard style={styles.card} tintColor={category.tint}>
+      <GlassCard style={styles.card} tintColor={category?.tint ?? DEFAULT_CATEGORY.tint}>
         <View style={styles.topRow}>
-          <View style={[styles.emojiCircle, { backgroundColor: category.tint }]}>
-            <Text style={styles.emoji}>{category.emoji}</Text>
+          <View style={[styles.iconCircle, { backgroundColor: category?.tint ?? DEFAULT_CATEGORY.tint }]}>
+            <Ionicons name={iconName as any} size={24} color={colors.accent} />
           </View>
           <View style={styles.titleBlock}>
             <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>{task.title}</Text>
@@ -60,7 +63,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  emojiCircle: {
+  iconCircle: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -68,9 +71,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
     flexShrink: 0,
-  },
-  emoji: {
-    fontSize: 22,
   },
   titleBlock: {
     flex: 1,

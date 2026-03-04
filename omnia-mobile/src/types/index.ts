@@ -19,9 +19,13 @@ export type RootStackParamList = {
     deviceName: string;
     personaId: string;
   };
-  TaskDetail: { taskId: string };
+  TaskDetail: { taskId: string; sopContent?: string; procedureId?: string; stationId?: string };
   Recording: { taskId: string };
   Account: undefined;
+  /** Dakkota: audio-based consent at workday start */
+  Consent: undefined;
+  /** Dakkota: workstation selection (pick or scan) */
+  WorkstationSelect: undefined;
 };
 
 // Tab Navigator types
