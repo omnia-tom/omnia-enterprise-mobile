@@ -1,24 +1,33 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, ScrollView } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Image, StyleSheet, Text, ScrollView } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, isFirebaseConfigured } from './src/services/firebase';
 import Navigation from './src/navigation';
+import MeshBackground from './src/components/MeshBackground';
+
+const dakkotaLogo = require('./src/assets/dakkota-logo.png');
 
 const AUTH_TIMEOUT_MS = 8000;
-const SPLASH_MIN_MS = 1500;
+const SPLASH_MIN_MS = 1600;
 
-// Keep native splash visible until app is ready — one fixed splash, no React UI, no size changes
+// Keep native splash visible until we hide it
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
   const appStartRef = useRef(Date.now());
+
+  const hideSplash = useCallback(() => {
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
-      setReady(true);
+      setAuthReady(true);
+      setLoading(false);
       return;
     }
     let cancelled = false;
@@ -26,7 +35,7 @@ export default function App() {
       if (!cancelled) {
         console.warn('[App] Auth check timeout — proceeding as unauthenticated');
         setIsAuthenticated(false);
-        setReady(true);
+        setAuthReady(true);
       }
     }, AUTH_TIMEOUT_MS);
 
@@ -35,7 +44,7 @@ export default function App() {
         if (cancelled) return;
         clearTimeout(timeoutId);
         setIsAuthenticated(currentUser !== null);
-        setReady(true);
+        setAuthReady(true);
       });
       return () => {
         cancelled = true;
@@ -45,24 +54,22 @@ export default function App() {
     } catch (err) {
       console.error('[App] Auth init error:', err);
       clearTimeout(timeoutId);
-      setReady(true);
+      setAuthReady(true);
       return () => { cancelled = true; };
     }
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!authReady) return;
     const elapsed = Date.now() - appStartRef.current;
     const remain = Math.max(0, SPLASH_MIN_MS - elapsed);
-    const t = setTimeout(() => {
-      SplashScreen.hideAsync().catch(() => {});
-    }, remain);
+    const t = setTimeout(() => setLoading(false), remain);
     return () => clearTimeout(t);
-  }, [ready]);
+  }, [authReady]);
 
   // Firebase not configured — show setup instructions
   if (!isFirebaseConfigured) {
-    SplashScreen.hideAsync().catch(() => {});
+    hideSplash();
     return (
       <View style={styles.setupContainer}>
         <ScrollView contentContainerStyle={styles.setupScroll}>
@@ -80,13 +87,38 @@ export default function App() {
     );
   }
 
-  // While loading: native splash stays (no React splash — prevents size changes / flash)
-  if (!ready) return null;
+  // Loading: show our Dakkota splash (Mesh + logo) and hide native splash immediately to replace white/circles
+  if (loading) {
+    hideSplash();
+    return (
+      <View style={styles.loadingContainer}>
+        <MeshBackground variant="warm" />
+        <View style={styles.splashContent} pointerEvents="none">
+          <Image source={dakkotaLogo} style={styles.splashLogo} resizeMode="contain" />
+        </View>
+      </View>
+    );
+  }
 
   return <Navigation isAuthenticated={isAuthenticated} />;
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#0D0D12',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splashContent: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splashLogo: {
+    width: 220,
+    height: 56,
+  },
   setupContainer: {
     flex: 1,
     backgroundColor: '#0D0D12',
