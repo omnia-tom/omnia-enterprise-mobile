@@ -7,6 +7,7 @@ import BLEConnectionScreen from '../screens/BLEConnectionScreen';
 import ChatScreen from '../screens/ChatScreen';
 import TaskDetailScreen from '../screens/TaskDetailScreen';
 import RecordingScreen from '../screens/RecordingScreen';
+import IPhoneTestRecordScreen from '../screens/IPhoneTestRecordScreen';
 import MainScreen from '../screens/MainScreen';
 import ConsentScreen from '../screens/ConsentScreen';
 import WorkstationSelectScreen from '../screens/WorkstationSelectScreen';
@@ -64,6 +65,10 @@ export default function Navigation({ isAuthenticated }: NavigationProps) {
         <Stack.Screen
           name="Recording"
           component={RecordingScreen}
+        />
+        <Stack.Screen
+          name="IPhoneTestRecord"
+          component={IPhoneTestRecordScreen}
         />
         <Stack.Screen
           name="Account"

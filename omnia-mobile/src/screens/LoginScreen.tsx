@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Image,
   ScrollView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { signInWithEmailAndPassword, signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '../services/firebase';
@@ -19,6 +20,8 @@ import { LoginFormData } from '../types';
 import { colors } from '../theme';
 import GlassCard from '../components/GlassCard';
 import MeshBackground from '../components/MeshBackground';
+
+const SAVED_EMAIL_KEY = '@omnia_login_email';
 
 const dakkotaLogo = require('../assets/dakkota-logo.png');
 const omniaLogoWhite = require('../assets/omnia-logo-white.png');
@@ -31,6 +34,52 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(SAVED_EMAIL_KEY).then((email) => {
+      if (email) setFormData((f) => ({ ...f, email }));
+    });
+  }, []);
+
+  const handleLogin = async () => {
+    if (!formData.email || !formData.password) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+    await AsyncStorage.setItem(SAVED_EMAIL_KEY, formData.email.trim());
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, formData.email.trim(), formData.password);
+    } catch (error: any) {
+      console.error('Login error:', error);
+      let errorMessage = 'An error occurred during login';
+      switch (error.code) {
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address';
+          break;
+        case 'auth/user-disabled':
+          errorMessage = 'This account has been disabled';
+          break;
+        case 'auth/user-not-found':
+          errorMessage = 'No account found with this email';
+          break;
+        case 'auth/wrong-password':
+          errorMessage = 'Incorrect password';
+          break;
+        case 'auth/invalid-credential':
+          errorMessage = 'Invalid email or password';
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = 'Too many failed attempts. Please try again later';
+          break;
+        default:
+          errorMessage = error.message || 'Failed to login';
+      }
+      Alert.alert('Login Failed', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     try {
@@ -55,50 +104,6 @@ export default function LoginScreen() {
       Alert.alert('Sign-In Failed', msg);
     } finally {
       setGoogleLoading(false);
-    }
-  };
-
-  const handleLogin = async () => {
-    if (!formData.email || !formData.password) {
-      Alert.alert('Error', 'Please enter both email and password');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      await signInWithEmailAndPassword(auth, formData.email.trim(), formData.password);
-    } catch (error: any) {
-      console.error('Login error:', error);
-
-      let errorMessage = 'An error occurred during login';
-
-      switch (error.code) {
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address';
-          break;
-        case 'auth/user-disabled':
-          errorMessage = 'This account has been disabled';
-          break;
-        case 'auth/user-not-found':
-          errorMessage = 'No account found with this email';
-          break;
-        case 'auth/wrong-password':
-          errorMessage = 'Incorrect password';
-          break;
-        case 'auth/invalid-credential':
-          errorMessage = 'Invalid email or password';
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = 'Too many failed attempts. Please try again later';
-          break;
-        default:
-          errorMessage = error.message || 'Failed to login';
-      }
-
-      Alert.alert('Login Failed', errorMessage);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -141,6 +146,8 @@ export default function LoginScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                textContentType="emailAddress"
+                autoComplete="email"
                 editable={!loading}
               />
             </View>
@@ -157,6 +164,8 @@ export default function LoginScreen() {
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
+                textContentType="password"
+                autoComplete="password"
                 editable={!loading}
               />
             </View>

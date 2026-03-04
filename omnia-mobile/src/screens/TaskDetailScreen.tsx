@@ -201,6 +201,12 @@ export default function TaskDetailScreen() {
             {glassesConnected ? 'Start Recording' : 'Connect Glasses First'}
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.testOnIphoneLink}
+          onPress={() => navigation.navigate('IPhoneTestRecord', { taskId })}
+        >
+          <Text style={styles.testOnIphoneText}>Test on iPhone</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -390,5 +396,13 @@ const styles = StyleSheet.create({
     color: '#09090F',
     fontSize: 17,
     fontWeight: '600',
+  },
+  testOnIphoneLink: {
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  testOnIphoneText: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 13,
   },
 });

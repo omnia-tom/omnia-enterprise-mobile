@@ -1,37 +1,32 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Image, StyleSheet, Text, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, Text, ScrollView } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, isFirebaseConfigured } from './src/services/firebase';
 import Navigation from './src/navigation';
-import MeshBackground from './src/components/MeshBackground';
-
-const dakkotaLogo = require('./src/assets/dakkota-logo.png');
 
 const AUTH_TIMEOUT_MS = 8000;
+const SPLASH_MIN_MS = 1500;
 
-// Keep native splash visible until we hide it (avoids white grid/circles flash)
+// Keep native splash visible until app is ready — one fixed splash, no React UI, no size changes
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  const hideSplash = useCallback(() => {
-    SplashScreen.hideAsync().catch(() => {});
-  }, []);
+  const [ready, setReady] = useState(false);
+  const appStartRef = useRef(Date.now());
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
-      setLoading(false);
+      setReady(true);
       return;
     }
     let cancelled = false;
     const timeoutId = setTimeout(() => {
       if (!cancelled) {
-        console.warn('[App] Auth check timeout — proceeding as unauthenticated (offline or network error)');
+        console.warn('[App] Auth check timeout — proceeding as unauthenticated');
         setIsAuthenticated(false);
-        setLoading(false);
+        setReady(true);
       }
     }, AUTH_TIMEOUT_MS);
 
@@ -40,7 +35,7 @@ export default function App() {
         if (cancelled) return;
         clearTimeout(timeoutId);
         setIsAuthenticated(currentUser !== null);
-        setLoading(false);
+        setReady(true);
       });
       return () => {
         cancelled = true;
@@ -50,13 +45,24 @@ export default function App() {
     } catch (err) {
       console.error('[App] Auth init error:', err);
       clearTimeout(timeoutId);
-      setLoading(false);
+      setReady(true);
       return () => { cancelled = true; };
     }
   }, []);
 
-  // Firebase not configured — show setup instructions instead of white screen
+  useEffect(() => {
+    if (!ready) return;
+    const elapsed = Date.now() - appStartRef.current;
+    const remain = Math.max(0, SPLASH_MIN_MS - elapsed);
+    const t = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, remain);
+    return () => clearTimeout(t);
+  }, [ready]);
+
+  // Firebase not configured — show setup instructions
   if (!isFirebaseConfigured) {
+    SplashScreen.hideAsync().catch(() => {});
     return (
       <View style={styles.setupContainer}>
         <ScrollView contentContainerStyle={styles.setupScroll}>
@@ -74,39 +80,13 @@ export default function App() {
     );
   }
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <MeshBackground variant="warm" />
-        <View style={styles.splashContent}>
-          <Image source={dakkotaLogo} style={styles.splashLogo} resizeMode="contain" />
-        </View>
-      </View>
-    );
-  }
-
-  // Hide native splash before showing app content (removes white grid/circles)
-  hideSplash();
+  // While loading: native splash stays (no React splash — prevents size changes / flash)
+  if (!ready) return null;
 
   return <Navigation isAuthenticated={isAuthenticated} />;
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#0D0D12',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  splashContent: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  splashLogo: {
-    width: 220,
-    height: 56,
-  },
   setupContainer: {
     flex: 1,
     backgroundColor: '#0D0D12',

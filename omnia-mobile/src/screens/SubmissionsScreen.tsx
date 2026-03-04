@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -94,58 +94,54 @@ export default function SubmissionsScreen() {
       <MeshBackground variant="balanced" />
       <StatusBar style={theme.statusBarStyle} />
 
-      <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Submissions</Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Submissions</Text>
 
-      {/* Summary card */}
-      <GlassCard style={styles.summaryCard}>
-        <View style={styles.summaryCol}>
-          <Text style={[styles.summaryValueDefault, { color: colors.textPrimary }]}>{submissions.length}</Text>
-          <Text style={[styles.summaryLabel, { color: colors.textTertiary }]}>Submitted</Text>
-        </View>
-        <View style={[styles.summaryDivider, { backgroundColor: colors.separator }]} />
-        <View style={styles.summaryCol}>
-          <Text style={[styles.summaryValueDefault, { color: colors.textPrimary }]}>{approvalRate}%</Text>
-          <Text style={[styles.summaryLabel, { color: colors.textTertiary }]}>Approval</Text>
-        </View>
-      </GlassCard>
+        {/* Summary card */}
+        <GlassCard style={styles.summaryCard}>
+          <View style={styles.summaryCol}>
+            <Text style={[styles.summaryValueDefault, { color: colors.textPrimary }]}>{submissions.length}</Text>
+            <Text style={[styles.summaryLabel, { color: colors.textTertiary }]}>Submitted</Text>
+          </View>
+          <View style={[styles.summaryDivider, { backgroundColor: colors.separator }]} />
+          <View style={styles.summaryCol}>
+            <Text style={[styles.summaryValueDefault, { color: colors.textPrimary }]}>{approvalRate}%</Text>
+            <Text style={[styles.summaryLabel, { color: colors.textTertiary }]}>Approval</Text>
+          </View>
+        </GlassCard>
 
-      {/* Filter tabs */}
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={FILTERS}
-        keyExtractor={(item) => item.key}
-        renderItem={({ item: f }) => (
-          <TouchableOpacity onPress={() => setFilter(f.key)}>
-            <GlassPill active={filter === f.key} style={styles.filterPill}>
-              <Text style={[styles.filterText, { color: filter === f.key ? '#FFFFFF' : colors.textSecondary }]}>
-                {f.label}
-              </Text>
-            </GlassPill>
-          </TouchableOpacity>
-        )}
-        contentContainerStyle={styles.filterRow}
-        style={styles.filterList}
-      />
+        {/* Filter tabs */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+          {FILTERS.map((f) => (
+            <TouchableOpacity key={f.key} onPress={() => setFilter(f.key)}>
+              <GlassPill active={filter === f.key} style={styles.filterPill}>
+                <Text style={[styles.filterText, { color: filter === f.key ? '#FFFFFF' : colors.textSecondary }]}>
+                  {f.label}
+                </Text>
+              </GlassPill>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-      {/* List */}
-      {filtered.length === 0 ? (
-        <View style={styles.center}>
+        {/* List - cards flow directly under filters */}
+        {filtered.length === 0 ? (
           <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
             {submissions.length === 0
               ? 'No submissions yet. Browse tasks to get started.'
               : 'No submissions match this filter.'}
           </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id}
-          renderItem={renderSubmission}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+        ) : (
+          <View style={styles.listContent}>
+            {filtered.map((item) => (
+              <View key={item.id}>{renderSubmission({ item })}</View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -163,7 +159,6 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flexDirection: 'row',
-    marginHorizontal: spacing.screenPadding,
     padding: 20,
     marginBottom: 20,
   },
@@ -182,13 +177,12 @@ const styles = StyleSheet.create({
     width: 1,
     marginHorizontal: 4,
   },
-  filterList: {
-    flexShrink: 0,
-    marginBottom: 16,
-  },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: spacing.screenPadding },
   filterRow: {
-    paddingHorizontal: spacing.screenPadding,
+    flexDirection: 'row',
     gap: 8,
+    marginBottom: 20,
   },
   filterPill: {
     // GlassPill handles padding/radius
@@ -197,8 +191,7 @@ const styles = StyleSheet.create({
     ...typography.caption1,
   },
   listContent: {
-    paddingHorizontal: spacing.screenPadding,
-    paddingBottom: 100,
+    paddingTop: 0,
   },
   subCard: {
     padding: spacing.cardPadding,
@@ -238,12 +231,6 @@ const styles = StyleSheet.create({
   rejectionText: {
     ...typography.caption1,
     marginTop: 8,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.screenPadding,
   },
   emptyText: {
     ...typography.body,

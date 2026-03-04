@@ -23,11 +23,18 @@ export const DAKKOTA_CONFIG = {
 
 export type DakkotaAssemblyDomain = (typeof DAKKOTA_CONFIG.assemblyDomains)[number];
 
-/** Extract Dakkota/SOP payload from raw scan data (handles URLs, lowercase, whitespace, encoding) */
+/** Extract Dakkota/SOP payload from raw scan data (handles URLs, encoding, extra chars) */
 function extractDakkotaPayload(raw: string): string | null {
   if (!raw || typeof raw !== 'string') return null;
-  let data = raw.trim().replace(/\s+/g, '-'); // Normalize spaces to hyphens
+  // Strip BOM, null bytes, control chars; normalize whitespace
+  let data = raw
+    .replace(/^\uFEFF/, '')
+    .replace(/\0/g, '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, '-');
   if (!data) return null;
+
   // If it's a URL, try to extract DAKKOTA-... or procedure-station from path
   try {
     if (data.startsWith('http://') || data.startsWith('https://')) {
@@ -38,8 +45,17 @@ function extractDakkotaPayload(raw: string): string | null {
       if (match) data = match[0];
     }
   } catch {
-    // Not a valid URL, use as-is
+    /* use as-is */
   }
+
+  // Try to find a known payload anywhere in the string (handles "QR: FBG-001" or wrapped text)
+  const embeddedMatch = data.match(/(?:DAKKOTA-|DAK-SOP-)?([A-Za-z]{2,4})-?(\d[\w-]*)|([A-Za-z]{2,4})-(\d[\w-]*)/);
+  if (embeddedMatch) {
+    const prefix = embeddedMatch[1] ?? embeddedMatch[3];
+    const suffix = embeddedMatch[2] ?? embeddedMatch[4];
+    if (prefix && suffix) data = `${prefix.toUpperCase()}-${suffix}`;
+  }
+
   return data;
 }
 
@@ -88,6 +104,12 @@ export function parseWorkstationQR(data: string): { stationId: string; procedure
   // Format 5: Single procedure code e.g. FBG → use default station 001
   if (/^[A-Za-z]+$/.test(raw)) {
     return { procedureId: raw.toUpperCase(), stationId: '001' };
+  }
+
+  // Format 6: procedure+station with optional separator, looser match (e.g. FBG001, FBG 001)
+  const looseMatch = raw.match(/([A-Za-z]{2,4})[-\s]?(\d[\w-]*)/i);
+  if (looseMatch) {
+    return { procedureId: looseMatch[1].toUpperCase(), stationId: looseMatch[2] };
   }
 
   return null;

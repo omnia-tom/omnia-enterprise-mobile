@@ -49,9 +49,15 @@ export default function WorkstationSelectScreen() {
     }
   };
 
-  const handleScan = (raw: string | { data?: string }) => {
-    const data = typeof raw === 'string' ? raw : (raw?.data ?? String(raw));
+  const handleScan = (raw: string | { data?: string; nativeEvent?: { data?: string } }) => {
+    const data =
+      typeof raw === 'string'
+        ? raw
+        : (raw?.nativeEvent?.data ?? raw?.data ?? String(raw));
     const parsed = parseWorkstationQR(data);
+    if (__DEV__ && !parsed) {
+      console.warn('[WorkstationSelect] QR not recognized. Raw:', JSON.stringify(data), 'chars:', [...(data || '')].map((c) => c.charCodeAt(0)));
+    }
     if (parsed) {
       const taskId = PROCEDURE_TO_TASK[parsed.procedureId];
       if (!taskId) {
@@ -75,8 +81,8 @@ export default function WorkstationSelectScreen() {
       }, 150);
     } else {
       Alert.alert(
-        'Invalid QR Code',
-        'Accepted: DAKKOTA-FBG-001, DAK-SOP-FBG-001, or FBG-001',
+        'QR Code Not Recognized',
+        'Use plain text content: FBG-001\n\nSee QR_CODE_FOR_TESTING.md for exact format.',
         [{ text: 'OK' }]
       );
     }

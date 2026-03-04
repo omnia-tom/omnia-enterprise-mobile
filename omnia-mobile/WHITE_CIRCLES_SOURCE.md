@@ -103,6 +103,9 @@ The Expo Dev Client replaces this with `DevClientNoOpLoadingView` when loading t
 
 2. **Dev builds:** The Expo Dev Client “Connecting to Metro” / loading UI can show a white background and status circles.
 
+
+3. **Xcode relaunch vs app reopen:** Circles show when Run from Xcode (fresh install) but NOT when closing/reopening (bundle cached). Confirms Dev Client UI. Use `--no-dev` or start Metro first to reduce.
+
 ---
 
 ## How to Fix the Native Splash

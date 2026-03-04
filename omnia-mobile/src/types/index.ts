@@ -20,7 +20,8 @@ export type RootStackParamList = {
     personaId: string;
   };
   TaskDetail: { taskId: string; sopContent?: string; procedureId?: string; stationId?: string };
-  Recording: { taskId: string };
+  Recording: { taskId: string; useIphoneCamera?: boolean };
+  IPhoneTestRecord: { taskId: string };
   Account: undefined;
   /** Dakkota: audio-based consent at workday start */
   Consent: undefined;
