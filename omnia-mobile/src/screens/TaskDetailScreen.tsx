@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -108,11 +109,19 @@ export default function TaskDetailScreen() {
         {/* Hero */}
         <View style={styles.hero}>
           <View style={styles.heroIconWrap}>
-            <Ionicons
-              name={(category?.icon ?? 'construct-outline') as any}
-              size={40}
-              color={colors.accent}
-            />
+            {(category as { imageSource?: number })?.imageSource ? (
+              <Image
+                source={(category as { imageSource: number }).imageSource}
+                style={styles.heroCategoryIcon}
+                resizeMode="contain"
+              />
+            ) : (
+              <Ionicons
+                name={(category?.icon ?? 'construct-outline') as any}
+                size={40}
+                color={colors.accent}
+              />
+            )}
           </View>
           <Text style={[styles.heroCategory, { color: colors.textTertiary }]}>{category.label}</Text>
           <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>{task.title}</Text>
@@ -255,6 +264,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
+  },
+  heroCategoryIcon: {
+    width: 48,
+    height: 48,
   },
   heroCategory: {
     ...typography.caption1,

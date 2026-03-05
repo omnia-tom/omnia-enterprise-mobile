@@ -112,9 +112,20 @@ export const spacing = {
   cardPadding: 20,
 };
 
+// Dakkota assembly part icons (from parts.png grid)
+const catIcons = {
+  front_bumper_grille: require('./assets/category-icons/front_bumper_grille.png'),
+  front_fascia: require('./assets/category-icons/front_fascia.png'),
+  rear_bumper: require('./assets/category-icons/rear_bumper.png'),
+  front_suspension: require('./assets/category-icons/front_suspension.png'),
+  rear_suspension: require('./assets/category-icons/rear_suspension.png'),
+  overhead_systems: require('./assets/category-icons/overhead_systems.png'),
+  tire_wheel: require('./assets/category-icons/tire_wheel.png'),
+};
+
 // ── Category config ────────────────────────────────────────────
-// icon: Ionicons name (outline variant for enterprise look)
-export const categoryConfig: Record<string, { icon: string; tint: string; label: string }> = {
+// icon: Ionicons name (fallback when no imageSource); imageSource: part icon from parts.png
+export const categoryConfig: Record<string, { icon: string; tint: string; label: string; imageSource?: number }> = {
   kitchen: { icon: 'restaurant-outline', tint: 'rgba(255, 159, 10, 0.12)', label: 'Kitchen' },
   warehouse: { icon: 'cube-outline', tint: 'rgba(100, 210, 255, 0.12)', label: 'Warehouse' },
   household: { icon: 'home-outline', tint: 'rgba(48, 209, 88, 0.12)', label: 'Household' },
@@ -122,14 +133,14 @@ export const categoryConfig: Record<string, { icon: string; tint: string; label:
   workshop: { icon: 'construct-outline', tint: 'rgba(255, 159, 10, 0.12)', label: 'Workshop' },
   outdoor: { icon: 'leaf-outline', tint: 'rgba(48, 209, 88, 0.12)', label: 'Outdoor' },
   personal_care: { icon: 'sparkles-outline', tint: 'rgba(255, 69, 58, 0.12)', label: 'Personal Care' },
-  // Dakkota assembly (professional icons)
-  front_bumper_grille: { icon: 'car-outline', tint: 'rgba(100, 210, 255, 0.15)', label: 'Front Bumper & Grille' },
-  front_fascia: { icon: 'square-outline', tint: 'rgba(100, 210, 255, 0.15)', label: 'Front Fascia' },
-  rear_bumper: { icon: 'car-sport-outline', tint: 'rgba(80, 80, 90, 0.2)', label: 'Rear Bumper' },
-  front_suspension: { icon: 'construct-outline', tint: 'rgba(255, 159, 10, 0.15)', label: 'Front Suspension' },
-  rear_suspension: { icon: 'git-merge-outline', tint: 'rgba(255, 159, 10, 0.15)', label: 'Rear Suspension' },
-  overhead_systems: { icon: 'hardware-chip-outline', tint: 'rgba(48, 209, 88, 0.15)', label: 'Overhead Systems' },
-  tire_wheel: { icon: 'disc-outline', tint: 'rgba(48, 209, 88, 0.15)', label: 'Tire & Wheel Assembly' },
+  // Dakkota assembly (part icons from parts.png)
+  front_bumper_grille: { icon: 'car-outline', tint: 'rgba(100, 210, 255, 0.15)', label: 'Front Bumper & Grille', imageSource: catIcons.front_bumper_grille },
+  front_fascia: { icon: 'square-outline', tint: 'rgba(100, 210, 255, 0.15)', label: 'Front Fascia', imageSource: catIcons.front_fascia },
+  rear_bumper: { icon: 'car-sport-outline', tint: 'rgba(80, 80, 90, 0.2)', label: 'Rear Bumper', imageSource: catIcons.rear_bumper },
+  front_suspension: { icon: 'construct-outline', tint: 'rgba(255, 159, 10, 0.15)', label: 'Front Suspension', imageSource: catIcons.front_suspension },
+  rear_suspension: { icon: 'git-merge-outline', tint: 'rgba(255, 159, 10, 0.15)', label: 'Rear Suspension', imageSource: catIcons.rear_suspension },
+  overhead_systems: { icon: 'hardware-chip-outline', tint: 'rgba(48, 209, 88, 0.15)', label: 'Overhead Systems', imageSource: catIcons.overhead_systems },
+  tire_wheel: { icon: 'disc-outline', tint: 'rgba(48, 209, 88, 0.15)', label: 'Tire & Wheel Assembly', imageSource: catIcons.tire_wheel },
 };
 
 // Backward-compat alias

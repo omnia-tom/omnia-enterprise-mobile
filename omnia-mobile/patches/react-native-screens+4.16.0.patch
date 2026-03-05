@@ -1,0 +1,184 @@
+diff --git a/node_modules/react-native-screens/ios/bottom-tabs/RNSBottomTabsScreenComponentView.mm b/node_modules/react-native-screens/ios/bottom-tabs/RNSBottomTabsScreenComponentView.mm
+index 174ee45..7f31da4 100644
+--- a/node_modules/react-native-screens/ios/bottom-tabs/RNSBottomTabsScreenComponentView.mm
++++ b/node_modules/react-native-screens/ios/bottom-tabs/RNSBottomTabsScreenComponentView.mm
+@@ -115,6 +115,12 @@ RNS_IGNORE_SUPER_CALL_END
+   _controller = nil;
+ }
+ 
++- (BOOL)shouldInvalidateOnMutation:(const facebook::react::ShadowViewMutation &)mutation
++{
++  return (mutation.oldChildShadowView.tag == self.tag && mutation.type == facebook::react::ShadowViewMutation::Delete);
++}
++
++
+ #else
+ 
+ #pragma mark - RCTInvalidating
+@@ -347,6 +353,54 @@ RNS_IGNORE_SUPER_CALL_END
+   return react::concreteComponentDescriptorProvider<react::RNSBottomTabsScreenComponentDescriptor>();
+ }
+ 
++- (void)handleCommand:(nonnull const NSString *)commandName args:(nonnull const NSArray *)args
++{
++  // Default implementation does nothing - tab screens don't handle commands
++}
++
++
++- (BOOL)isJSResponder
++{
++  return NO;
++}
++
++
++- (nullable NSSet<NSString *> *)propKeysManagedByAnimated_DO_NOT_USE_THIS_IS_BROKEN
++{
++  return nil;
++}
++
++
++- (facebook::react::Props::Shared)props
++{
++  return _props;
++}
++
++
++- (void)setIsJSResponder:(BOOL)isJSResponder
++{
++  [super setIsJSResponder:isJSResponder];
++}
++
++
++- (void)setPropKeysManagedByAnimated_DO_NOT_USE_THIS_IS_BROKEN:(nullable NSSet<NSString *> *)props
++{
++  [super setPropKeysManagedByAnimated_DO_NOT_USE_THIS_IS_BROKEN:props];
++}
++
++
+++ (std::vector<facebook::react::ComponentDescriptorProvider>)supplementalComponentDescriptorProviders
++{
++  return {};
++}
++
++
++- (void)updateState:(const facebook::react::State::Shared &)state oldState:(const facebook::react::State::Shared &)oldState
++{
++  [super updateState:state oldState:oldState];
++}
++
++
+ + (BOOL)shouldBeRecycled
+ {
+   // There won't be tens of instances of this component usually & it's easier for now.
+@@ -537,6 +591,96 @@ RNS_FAILING_EVENT_GETTER(onDidDisappear);
+ 
+ #endif // RCT_NEW_ARCH_ENABLED
+ 
++- (facebook::react::SharedTouchEventEmitter)touchEventEmitterAtPoint:(CGPoint)point
++{
++  return [super touchEventEmitterAtPoint:point];
++}
++
++- (void)encodeWithCoder:(nonnull NSCoder *)coder
++{
++  [super encodeWithCoder:coder];
++}
++
+++ (nonnull instancetype)appearance
++{
++  return [super appearance];
++}
++
+++ (nonnull instancetype)appearanceForTraitCollection:(nonnull UITraitCollection *)trait
++{
++  return [super appearanceForTraitCollection:trait];
++}
++
+++ (nonnull instancetype)appearanceForTraitCollection:(nonnull UITraitCollection *)trait whenContainedIn:(nullable Class<UIAppearanceContainer>)ContainerClass, ...
++{
++  return [super appearanceForTraitCollection:trait whenContainedIn:ContainerClass];
++}
++
+++ (nonnull instancetype)appearanceForTraitCollection:(nonnull UITraitCollection *)trait whenContainedInInstancesOfClasses:(nonnull NSArray<Class<UIAppearanceContainer>> *)containerTypes
++{
++  return [super appearanceForTraitCollection:trait whenContainedInInstancesOfClasses:containerTypes];
++}
++
+++ (nonnull instancetype)appearanceWhenContainedIn:(nullable Class<UIAppearanceContainer>)ContainerClass, ...
++{
++  return [super appearanceWhenContainedIn:ContainerClass];
++}
++
+++ (nonnull instancetype)appearanceWhenContainedInInstancesOfClasses:(nonnull NSArray<Class<UIAppearanceContainer>> *)containerTypes
++{
++  return [super appearanceWhenContainedInInstancesOfClasses:containerTypes];
++}
++
++- (void)traitCollectionDidChange:(nullable UITraitCollection *)previousTraitCollection
++{
++  [super traitCollectionDidChange:previousTraitCollection];
++}
++
++- (CGPoint)convertPoint:(CGPoint)point fromCoordinateSpace:(nonnull id<UICoordinateSpace>)coordinateSpace
++{
++  return [super convertPoint:point fromCoordinateSpace:coordinateSpace];
++}
++
++- (CGPoint)convertPoint:(CGPoint)point toCoordinateSpace:(nonnull id<UICoordinateSpace>)coordinateSpace
++{
++  return [super convertPoint:point toCoordinateSpace:coordinateSpace];
++}
++
++- (CGRect)convertRect:(CGRect)rect fromCoordinateSpace:(nonnull id<UICoordinateSpace>)coordinateSpace
++{
++  return [super convertRect:rect fromCoordinateSpace:coordinateSpace];
++}
++
++- (CGRect)convertRect:(CGRect)rect toCoordinateSpace:(nonnull id<UICoordinateSpace>)coordinateSpace
++{
++  return [super convertRect:rect toCoordinateSpace:coordinateSpace];
++}
++
++- (void)didUpdateFocusInContext:(nonnull UIFocusUpdateContext *)context withAnimationCoordinator:(nonnull UIFocusAnimationCoordinator *)coordinator
++{
++  [super didUpdateFocusInContext:context withAnimationCoordinator:coordinator];
++}
++
++- (void)setNeedsFocusUpdate
++{
++  [super setNeedsFocusUpdate];
++}
++
++- (BOOL)shouldUpdateFocusInContext:(nonnull UIFocusUpdateContext *)context
++{
++  return [super shouldUpdateFocusInContext:context];
++}
++
++- (void)updateFocusIfNeeded
++{
++  [super updateFocusIfNeeded];
++}
++
++- (nonnull NSArray<id<UIFocusItem>> *)focusItemsInRect:(CGRect)rect
++{
++  return [super focusItemsInRect:rect];
++}
++
+ @end
+ 
+ #if RCT_NEW_ARCH_ENABLED
+diff --git a/node_modules/react-native-screens/ios/conversion/RNSConversions-BottomTabs.mm b/node_modules/react-native-screens/ios/conversion/RNSConversions-BottomTabs.mm
+index 780e257..6454b1e 100644
+--- a/node_modules/react-native-screens/ios/conversion/RNSConversions-BottomTabs.mm
++++ b/node_modules/react-native-screens/ios/conversion/RNSConversions-BottomTabs.mm
+@@ -290,7 +290,9 @@ UITabBarSystemItem RNSBottomTabsScreenSystemItemToUITabBarSystemItem(RNSBottomTa
+       systemItem != RNSBottomTabsScreenSystemItemNone,
+       @"Attempt to convert bottom tabs systemItem none to UITabBarSystemItem");
+   switch (systemItem) {
+-    case RNSBottomTabsScreenSystemItemBookmarks:
++      case RNSBottomTabsScreenSystemItemNone:
++          return UITabBarSystemItemMore;  // Fallback; assert above should prevent this
++case RNSBottomTabsScreenSystemItemBookmarks:
+       return UITabBarSystemItemBookmarks;
+     case RNSBottomTabsScreenSystemItemContacts:
+       return UITabBarSystemItemContacts;

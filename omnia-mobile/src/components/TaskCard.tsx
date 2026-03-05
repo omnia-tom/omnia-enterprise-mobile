@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Task } from '../types/tasks';
 import { typography, spacing, useThemeColors } from '../theme';
@@ -17,6 +17,7 @@ export default function TaskCard({ task, onPress }: TaskCardProps) {
   const { colors, categoryConfig, difficultyConfig } = theme;
   const category = categoryConfig?.[task?.category] ?? categoryConfig?.household ?? DEFAULT_CATEGORY;
   const iconName = category?.icon ?? 'construct-outline';
+  const imageSource = (category as { imageSource?: number })?.imageSource;
   const difficulty = difficultyConfig[task.difficulty] || difficultyConfig.beginner;
   const progress = task.maxSubmissions > 0 ? task.currentSubmissions / task.maxSubmissions : 0;
 
@@ -25,7 +26,11 @@ export default function TaskCard({ task, onPress }: TaskCardProps) {
       <GlassCard style={styles.card} tintColor={category?.tint ?? DEFAULT_CATEGORY.tint}>
         <View style={styles.topRow}>
           <View style={[styles.iconCircle, { backgroundColor: category?.tint ?? DEFAULT_CATEGORY.tint }]}>
-            <Ionicons name={iconName as any} size={24} color={colors.accent} />
+            {imageSource ? (
+              <Image source={imageSource} style={styles.categoryIcon} resizeMode="contain" />
+            ) : (
+              <Ionicons name={iconName as any} size={24} color={colors.accent} />
+            )}
           </View>
           <View style={styles.titleBlock}>
             <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>{task.title}</Text>
@@ -71,6 +76,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
     flexShrink: 0,
+    overflow: 'hidden',
+  },
+  categoryIcon: {
+    width: 36,
+    height: 36,
   },
   titleBlock: {
     flex: 1,

@@ -8,7 +8,9 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../types';
 import { auth } from '../services/firebase';
 import { typography, spacing, useThemeColors } from '../theme';
 import { Submission, SubmissionStatus } from '../types';
@@ -32,8 +34,11 @@ const FILTERS: { key: 'all' | SubmissionStatus; label: string }[] = [
   { key: 'rejected', label: 'Rejected' },
 ];
 
+type Nav = NativeStackNavigationProp<RootStackParamList, 'SubmissionDetail'>;
+
 export default function SubmissionsScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<Nav>();
   const theme = useThemeColors();
   const { colors } = theme;
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -72,19 +77,26 @@ export default function SubmissionsScreen() {
     const statusConf = STATUS_CONFIG[item.status];
     return (
       <GlassCard style={styles.subCard}>
-        <View style={styles.subTopRow}>
-          <Text style={[styles.subTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.taskTitle}</Text>
-        </View>
-        <View style={styles.subMeta}>
-          <Text style={[styles.subDate, { color: colors.textTertiary }]}>{formatDate(item.submittedAt)}</Text>
-          <Text style={[styles.subDuration, { color: colors.textTertiary }]}>{formatDuration(item.duration)}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: statusConf.bg }]}>
-            <Text style={[styles.statusText, { color: statusConf.color }]}>{statusConf.label}</Text>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate('SubmissionDetail', { submissionId: item.id })}
+        >
+          <View style={styles.subTopRow}>
+            <Text style={[styles.subTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+              {item.taskTitle}
+            </Text>
           </View>
-        </View>
-        {item.status === 'rejected' && item.rejectionReason && (
-          <Text style={[styles.rejectionText, { color: colors.destructive }]}>{item.rejectionReason}</Text>
-        )}
+          <View style={styles.subMeta}>
+            <Text style={[styles.subDate, { color: colors.textTertiary }]}>{formatDate(item.submittedAt)}</Text>
+            <Text style={[styles.subDuration, { color: colors.textTertiary }]}>{formatDuration(item.duration)}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: statusConf.bg }]}>
+              <Text style={[styles.statusText, { color: statusConf.color }]}>{statusConf.label}</Text>
+            </View>
+          </View>
+          {item.status === 'rejected' && item.rejectionReason && (
+            <Text style={[styles.rejectionText, { color: colors.destructive }]}>{item.rejectionReason}</Text>
+          )}
+        </TouchableOpacity>
       </GlassCard>
     );
   };

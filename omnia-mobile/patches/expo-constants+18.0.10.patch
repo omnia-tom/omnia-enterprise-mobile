@@ -1,0 +1,77 @@
+diff --git a/node_modules/expo-constants/ios/EXConstantsService.m b/node_modules/expo-constants/ios/EXConstantsService.m
+index f79eaae..4260c68 100644
+--- a/node_modules/expo-constants/ios/EXConstantsService.m
++++ b/node_modules/expo-constants/ios/EXConstantsService.m
+@@ -108,6 +108,62 @@ EX_REGISTER_MODULE();
+ #endif
+ }
+ 
+++ (NSString *)devicePlatform
++{
++#if TARGET_OS_IOS
++  return @"iOS";
++#elif TARGET_OS_TV
++  return @"tvOS";
++#elif TARGET_OS_OSX
++  return @"macOS";
++#else
++  return @"unknown";
++#endif
++}
++
++- (NSString *)iosVersion
++{
++#if TARGET_OS_IOS || TARGET_OS_TV
++  return [UIDevice currentDevice].systemVersion;
++#elif TARGET_OS_OSX
++  return [[NSProcessInfo processInfo] operatingSystemVersionString];
++#else
++  return @"";
++#endif
++}
++
++- (BOOL)isDevice
++{
++#if TARGET_OS_SIMULATOR
++  return NO;
++#else
++  return YES;
++#endif
++}
++
++- (NSString *)userInterfaceIdiom
++{
++#if TARGET_OS_IOS || TARGET_OS_TV
++  switch ([UIDevice currentDevice].userInterfaceIdiom) {
++    case UIUserInterfaceIdiomPhone:
++      return @"handset";
++    case UIUserInterfaceIdiomPad:
++      return @"tablet";
++    case UIUserInterfaceIdiomTV:
++      return @"tv";
++    case UIUserInterfaceIdiomCarPlay:
++      return @"unsupported";
++    default:
++      return @"unsupported";
++  }
++#elif TARGET_OS_OSX
++  return @"desktop";
++#else
++  return @"unsupported";
++#endif
++}
++
++
+ + (NSDictionary *)appConfig
+ {
+   NSBundle *frameworkBundle = [NSBundle bundleForClass:[EXConstantsService class]];
+@@ -129,4 +185,9 @@ EX_REGISTER_MODULE();
+   return nil;
+ }
+ 
+++ (nonnull NSNumber *)deviceYear
++{
++  return @(0);
++}
++
+ @end

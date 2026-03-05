@@ -19,7 +19,7 @@ final class StepValidator: MLModelConsumer {
 
   var currentStepIndex: Int = 0
   var currentPrompt: String = ""
-  weak var eventEmitter: RCTEventEmitter?
+  weak var eventEmitter: (RCTEventEmitter & AnyObject)?
 
   // MARK: - Internal state
 
@@ -48,11 +48,17 @@ final class StepValidator: MLModelConsumer {
     let prompt = currentPrompt
     let stepIndex = currentStepIndex
 
-    validationQueue.async { [weak self] in
+    validationQueue.async { [weak self, cgImage, prompt, stepIndex] in
       guard let self = self else { return }
 
+      let sharpened = self.sharpenForVLM(cgImage)
+
       Task {
-        defer { self.isProcessing = false }
+        defer {
+          self.validationQueue.async {
+            self.isProcessing = false
+          }
+        }
 
         do {
           // Unbiased prompt — do NOT include expected text to prevent hallucination
@@ -63,8 +69,6 @@ final class StepValidator: MLModelConsumer {
           print("[StepValidator]   Image: \(cgImage.width)x\(cgImage.height)")
           print("[StepValidator]   Looking for: \(prompt)")
 
-          let sharpened = self.sharpenForVLM(cgImage)
-
           let startTime = CFAbsoluteTimeGetCurrent()
           let response = try await FastVLMService.shared.predict(image: sharpened, prompt: vlmPrompt)
           let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
@@ -72,12 +76,22 @@ final class StepValidator: MLModelConsumer {
           print("[StepValidator]   VLM says: \"\(response)\" (\(elapsedMs)ms)")
           print("[StepValidator] ──────────────────────────────────")
 
-          self.emitValidation(stepIndex: stepIndex, validated: false, checking: false, response: "\(response) (\(elapsedMs)ms)", prompt: prompt)
-          DispatchQueue.main.async { self.onCheckComplete?(); self.onCheckComplete = nil }
+          await MainActor.run {
+            self.emitValidation(stepIndex: stepIndex, validated: false, checking: false, response: "\(response) (\(elapsedMs)ms)", prompt: prompt)
+          }
+          await MainActor.run {
+            self.onCheckComplete?()
+            self.onCheckComplete = nil
+          }
         } catch {
           print("[StepValidator] Inference error: \(error.localizedDescription)")
-          self.emitValidation(stepIndex: stepIndex, validated: false, checking: false, response: "ERROR: \(error.localizedDescription)", prompt: prompt)
-          DispatchQueue.main.async { self.onCheckComplete?(); self.onCheckComplete = nil }
+          await MainActor.run {
+            self.emitValidation(stepIndex: stepIndex, validated: false, checking: false, response: "ERROR: \(error.localizedDescription)", prompt: prompt)
+          }
+          await MainActor.run {
+            self.onCheckComplete?()
+            self.onCheckComplete = nil
+          }
         }
       }
     }
@@ -146,3 +160,4 @@ final class StepValidator: MLModelConsumer {
     }
   }
 }
+

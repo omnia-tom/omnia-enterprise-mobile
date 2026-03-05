@@ -34,6 +34,13 @@ export interface Task {
 
 export type SubmissionStatus = 'recording' | 'uploading' | 'under_review' | 'approved' | 'rejected';
 
+export interface StepRecap {
+  stepIndex: number;
+  instruction: string;
+  stillImageUri?: string;
+  handPoseSample?: { timestamp: number; hands: Array<{ chirality: string; joints: Array<{ name: string; x: number; y: number }> }> };
+}
+
 export interface Submission {
   id: string;
   taskId: string;
@@ -47,4 +54,6 @@ export interface Submission {
   submittedAt: Date;
   reviewedAt?: Date;
   rejectionReason?: string;
+  stepRecaps?: StepRecap[];
+  handPoseSamples?: Array<{ timestamp: number; elapsedSec: number; hands: unknown[] }>;
 }

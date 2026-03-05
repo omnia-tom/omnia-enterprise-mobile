@@ -165,6 +165,10 @@ export async function getUserSubmissions(userId: string): Promise<Submission[]> 
   return submissions.filter(s => s.userId === userId);
 }
 
+export async function getSubmissionById(id: string): Promise<Submission | undefined> {
+  return submissions.find(s => s.id === id);
+}
+
 export async function addSubmission(submission: Submission): Promise<void> {
   submissions.push(submission);
   const task = MOCK_TASKS.find(t => t.id === submission.taskId);

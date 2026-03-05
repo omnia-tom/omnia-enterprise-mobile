@@ -29,6 +29,8 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const WELCOME_SEEN_KEY = '@specTask_welcomeSeen';
 
+const dakkotaLogo = require('../assets/Dakkota-Logo-2.png');
+
 const ASSEMBLY_CATEGORIES: (TaskCategory | 'all')[] = [
   'all',
   'front_bumper_grille',
@@ -138,6 +140,9 @@ export default function DakkotaHomeScreen() {
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <MeshBackground variant="warm" />
         <StatusBar style="light" />
+        <View style={styles.logoButton}>
+          <Image source={dakkotaLogo} style={styles.logoImage} resizeMode="contain" />
+        </View>
         <View style={styles.welcomeContent}>
           <Text style={[styles.welcomeTitle, { color: themeColors.textPrimary }]}>Welcome to SpecTask</Text>
           <Text style={[styles.welcomeSubtitle, { color: themeColors.textSecondary }]}>
@@ -167,10 +172,15 @@ export default function DakkotaHomeScreen() {
     }
     const config = categoryConfig[cat];
     const iconName = (config as { icon?: string })?.icon || 'ellipse-outline';
+    const imageSource = (config as { imageSource?: number })?.imageSource;
     return (
       <TouchableOpacity key={cat} onPress={() => setSelectedCategory(cat)}>
         <GlassPill active={isActive} style={[styles.pill, styles.pillWithIcon]}>
-          <Ionicons name={iconName as any} size={16} color={isActive ? '#FFFFFF' : themeColors.textSecondary} />
+          {imageSource ? (
+            <Image source={imageSource} style={styles.pillIconImage} resizeMode="contain" />
+          ) : (
+            <Ionicons name={iconName as any} size={16} color={isActive ? '#FFFFFF' : themeColors.textSecondary} />
+          )}
           <Text style={[styles.pillText, { color: isActive ? '#FFFFFF' : themeColors.textSecondary }]}>
             {config?.label}
           </Text>
@@ -183,6 +193,11 @@ export default function DakkotaHomeScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <MeshBackground variant="warm" />
       <StatusBar style="light" />
+
+      {/* Dakkota logo - top left */}
+      <View style={styles.logoButton}>
+        <Image source={dakkotaLogo} style={styles.logoImage} resizeMode="contain" />
+      </View>
 
       {/* Profile icon - top right */}
       <TouchableOpacity style={styles.profileButton} onPress={handleAccountPress}>
@@ -265,6 +280,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'transparent',
+  },
+  logoButton: {
+    position: 'absolute',
+    top: 60,
+    left: spacing.screenPadding,
+    zIndex: 10,
+  },
+  logoImage: {
+    width: 100,
+    height: 32,
   },
   profileButton: {
     position: 'absolute',
@@ -359,6 +384,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pill: {},
+  pillIconImage: {
+    width: 20,
+    height: 20,
+  },
   pillWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',

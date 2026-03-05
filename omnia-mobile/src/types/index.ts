@@ -27,6 +27,8 @@ export type RootStackParamList = {
   Consent: undefined;
   /** Dakkota: workstation selection (pick or scan) */
   WorkstationSelect: undefined;
+  /** Full-screen submission detail (like TaskDetail) */
+  SubmissionDetail: { submissionId: string };
 };
 
 // Tab Navigator types

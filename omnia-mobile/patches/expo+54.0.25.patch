@@ -1,0 +1,110 @@
+diff --git a/node_modules/expo/ios/AppDelegates/EXAppDelegateWrapper.mm b/node_modules/expo/ios/AppDelegates/EXAppDelegateWrapper.mm
+index f820b49..cbaabdc 100644
+--- a/node_modules/expo/ios/AppDelegates/EXAppDelegateWrapper.mm
++++ b/node_modules/expo/ios/AppDelegates/EXAppDelegateWrapper.mm
+@@ -6,6 +6,9 @@
+ #import <Expo/Swift.h>
+ 
+ #import <React/RCTComponentViewFactory.h> // Allows non-umbrella since it's coming from React-RCTFabric
++#import <React/RCTUtils.h>
++#import <React/RCTHermesInstanceFactory.h>
++#import <React/RCTBundleURLProvider.h>
+ #import <ReactCommon/RCTHost.h> // Allows non-umbrella because the header is not inside a clang module
+ 
+ @implementation EXAppDelegateWrapper {
+@@ -71,6 +74,16 @@
+   [_expoAppDelegate.factory.delegate customizeRootView:rootView];
+ }
+ 
++- (RCTColorSpace)defaultColorSpace
++{
++  return RCTColorSpaceSRGB;
++}
++
++- (void)setRootView:(nonnull UIView *)rootView toRootViewController:(nonnull UIViewController *)rootViewController
++{
++  rootViewController.view = rootView;
++}
++
+ #pragma mark - RCTComponentViewFactoryComponentProvider
+ 
+ - (NSDictionary<NSString *, Class<RCTComponentViewProtocol>> *)thirdPartyFabricComponents
+@@ -78,6 +91,15 @@
+   return self.dependencyProvider.thirdPartyFabricComponents;
+ }
+ 
++- (NSURL * _Nullable)bundleURL
++{
++  if (self.reactDelegate) {
++    return [self.reactDelegate bundleURL];
++  }
++  return [[RCTBundleURLProvider sharedSettings] jsBundleURLForFallbackExtension:nil];
++}
++
++
+ #pragma mark - RCTHostDelegate
+ 
+ - (void)hostDidStart:(RCTHost *)host
+@@ -109,4 +131,36 @@
+   [appDelegate customizeRootView:(RCTRootView *)rootView];
+ }
+ 
++@synthesize dependencyProvider;
++
++- (NSURL * _Nullable)sourceURLForBridge:(nonnull RCTBridge *)bridge
++{
++  return [self bundleURL] ?: [[RCTBundleURLProvider sharedSettings] jsBundleURLForFallbackExtension:nil];
++}
++
++- (nonnull JSRuntimeFactoryRef)createJSRuntimeFactory
++{
++  return jsrt_create_hermes_factory();
++}
++
++- (BOOL)bridgelessEnabled
++{
++  return RCTIsNewArchEnabled();
++}
++
++- (BOOL)fabricEnabled
++{
++  return RCTIsNewArchEnabled();
++}
++
++- (BOOL)newArchEnabled
++{
++  return RCTIsNewArchEnabled();
++}
++
++- (BOOL)turboModuleEnabled
++{
++  return RCTIsNewArchEnabled();
++}
++
+ @end
+diff --git a/node_modules/expo/ios/AppDelegates/ExpoAppDelegate.swift b/node_modules/expo/ios/AppDelegates/ExpoAppDelegate.swift
+index ab95b08..7fac4cf 100644
+--- a/node_modules/expo/ios/AppDelegates/ExpoAppDelegate.swift
++++ b/node_modules/expo/ios/AppDelegates/ExpoAppDelegate.swift
+@@ -11,7 +11,7 @@ import ReactAppDependencyProvider
+  Keep functions and markers in sync with https://developer.apple.com/documentation/uikit/uiapplicationdelegate
+  */
+ @objc(EXExpoAppDelegate)
+-open class ExpoAppDelegate: UIResponder, @preconcurrency ReactNativeFactoryProvider, UIApplicationDelegate {
++open class ExpoAppDelegate: UIResponder, ReactNativeFactoryProvider, UIApplicationDelegate {
+   @objc public var factory: RCTReactNativeFactory?
+   private let defaultModuleName = "main"
+   private let defaultInitialProps = [AnyHashable: Any]()
+diff --git a/node_modules/expo/ios/AppDelegates/ExpoReactNativeFactory.swift b/node_modules/expo/ios/AppDelegates/ExpoReactNativeFactory.swift
+index ce8b1d7..15fe484 100644
+--- a/node_modules/expo/ios/AppDelegates/ExpoReactNativeFactory.swift
++++ b/node_modules/expo/ios/AppDelegates/ExpoReactNativeFactory.swift
+@@ -97,7 +97,7 @@ public class ExpoReactNativeFactory: RCTReactNativeFactory, ExpoReactNativeFacto
+     initialProps: [AnyHashable: Any]?,
+     launchOptions: [AnyHashable: Any]?
+   ) -> UIView {
+-    guard let delegate = self.delegate else {
++    guard self.delegate != nil else {
+       fatalError("recreateRootView: Missing RCTReactNativeFactoryDelegate")
+     }
+ 

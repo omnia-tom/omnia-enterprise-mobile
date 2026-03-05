@@ -132,7 +132,7 @@ class MLProcessingPipeline {
         guard let payload = observation.payloadStringValue else { continue }
 
         let currentTime = Date().timeIntervalSince1970
-        var barcodeType = self.getBarcodeTypeName(observation.symbology)
+        let barcodeType = self.getBarcodeTypeName(observation.symbology)
         var finalPayload = payload
 
         if barcodeType == "EAN-13" && payload.count == 13 {
@@ -166,7 +166,7 @@ class MLProcessingPipeline {
     }
 
     if #available(iOS 15.0, *) {
-      request.revision = VNDetectBarcodesRequestRevision2
+      request.revision = VNDetectBarcodesRequestRevision3
     }
 
     request.regionOfInterest = CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)

@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
 import { StatusBar } from 'expo-status-bar';
@@ -21,6 +22,48 @@ import { typography, spacing, useThemeColors } from '../theme';
 import { RootStackParamList, Task, Submission } from '../types';
 import { getTaskById, addSubmission } from '../services/taskData';
 import MeshBackground from '../components/MeshBackground';
+import HandPoseOverlay from '../components/HandPoseOverlay';
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+// Demo hand pose for iPhone prototype (same overlay as glasses — validates UI before hardware test)
+const DEMO_HAND_POSE = {
+  hands: [{
+    chirality: 'right' as const,
+    joints: [
+      { name: 'wrist', x: 0.5, y: 0.72, confidence: 0.9 },
+      { name: 'thumbCMC', x: 0.48, y: 0.68, confidence: 0.9 },
+      { name: 'thumbMP', x: 0.46, y: 0.62, confidence: 0.9 },
+      { name: 'thumbIP', x: 0.44, y: 0.56, confidence: 0.9 },
+      { name: 'thumbTip', x: 0.42, y: 0.50, confidence: 0.9 },
+      { name: 'indexMCP', x: 0.52, y: 0.66, confidence: 0.9 },
+      { name: 'indexPIP', x: 0.54, y: 0.58, confidence: 0.9 },
+      { name: 'indexDIP', x: 0.55, y: 0.50, confidence: 0.9 },
+      { name: 'indexTip', x: 0.56, y: 0.42, confidence: 0.9 },
+      { name: 'middleMCP', x: 0.54, y: 0.64, confidence: 0.9 },
+      { name: 'middlePIP', x: 0.56, y: 0.54, confidence: 0.9 },
+      { name: 'middleDIP', x: 0.57, y: 0.46, confidence: 0.9 },
+      { name: 'middleTip', x: 0.58, y: 0.38, confidence: 0.9 },
+      { name: 'ringMCP', x: 0.52, y: 0.62, confidence: 0.9 },
+      { name: 'ringPIP', x: 0.54, y: 0.52, confidence: 0.9 },
+      { name: 'ringDIP', x: 0.55, y: 0.44, confidence: 0.9 },
+      { name: 'ringTip', x: 0.56, y: 0.36, confidence: 0.9 },
+      { name: 'littleMCP', x: 0.50, y: 0.60, confidence: 0.9 },
+      { name: 'littlePIP', x: 0.52, y: 0.50, confidence: 0.9 },
+      { name: 'littleDIP', x: 0.53, y: 0.42, confidence: 0.9 },
+      { name: 'littleTip', x: 0.54, y: 0.34, confidence: 0.9 },
+    ],
+  }],
+  timestamp: Date.now() / 1000,
+  frameWidth: SCREEN_W,
+  frameHeight: SCREEN_H,
+};
+
+let ExpoSpeech: any = null;
+try {
+  const sr = require('expo-speech-recognition');
+  ExpoSpeech = sr.ExpoSpeechRecognitionModule;
+} catch {}
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'IPhoneTestRecord'>;
 type Route = RouteProp<RootStackParamList, 'IPhoneTestRecord'>;
@@ -40,6 +83,7 @@ export default function IPhoneTestRecordScreen() {
   const [elapsed, setElapsed] = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [micPermission, setMicPermission] = useState<boolean | null>(null);
   const [currentInstructionIndex, setCurrentInstructionIndex] = useState(0);
 
   const cameraRef = useRef<CameraView>(null);
@@ -50,8 +94,12 @@ export default function IPhoneTestRecordScreen() {
   useEffect(() => {
     loadTask();
     (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
+      const [cam, mic] = await Promise.all([
+        Camera.requestCameraPermissionsAsync(),
+        ExpoSpeech?.requestPermissionsAsync?.().catch(() => ({ granted: false })),
+      ]);
+      setHasPermission(cam.status === 'granted');
+      setMicPermission(mic?.granted ?? false);
     })();
   }, []);
 
@@ -70,13 +118,40 @@ export default function IPhoneTestRecordScreen() {
     };
   }, [recording]);
 
-  // Cycle through instructions every ~18 seconds during recording (like glasses audio prompts)
+  const advanceStep = () => {
+    if (!task?.instructions?.length) return;
+    setCurrentInstructionIndex((prev) =>
+      Math.min(prev + 1, task!.instructions!.length - 1)
+    );
+  };
+
+  const stopRecordingRef = useRef<() => Promise<void>>(async () => {});
+
+  // Voice commands on iPhone (next, repeat, done) — requires mic permission
   useEffect(() => {
-    if (!recording || !task?.instructions?.length) return;
-    const intervalSec = 18;
-    const idx = Math.min(Math.floor(elapsed / intervalSec), task.instructions.length - 1);
-    setCurrentInstructionIndex(idx);
-  }, [recording, elapsed, task?.instructions]);
+    if (!ExpoSpeech || !recording || !micPermission) return;
+    const handleResult = (event: { results?: Array<{ transcript?: string }>; isFinal?: boolean }) => {
+      const transcript = (event.results?.[0]?.transcript || '').toLowerCase().trim();
+      if (transcript.includes('next')) advanceStep();
+      if (transcript.includes('repeat')) {
+        setCurrentInstructionIndex((p) => Math.max(0, p - 1));
+      }
+      if (transcript.includes('done') || transcript.includes('stop')) stopRecordingRef.current();
+    };
+    let listener: { remove: () => void } | null = null;
+    (async () => {
+      try {
+        listener = ExpoSpeech.addListener?.('result', handleResult);
+        await ExpoSpeech.start?.({ lang: 'en-US', continuous: true });
+      } catch (e) {
+        console.warn('[IPhoneTest] Speech recognition:', e);
+      }
+    })();
+    return () => {
+      listener?.remove?.();
+      ExpoSpeech?.stop?.().catch(() => {});
+    };
+  }, [recording, micPermission]);
 
   const loadTask = async () => {
     const data = await getTaskById(taskId);
@@ -97,7 +172,7 @@ export default function IPhoneTestRecordScreen() {
     }
   };
 
-  const stopRecording = async () => {
+  const doStopRecording = async () => {
     const finalElapsed = elapsedRef.current;
     try {
       await cameraRef.current?.stopRecording();
@@ -114,6 +189,7 @@ export default function IPhoneTestRecordScreen() {
       setRecording(false);
     }
   };
+  stopRecordingRef.current = doStopRecording;
 
   const handleSubmit = async () => {
     if (!task || !recordedVideo) return;
@@ -131,6 +207,7 @@ export default function IPhoneTestRecordScreen() {
       frameCount: 0,
       submittedAt: new Date(),
       payoutCents: task.payoutCents ?? 0,
+      stepRecaps: task.instructions.map((inst, i) => ({ stepIndex: i, instruction: inst })),
     };
     await addSubmission(submission);
     navigation.navigate('MainTabs' as any, { screen: 'Submissions' });
@@ -186,35 +263,59 @@ export default function IPhoneTestRecordScreen() {
         mode="video"
         onCameraReady={() => setCameraReady(true)}
       />
+      {/* Demo hand pose overlay — same UI as glasses, for iPhone prototyping */}
+      {recording && (
+        <View style={[StyleSheet.absoluteFillObject, { zIndex: 100, pointerEvents: 'none' }]}>
+          <HandPoseOverlay
+            handPoseData={DEMO_HAND_POSE}
+            containerWidth={SCREEN_W}
+            containerHeight={SCREEN_H}
+          />
+          <View style={styles.demoBadge}>
+            <Text style={styles.demoBadgeText}>Demo overlay</Text>
+          </View>
+        </View>
+      )}
       <View style={[styles.overlay, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.taskLabel}>{task.title}</Text>
+        <View style={styles.topRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.taskTitle}>{task.title}</Text>
         {recording && (
-          <View style={styles.recordingHUD}>
-            <View style={styles.recordingBadge}>
-              <View style={styles.recordingDot} />
-              <Text style={styles.recordingTime}>{formatTime(elapsed)}</Text>
-            </View>
-            {task.instructions?.length > 0 && (
-              <View style={styles.instructionOverlay}>
-                <Text style={styles.instructionLabel}>
-                  Step {currentInstructionIndex + 1} of {task.instructions.length}
-                </Text>
-                <Text style={styles.instructionText}>
-                  {task.instructions[currentInstructionIndex]}
-                </Text>
-              </View>
-            )}
-            <View style={styles.handStatus}>
-              <View style={[styles.handDot, { backgroundColor: 'rgba(52, 199, 89, 0.9)' }]} />
-              <Text style={styles.handText}>iPhone demo — keep hands visible</Text>
-            </View>
+          <View style={styles.recordingBadge}>
+            <View style={styles.recordingDot} />
+            <Text style={styles.recordingTime}>{formatTime(elapsed)}</Text>
           </View>
         )}
-        <View style={styles.controls}>
-          {!recording ? (
+        <View style={styles.bottomControlArea}>
+          {recording && task.instructions?.length > 0 && (
+            <View style={styles.instructionOverlay}>
+              <Text style={styles.instructionLabel}>
+                Step {currentInstructionIndex + 1} of {task.instructions.length}
+              </Text>
+              <Text style={styles.instructionText}>
+                {task.instructions[currentInstructionIndex]}
+              </Text>
+              <View style={styles.instructionActions}>
+                {currentInstructionIndex < task.instructions.length - 1 && (
+                  <TouchableOpacity style={styles.nextStepBtn} onPress={advanceStep}>
+                    <Text style={styles.nextStepBtnText}>Next →</Text>
+                  </TouchableOpacity>
+                )}
+                <Text style={styles.voiceHint}>
+                  {micPermission ? 'Say "next" or "done"' : 'Enable mic for voice'}
+                </Text>
+              </View>
+            </View>
+          )}
+          <View style={styles.handStatus}>
+            <View style={[styles.handDot, { backgroundColor: 'rgba(52, 199, 89, 0.9)' }]} />
+            <Text style={styles.handText}>Keep hands visible in frame</Text>
+          </View>
+          <View style={styles.controls}>
+            {!recording ? (
             <TouchableOpacity
               style={[styles.recordBtn, !cameraReady && styles.recordBtnDisabled]}
               onPress={startRecording}
@@ -222,11 +323,12 @@ export default function IPhoneTestRecordScreen() {
             >
               <Text style={styles.recordBtnText}>{cameraReady ? 'Start Recording' : 'Preparing...'}</Text>
             </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.stopBtn} onPress={stopRecording}>
-              <Text style={styles.stopBtnText}>Stop & Save</Text>
-            </TouchableOpacity>
-          )}
+            ) : (
+              <TouchableOpacity style={styles.stopBtn} onPress={doStopRecording}>
+                <Text style={styles.stopBtnText}>Stop & Save</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     </View>
@@ -241,9 +343,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.screenPadding,
   },
+  topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   backBtn: { alignSelf: 'flex-start' },
   backText: { color: '#fff', fontSize: 16 },
-  taskLabel: { color: 'rgba(255,255,255,0.9)', fontSize: 18, fontWeight: '600' },
+  taskTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
   recordingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -254,16 +362,25 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     gap: 8,
   },
-  recordingHUD: { alignItems: 'center', gap: 8 },
+  bottomControlArea: { alignItems: 'center', gap: 12, width: '100%' },
   recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF453A' },
   recordingTime: { color: '#fff', fontSize: 18, fontWeight: '600' },
   instructionOverlay: {
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.75)',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
     alignSelf: 'stretch',
-    marginHorizontal: spacing.screenPadding,
+  },
+  instructionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  voiceHint: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
   },
   instructionLabel: {
     color: 'rgba(255,255,255,0.7)',
@@ -274,6 +391,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     lineHeight: 22,
+  },
+  nextStepBtn: {
+    marginTop: 10,
+    alignSelf: 'flex-end',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(99, 102, 241, 0.8)',
+    borderRadius: 8,
+  },
+  nextStepBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   handStatus: {
     flexDirection: 'row',
@@ -288,6 +418,19 @@ const styles = StyleSheet.create({
   handText: {
     color: 'rgba(255,255,255,0.85)',
     fontSize: 13,
+  },
+  demoBadge: {
+    position: 'absolute',
+    top: 60,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  demoBadgeText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 11,
   },
   controls: { alignItems: 'center' },
   recordBtn: {

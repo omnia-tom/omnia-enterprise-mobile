@@ -128,10 +128,15 @@ export default function TaskBrowserScreen() {
     }
     const config = categoryConfig[cat];
     const iconName = (config as { icon?: string })?.icon || 'ellipse-outline';
+    const imageSource = (config as { imageSource?: number })?.imageSource;
     return (
       <TouchableOpacity key={cat} onPress={() => setSelectedCategory(cat)}>
         <GlassPill active={isActive} style={[styles.pill, styles.pillWithIcon]}>
-          <Ionicons name={iconName as any} size={16} color={isActive ? '#FFFFFF' : colors.textSecondary} />
+          {imageSource ? (
+            <Image source={imageSource} style={styles.pillIconImage} resizeMode="contain" />
+          ) : (
+            <Ionicons name={iconName as any} size={16} color={isActive ? '#FFFFFF' : colors.textSecondary} />
+          )}
           <Text style={[styles.pillText, { color: isActive ? '#FFFFFF' : colors.textSecondary }]}>
             {config?.label}
           </Text>
@@ -260,6 +265,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pill: {},
+  pillIconImage: {
+    width: 20,
+    height: 20,
+  },
   pillWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',

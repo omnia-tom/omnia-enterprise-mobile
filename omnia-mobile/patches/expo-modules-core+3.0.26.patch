@@ -1,0 +1,64 @@
+diff --git a/node_modules/expo-modules-core/ios/Core/Views/ViewModuleWrapper.swift b/node_modules/expo-modules-core/ios/Core/Views/ViewModuleWrapper.swift
+index 75f7a6f..f9f2056 100644
+--- a/node_modules/expo-modules-core/ios/Core/Views/ViewModuleWrapper.swift
++++ b/node_modules/expo-modules-core/ios/Core/Views/ViewModuleWrapper.swift
+@@ -161,3 +161,4 @@ public final class ViewModuleWrapper: RCTViewManager, DynamicModuleWrapperProtoc
+ 
+ // The direct event implementation can be cached and lazy-loaded (global and static variables are lazy by default in Swift).
+ let directEventBlockImplementation = imp_implementationWithBlock({ ["RCTDirectEventBlock"] } as @convention(block) () -> [String])
++
+diff --git a/node_modules/expo-modules-core/ios/DevTools/ModuleDefinitionEncoder.swift b/node_modules/expo-modules-core/ios/DevTools/ModuleDefinitionEncoder.swift
+index 9453b5e..c6e9c73 100644
+--- a/node_modules/expo-modules-core/ios/DevTools/ModuleDefinitionEncoder.swift
++++ b/node_modules/expo-modules-core/ios/DevTools/ModuleDefinitionEncoder.swift
+@@ -130,10 +130,10 @@ class ConstantEncoder: Encodable {
+     case nil:
+       try container.encodeNil(forKey: .value)
+       try container.encode("null", forKey: .type)
+-    case let value as Dictionary<String, Any>:
++    case let _ as Dictionary<String, Any>:
+       try container.encodeNil(forKey: .value)
+       try container.encode("object", forKey: .type)
+-    case let value as Array<Any>:
++    case let _ as Array<Any>:
+       try container.encodeNil(forKey: .value)
+       try container.encode("array", forKey: .type)
+     default:
+diff --git a/node_modules/expo-modules-core/ios/Fabric/ExpoFabricView.swift b/node_modules/expo-modules-core/ios/Fabric/ExpoFabricView.swift
+index bd73d91..4d6a348 100644
+--- a/node_modules/expo-modules-core/ios/Fabric/ExpoFabricView.swift
++++ b/node_modules/expo-modules-core/ios/Fabric/ExpoFabricView.swift
+@@ -165,7 +165,7 @@ open class ExpoFabricView: ExpoFabricViewObjC, AnyExpoView {
+ 
+   internal static func inject(appContext: AppContext) {
+     // Keep it weak so we don't leak the app context.
+-    weak var weakAppContext = appContext
++    weak let weakAppContext = appContext
+     let appContextBlock: @convention(block) () -> AppContext? = { weakAppContext }
+     let appContextBlockImp: IMP = imp_implementationWithBlock(appContextBlock)
+     class_replaceMethod(object_getClass(ExpoFabricView.self), #selector(appContextFromClass), appContextBlockImp, "@@:")
+@@ -192,7 +192,7 @@ open class ExpoFabricView: ExpoFabricViewObjC, AnyExpoView {
+       }
+     }
+     let newBlockImp: IMP = imp_implementationWithBlock(newBlock)
+-    class_replaceMethod(object_getClass(viewClass), Selector("new"), newBlockImp, "@@:")
++    class_replaceMethod(object_getClass(viewClass), NSSelectorFromString("new"), newBlockImp, "@@:")
+   }
+ 
+   // swiftlint:disable unavailable_function
+diff --git a/node_modules/expo-modules-core/ios/JSI/EXJavaScriptRuntime.mm b/node_modules/expo-modules-core/ios/JSI/EXJavaScriptRuntime.mm
+index 4036062..a65ca8f 100644
+--- a/node_modules/expo-modules-core/ios/JSI/EXJavaScriptRuntime.mm
++++ b/node_modules/expo-modules-core/ios/JSI/EXJavaScriptRuntime.mm
+@@ -277,4 +277,11 @@ typedef jsi::Function (^InstanceFactory)(jsi::Runtime& runtime, NSString * name,
+   return [[EXJavaScriptObject alloc] initWith:fnPtr runtime:self];
+ }
+ 
++- (nonnull EXJavaScriptObject *)createClass:(nonnull NSString *)name constructor:(nonnull ClassConstructorBlock)constructor {
++  InstanceFactory instanceFactory = ^(jsi::Runtime& runtime, NSString * name, expo::common::ClassConstructor constructor){
++    return expo::common::createClass(*self->_runtime, [name UTF8String], constructor);
++  };
++  return [self createInstance:name instanceFactory:instanceFactory constructor:constructor];
++}
++
+ @end

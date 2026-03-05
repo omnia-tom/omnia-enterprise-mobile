@@ -20,16 +20,45 @@ const HAND_SKELETON_CONNECTIONS: [string, string][] = [
 
 const FINGERTIP_JOINTS = new Set(['thumbTip', 'indexTip', 'middleTip', 'ringTip', 'littleTip']);
 
+/** Map normalized frame coords (0-1) to container coords. Handles cover mode when frame aspect differs. */
+function frameToContainer(
+  fx: number, fy: number,
+  containerW: number, containerH: number,
+  frameW: number, frameH: number
+): { x: number; y: number } {
+  if (!frameW || !frameH || frameW === containerW) {
+    return { x: fx * containerW, y: fy * containerH };
+  }
+  const scale = Math.max(containerW / frameW, containerH / frameH);
+  const dispW = frameW * scale;
+  const dispH = frameH * scale;
+  const offX = (containerW - dispW) / 2;
+  const offY = (containerH - dispH) / 2;
+  return {
+    x: offX + fx * dispW,
+    y: offY + fy * dispH,
+  };
+}
+
 const HandPoseOverlay = React.memo(({
   handPoseData,
   containerWidth,
   containerHeight,
+  frameWidth,
+  frameHeight,
 }: {
   handPoseData: HandPoseData;
   containerWidth: number;
   containerHeight: number;
+  frameWidth?: number;
+  frameHeight?: number;
 }) => {
   if (!containerWidth || !containerHeight) return null;
+
+  const fw = frameWidth ?? containerWidth;
+  const fh = frameHeight ?? containerHeight;
+  const toScreen = (fx: number, fy: number) =>
+    frameToContainer(fx, fy, containerWidth, containerHeight, fw, fh);
 
   const elements: React.ReactElement[] = [];
   let keyIdx = 0;
@@ -37,7 +66,6 @@ const HandPoseOverlay = React.memo(({
   for (const hand of handPoseData.hands) {
     const color = hand.chirality === 'left' ? '#22c55e' : hand.chirality === 'right' ? '#ef4444' : '#eab308';
 
-    // Build joint lookup map
     const jointMap = new Map<string, { x: number; y: number; confidence: number }>();
     for (const joint of hand.joints) {
       if (joint.confidence >= 0.3) {
@@ -45,16 +73,14 @@ const HandPoseOverlay = React.memo(({
       }
     }
 
-    // Draw skeleton lines
     for (const [from, to] of HAND_SKELETON_CONNECTIONS) {
       const a = jointMap.get(from);
       const b = jointMap.get(to);
       if (!a || !b) continue;
 
-      const x1 = a.x * containerWidth;
-      const y1 = a.y * containerHeight;
-      const x2 = b.x * containerWidth;
-      const y2 = b.y * containerHeight;
+      const p1 = toScreen(a.x, a.y);
+      const p2 = toScreen(b.x, b.y);
+      const x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y;
 
       const dx = x2 - x1;
       const dy = y2 - y1;
@@ -69,11 +95,16 @@ const HandPoseOverlay = React.memo(({
             left: x1,
             top: y1,
             width: length,
-            height: 2,
+            height: 5,
             backgroundColor: color,
-            opacity: 0.7,
+            opacity: 0.95,
             transformOrigin: 'left center',
             transform: [{ rotate: `${angle}deg` }],
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.5,
+            shadowRadius: 2,
+            elevation: 4,
           }}
         />
       );
@@ -82,9 +113,10 @@ const HandPoseOverlay = React.memo(({
     // Draw joint dots
     for (const [name, joint] of jointMap) {
       const isTip = FINGERTIP_JOINTS.has(name);
-      const dotSize = isTip ? 10 : 6;
-      const x = joint.x * containerWidth - dotSize / 2;
-      const y = joint.y * containerHeight - dotSize / 2;
+      const dotSize = isTip ? 16 : 10;
+      const p = toScreen(joint.x, joint.y);
+      const x = p.x - dotSize / 2;
+      const y = p.y - dotSize / 2;
 
       elements.push(
         <View
@@ -97,8 +129,13 @@ const HandPoseOverlay = React.memo(({
             height: dotSize,
             borderRadius: dotSize / 2,
             backgroundColor: color,
-            borderWidth: 1,
+            borderWidth: 2,
             borderColor: '#fff',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.6,
+            shadowRadius: 2,
+            elevation: 4,
           }}
         />
       );

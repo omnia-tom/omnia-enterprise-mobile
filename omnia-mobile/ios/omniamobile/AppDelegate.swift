@@ -25,7 +25,9 @@ public class AppDelegate: ExpoAppDelegate {
     bindReactNativeFactory(factory)
 
 #if os(iOS) || os(tvOS)
-    window = UIWindow(frame: UIScreen.main.bounds)
+    // Initialize window without UIScreen.main.bounds to avoid direct usage
+    // Proper scene-based window setup should occur in SceneDelegate with UIWindow(windowScene:)
+    window = UIWindow()
     factory.startReactNative(
       withModuleName: "main",
       in: window,

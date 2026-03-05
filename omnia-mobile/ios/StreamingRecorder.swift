@@ -303,7 +303,7 @@ class StreamingRecorder {
 
   private func startAudioCapture() throws {
     let audioSession = AVAudioSession.sharedInstance()
-    try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .allowBluetooth])
+    try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .allowBluetoothHFP])
     try audioSession.setActive(true, options: [])
 
     let tempDir = FileManager.default.temporaryDirectory
@@ -333,8 +333,8 @@ class StreamingRecorder {
   private func mergeAudioIntoVideo(videoURL: URL, audioURL: URL, completion: @escaping (URL) -> Void) {
     let composition = AVMutableComposition()
 
-    let videoAsset = AVAsset(url: videoURL)
-    let audioAsset = AVAsset(url: audioURL)
+    let videoAsset = AVURLAsset(url: videoURL)
+    let audioAsset = AVURLAsset(url: audioURL)
 
     Task {
       do {
@@ -366,7 +366,11 @@ class StreamingRecorder {
         exporter.outputURL = mergedURL
         exporter.outputFileType = .mov
 
-        await exporter.export()
+        await withCheckedContinuation { continuation in
+          exporter.exportAsynchronously {
+            continuation.resume()
+          }
+        }
 
         if exporter.status == .completed {
           completion(mergedURL)
@@ -468,3 +472,4 @@ class StreamingRecorder {
     context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
   }
 }
+

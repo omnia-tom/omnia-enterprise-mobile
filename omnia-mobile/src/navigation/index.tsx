@@ -11,6 +11,7 @@ import IPhoneTestRecordScreen from '../screens/IPhoneTestRecordScreen';
 import MainScreen from '../screens/MainScreen';
 import ConsentScreen from '../screens/ConsentScreen';
 import WorkstationSelectScreen from '../screens/WorkstationSelectScreen';
+import SubmissionDetailScreen from '../screens/SubmissionDetailScreen';
 import TabNavigator from './TabNavigator';
 import { RootStackParamList } from '../types';
 
@@ -93,6 +94,10 @@ export default function Navigation({ isAuthenticated }: NavigationProps) {
         <Stack.Screen
           name="WorkstationSelect"
           component={WorkstationSelectScreen}
+        />
+        <Stack.Screen
+          name="SubmissionDetail"
+          component={SubmissionDetailScreen}
         />
       </Stack.Navigator>
     </NavigationContainer>

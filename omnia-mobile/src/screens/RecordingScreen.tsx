@@ -15,7 +15,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { auth } from '../services/firebase';
 import { typography, spacing, useThemeColors } from '../theme';
-import { RootStackParamList, Task, Submission } from '../types';
+import { RootStackParamList, Task, Submission, StepRecap } from '../types';
 import { getTaskById, addSubmission } from '../services/taskData';
 import { metaWearablesService, MetaVideoFrame, HandPoseData, VoiceCommand, StepValidation, VLMModelInfo } from '../services/metaWearables';
 import HandPoseOverlay from '../components/HandPoseOverlay';
@@ -156,6 +156,10 @@ export default function RecordingScreen() {
   const stopRecordingRef = useRef<() => void>(() => {});
   const vlmLogScrollRef = useRef<ScrollView>(null);
   const reviewCheckScale = useRef(new Animated.Value(0)).current;
+  const stepRecapsRef = useRef<StepRecap[]>([]);
+  const handPoseSamplesRef = useRef<Array<{ timestamp: number; elapsedSec: number; hands: unknown[] }>>([]);
+  const lastHandSampleRef = useRef(0);
+  const elapsedSecRef = useRef(0);
 
   useEffect(() => {
     loadTask();
@@ -211,7 +215,7 @@ export default function RecordingScreen() {
   const startStream = async () => {
     try {
       await metaWearablesService.startVideoStream();
-      await metaWearablesService.setHandPoseEnabled(false);
+      await metaWearablesService.setHandPoseEnabled(true);
 
       metaWearablesService.addEventListener('videoFrame', handleVideoFrame);
       metaWearablesService.addEventListener('handPoseDetected', handleHandPose);
@@ -272,6 +276,20 @@ export default function RecordingScreen() {
 
   const handleHandPose = useCallback((data: HandPoseData) => {
     setHandPoseData(data);
+      if (isRecordingRef.current && data.hands?.length) {
+      const now = Date.now();
+      if (now - lastHandSampleRef.current > 1500) {
+        lastHandSampleRef.current = now;
+        handPoseSamplesRef.current.push({
+          timestamp: data.timestamp * 1000,
+          elapsedSec: elapsedSecRef.current,
+          hands: data.hands.map((h) => ({
+            chirality: h.chirality,
+            joints: h.joints.map((j) => ({ name: j.name, x: j.x, y: j.y })),
+          })),
+        });
+      }
+    }
   }, []);
 
   const handleStepValidation = useCallback((data: StepValidation) => {
@@ -332,10 +350,16 @@ export default function RecordingScreen() {
       const validArr = new Array(task?.instructions.length || 0).fill(false);
       setStepValidations(validArr);
       stepValidationsRef.current = validArr;
+      stepRecapsRef.current = [];
+      handPoseSamplesRef.current = [];
+      lastHandSampleRef.current = 0;
 
       // Start timer
       timerRef.current = setInterval(() => {
-        setElapsedSeconds(prev => prev + 1);
+        setElapsedSeconds(prev => {
+          elapsedSecRef.current = prev + 1;
+          return prev + 1;
+        });
       }, 1000);
 
       // Start pulse animation
@@ -436,6 +460,11 @@ export default function RecordingScreen() {
         return;
       }
       if (cmd === 'timeout' || cmd === 'next') {
+        stepRecapsRef.current.push({
+          stepIndex: i,
+          instruction: task.instructions[i],
+          stillImageUri: undefined,
+        });
         if (i + 1 < task.instructions.length) {
           addVlmLog(`Step ${i + 1} complete → Next: "${task.instructions[i + 1].substring(0, 45)}"`, '#FFFFFF');
         } else {
@@ -470,7 +499,7 @@ export default function RecordingScreen() {
       setRecordedVideo({
         filePath: result.filePath,
         frameCount: result.frameCount,
-        duration: result.duration,
+        duration: dur,
       });
       setPhase('review');
     } catch (e) {
@@ -522,6 +551,8 @@ export default function RecordingScreen() {
       duration: recordedVideo.duration,
       frameCount: recordedVideo.frameCount,
       submittedAt: new Date(),
+      stepRecaps: stepRecapsRef.current.length ? stepRecapsRef.current : task.instructions.map((inst, i) => ({ stepIndex: i, instruction: inst })),
+      handPoseSamples: handPoseSamplesRef.current.length ? handPoseSamplesRef.current : undefined,
     };
 
     await addSubmission(submission);
@@ -645,25 +676,27 @@ export default function RecordingScreen() {
           </View>
         )}
 
-        {/* Hand pose overlay */}
-        {handPoseData && (
-          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {/* Hand pose overlay - prominent, always on top */}
+        {handPoseData && handPoseData.hands?.length > 0 && (
+          <View style={[StyleSheet.absoluteFillObject, { zIndex: 100, pointerEvents: 'none' }]}>
             <HandPoseOverlay
               handPoseData={handPoseData}
               containerWidth={SCREEN_WIDTH}
               containerHeight={SCREEN_HEIGHT}
+              frameWidth={handPoseData.frameWidth}
+              frameHeight={handPoseData.frameHeight}
             />
           </View>
         )}
       </View>
 
-      {/* Top overlay bar */}
+      {/* Top overlay — task title prominent, back button */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.topBackButton}>
           <Text style={styles.topBackArrow}>{'‹'}</Text>
         </TouchableOpacity>
         <View style={styles.topCenter}>
-          <Text style={styles.topTitle} numberOfLines={1}>{task?.title || 'Recording'}</Text>
+          <Text style={styles.topTitle} numberOfLines={2}>{task?.title || 'Recording'}</Text>
           {phase === 'recording' && (
             <Text style={styles.timer}>{formatTime(elapsedSeconds)}</Text>
           )}
@@ -828,6 +861,10 @@ export default function RecordingScreen() {
         {phase === 'preview' && voiceReady && (
           <Text style={styles.voiceHint}>Say "Start" to begin</Text>
         )}
+        {/* Voice hint during recording */}
+        {phase === 'recording' && (
+          <Text style={styles.voiceHint}>Say "Next" to advance step</Text>
+        )}
 
         {/* Record / Stop button */}
         {phase === 'recording' ? (
@@ -905,7 +942,7 @@ const styles = StyleSheet.create({
   },
   topTitle: {
     color: '#FFFFFF',
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '600',
   },
   timer: {
@@ -922,7 +959,7 @@ const styles = StyleSheet.create({
   // Unified VLM + Steps panel (during recording)
   vlmPanel: {
     position: 'absolute',
-    top: 160,
+    bottom: 220,
     left: 12,
     right: 12,
     backgroundColor: 'rgba(0,0,0,0.7)',

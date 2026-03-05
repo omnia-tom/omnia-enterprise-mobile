@@ -77,7 +77,7 @@ final class FastVLMService {
     print("[FastVLM] Loading model: \(entry.label)...")
 
     // Cap GPU cache to 2 GB so we don't starve the rest of the app.
-    MLX.GPU.set(cacheLimit: 2_000_000_000)
+    Memory.cacheLimit = 2_000_000_000
 
     let container = try await VLMModelFactory.shared.loadContainer(
       configuration: entry.config
@@ -126,7 +126,7 @@ final class FastVLMService {
   /// Free model memory. Call when leaving the recording screen.
   func unloadModel() {
     modelContainer = nil
-    MLX.GPU.clearCache()
+    Memory.clearCache()
     print("[FastVLM] Model unloaded")
   }
 
@@ -157,3 +157,4 @@ enum FastVLMError: LocalizedError {
     }
   }
 }
+

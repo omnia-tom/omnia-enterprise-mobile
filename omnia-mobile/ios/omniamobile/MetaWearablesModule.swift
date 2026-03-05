@@ -163,11 +163,11 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
 
       for await registrationState in await wearables.registrationStateStream() {
         print("[MetaWearables] Registration state changed: \(previousState) -> \(registrationState)")
-        print("[MetaWearables] Current devices count: \(await wearables.devices.count)")
+        let devices = await wearables.devices
+        print("[MetaWearables] Current devices count: \(devices.count)")
 
         // Set up device stream when registered
         if registrationState == .registered {
-          let devices = await wearables.devices
           let deviceId = devices.first ?? ""
           print("[MetaWearables] Now in .registered state, devices: \(devices)")
 
@@ -185,10 +185,6 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
           print("[MetaWearables] State is .unavailable - device disconnected")
           self.currentDevice = nil
           self.sendEvent(withName: "onDeviceDisconnected", body: [:])
-        } else if registrationState == .none {
-          print("[MetaWearables] State is .unregistered - device disconnected")
-          self.currentDevice = nil
-          self.sendEvent(withName: "onDeviceDisconnected", body: [:])
         } else {
           print("[MetaWearables] State is something else: \(registrationState)")
         }
@@ -199,7 +195,7 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
   }
 
   private func setupDeviceStream() async {
-    guard let wearables = self.wearables else {
+    guard self.wearables != nil else {
       print("[MetaWearables] Cannot setup device stream - wearables is nil")
       return
     }
@@ -219,7 +215,7 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
 
       var previousDevices: Set<DeviceIdentifier> = []
 
-      for await devices in await wearables.devicesStream() {
+      for await devices in wearables.devicesStream() {
         print("[MetaWearables] Received devices update: \(devices.count) devices")
         let currentDevices = Set(devices)
         self.discoveredDevices = devices
@@ -237,7 +233,7 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
 
         for deviceId in devices {
           print("[MetaWearables] Processing device: \(deviceId)")
-          if let device = await wearables.deviceForIdentifier(deviceId) {
+          if let device = wearables.deviceForIdentifier(deviceId) {
             print("[MetaWearables] Emitting deviceFound for: \(device.nameOrId())")
             self.sendEvent(withName: "onDeviceFound", body: [
               "id": deviceId,
@@ -414,7 +410,7 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
       }
 
       do {
-        let currentState = await wearables.registrationState
+        let currentState = wearables.registrationState
         print("[MetaWearables] startPairing called, current state: \(currentState)")
 
         if currentState == .registered {
@@ -453,7 +449,7 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
 
   private func setupStreamSession() async {
     await MainActor.run {
-      guard let wearables = self.wearables,
+      guard self.wearables != nil,
             let deviceSelector = self.deviceSelector else {
         print("[MetaWearables] Cannot setup stream - wearables or deviceSelector is nil")
         return
@@ -703,8 +699,8 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         return
       }
 
-      let registrationState = await wearables.registrationState
-      let devices = await wearables.devices
+      let registrationState = wearables.registrationState
+      let devices = wearables.devices
       let isConnected = (registrationState == .registered && !devices.isEmpty)
 
       let stateString: String
@@ -715,6 +711,8 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
         stateString = "registering"
       case .unavailable:
         stateString = "unavailable"
+      case .available:
+        stateString = "available"
       @unknown default:
         stateString = "unknown"
       }
@@ -836,7 +834,7 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
 
       let audioSession = AVAudioSession.sharedInstance()
       do {
-        try audioSession.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetooth])
+        try audioSession.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try audioSession.setActive(true)
       } catch {
         print("[MetaWearables] Failed to configure audio session: \(error.localizedDescription)")
@@ -900,7 +898,7 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
       do {
         if self.isRecording {
           let audioSession = AVAudioSession.sharedInstance()
-          try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .allowBluetooth])
+          try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .allowBluetoothHFP])
           try audioSession.setActive(true)
         }
 
@@ -990,7 +988,7 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
     recognitionTask = nil
 
     let audioSession = AVAudioSession.sharedInstance()
-    try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
+    try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP])
     try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
     recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
@@ -1295,3 +1293,4 @@ class MetaWearablesModule: RCTEventEmitter, AVAudioRecorderDelegate, AVSpeechSyn
     streamSession = nil
   }
 }
+
