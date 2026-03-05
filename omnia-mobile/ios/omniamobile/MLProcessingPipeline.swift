@@ -25,7 +25,7 @@ class MLProcessingPipeline {
 
   // Throttle rates
   private let barcodeEveryN: Int = 3   // ~5fps at 15fps input
-  private let handPoseEveryN: Int = 2  // ~7.5fps at 15fps input
+  private let handPoseEveryN: Int = 1  // every frame for responsive hand/wrist tracking
 
   // State
   var isBarcodeEnabled: Bool = true
@@ -223,7 +223,7 @@ class MLProcessingPipeline {
       var jointsArray: [[String: Any]] = []
 
       for (jointName, point) in allPoints {
-        guard point.confidence > 0.1 else { continue }
+        guard point.confidence > 0.05 else { continue }
 
         let name = readableJointName(jointName)
         guard name != "unknown" else { continue }

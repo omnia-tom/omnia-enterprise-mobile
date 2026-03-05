@@ -56,5 +56,37 @@ target 'omniamobile' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+    # Disable user script sandboxing to fix "Operation not permitted" when Copy Pods Resources runs rsync (Xcode 15+)
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+      end
+    end
+    installer.pods_project.build_configurations.each do |config|
+      config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+    end
+    # Disable sandboxing on main app project (Copy Pods Resources runs in omniamobile target)
+    main_project_path = File.join(__dir__, 'omniamobile.xcodeproj', 'project.pbxproj')
+    if File.exist?(main_project_path)
+      pbx = File.read(main_project_path)
+      File.write(main_project_path, pbx.gsub('ENABLE_USER_SCRIPT_SANDBOXING = YES;', 'ENABLE_USER_SCRIPT_SANDBOXING = NO;'))
+    end
+    # Fix realpath -mq (GNU-only) for macOS: BSD realpath only supports -q
+    Dir.glob(File.join(__dir__, 'Pods', 'Target Support Files', '**', '*.sh')).each do |script|
+      content = File.read(script)
+      if content.include?('realpath -mq')
+        File.write(script, content.gsub('realpath -mq', 'realpath -q'))
+      end
+    end
+    # Fix "Operation not permitted" when writing resources-to-copy: use TARGET_TEMP_DIR (writable in sandbox) instead of PODS_ROOT
+    resources_script = File.join(__dir__, 'Pods', 'Target Support Files', 'Pods-omniamobile', 'Pods-omniamobile-resources.sh')
+    if File.exist?(resources_script)
+      content = File.read(resources_script)
+      content = content.gsub(
+        'RESOURCES_TO_COPY=${PODS_ROOT}/resources-to-copy-${TARGETNAME}.txt',
+        'RESOURCES_TO_COPY=${TARGET_TEMP_DIR}/resources-to-copy-${TARGETNAME}.txt'
+      )
+      File.write(resources_script, content)
+    end
   end
 end

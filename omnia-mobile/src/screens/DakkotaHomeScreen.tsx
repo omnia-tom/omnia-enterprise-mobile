@@ -40,6 +40,7 @@ const ASSEMBLY_CATEGORIES: (TaskCategory | 'all')[] = [
   'rear_suspension',
   'overhead_systems',
   'tire_wheel',
+  'rear_fascia',
 ];
 
 export default function DakkotaHomeScreen() {

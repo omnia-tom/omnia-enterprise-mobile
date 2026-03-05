@@ -121,6 +121,7 @@ const catIcons = {
   rear_suspension: require('./assets/category-icons/rear_suspension.png'),
   overhead_systems: require('./assets/category-icons/overhead_systems.png'),
   tire_wheel: require('./assets/category-icons/tire_wheel.png'),
+  rear_fascia: require('./assets/category-icons/rear_fascia.png'),
 };
 
 // ── Category config ────────────────────────────────────────────
@@ -141,6 +142,7 @@ export const categoryConfig: Record<string, { icon: string; tint: string; label:
   rear_suspension: { icon: 'git-merge-outline', tint: 'rgba(255, 159, 10, 0.15)', label: 'Rear Suspension', imageSource: catIcons.rear_suspension },
   overhead_systems: { icon: 'hardware-chip-outline', tint: 'rgba(48, 209, 88, 0.15)', label: 'Overhead Systems', imageSource: catIcons.overhead_systems },
   tire_wheel: { icon: 'disc-outline', tint: 'rgba(48, 209, 88, 0.15)', label: 'Tire & Wheel Assembly', imageSource: catIcons.tire_wheel },
+  rear_fascia: { icon: 'car-sport-outline', tint: 'rgba(80, 80, 90, 0.2)', label: 'Rear Fascia', imageSource: catIcons.rear_fascia },
 };
 
 // Backward-compat alias

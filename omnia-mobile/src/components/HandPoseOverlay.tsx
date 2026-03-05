@@ -55,8 +55,9 @@ const HandPoseOverlay = React.memo(({
 }) => {
   if (!containerWidth || !containerHeight) return null;
 
-  const fw = frameWidth ?? containerWidth;
-  const fh = frameHeight ?? containerHeight;
+  // Use frame dimensions from native; fallback to container if missing (avoids division by zero / wrong mapping)
+  const fw = (frameWidth && frameWidth > 0) ? frameWidth : containerWidth;
+  const fh = (frameHeight && frameHeight > 0) ? frameHeight : containerHeight;
   const toScreen = (fx: number, fy: number) =>
     frameToContainer(fx, fy, containerWidth, containerHeight, fw, fh);
 
@@ -68,7 +69,7 @@ const HandPoseOverlay = React.memo(({
 
     const jointMap = new Map<string, { x: number; y: number; confidence: number }>();
     for (const joint of hand.joints) {
-      if (joint.confidence >= 0.3) {
+      if (joint.confidence >= 0.2) {
         jointMap.set(joint.name, joint);
       }
     }

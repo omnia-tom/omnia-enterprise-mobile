@@ -22,6 +22,7 @@ import { RootStackParamList, Submission, StepRecap } from '../types';
 import { getSubmissionById } from '../services/taskData';
 import GlassCard from '../components/GlassCard';
 import MeshBackground from '../components/MeshBackground';
+import HandPoseThumbnail from '../components/HandPoseThumbnail';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   recording: { label: 'Recording', color: '#FF9F0A', bg: 'rgba(255, 159, 10, 0.12)' },
@@ -133,6 +134,8 @@ export default function SubmissionDetailScreen() {
                         style={styles.thumbnail}
                         resizeMode="cover"
                       />
+                    ) : recap.handPoseSample ? (
+                      <HandPoseThumbnail handPoseSample={recap.handPoseSample} />
                     ) : (
                       <View style={[styles.thumbnailPlaceholder, { backgroundColor: colors.accentMuted }]}>
                         <Ionicons name="image-outline" size={28} color={colors.accent} />
@@ -153,6 +156,13 @@ export default function SubmissionDetailScreen() {
                         <Text style={[styles.handDataLabel, { color: colors.textTertiary }]}>
                           Hand pose @ {recap.handPoseSample.timestamp.toFixed(1)}s
                         </Text>
+                        {recap.handPoseSample.wristPosition && (
+                          <Text style={[styles.wristCoords, { color: colors.textSecondary }]}>
+                            Wrist (x, y, z): {recap.handPoseSample.wristPosition.x.toFixed(3)},{' '}
+                            {recap.handPoseSample.wristPosition.y.toFixed(3)},{' '}
+                            {recap.handPoseSample.wristPosition.z.toFixed(3)} — for data labeling
+                          </Text>
+                        )}
                         <Text style={[styles.handDataDetail, { color: colors.textSecondary }]}>
                           {recap.handPoseSample.hands?.length ?? 0} hand(s),{' '}
                           {recap.handPoseSample.hands?.[0]?.joints?.length ?? 0} joints
@@ -265,6 +275,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   handDataLabel: { ...typography.caption2, marginBottom: 2 },
+  wristCoords: { ...typography.caption2, marginBottom: 4, fontFamily: 'monospace' },
   handDataDetail: { ...typography.caption2 },
   handSummaryCard: { padding: spacing.cardPadding },
   handSummaryText: { ...typography.body, marginBottom: 12 },

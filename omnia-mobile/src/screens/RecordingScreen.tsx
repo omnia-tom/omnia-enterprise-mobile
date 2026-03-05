@@ -8,6 +8,7 @@ import {
   Dimensions,
   Alert,
   ScrollView,
+  InteractionManager,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -134,6 +135,7 @@ export default function RecordingScreen() {
   const [vlmCurrentModel, setVlmCurrentModel] = useState<string>('qwen2vl2b');
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [modelSwitching, setModelSwitching] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const addVlmLog = (msg: string, color?: string) => {
     const now = new Date();
@@ -158,8 +160,10 @@ export default function RecordingScreen() {
   const reviewCheckScale = useRef(new Animated.Value(0)).current;
   const stepRecapsRef = useRef<StepRecap[]>([]);
   const handPoseSamplesRef = useRef<Array<{ timestamp: number; elapsedSec: number; hands: unknown[] }>>([]);
+  const handPoseDataRef = useRef<HandPoseData | null>(null);
   const lastHandSampleRef = useRef(0);
   const elapsedSecRef = useRef(0);
+  const [videoLayout, setVideoLayout] = useState({ width: SCREEN_WIDTH, height: SCREEN_HEIGHT });
 
   useEffect(() => {
     loadTask();
@@ -276,7 +280,8 @@ export default function RecordingScreen() {
 
   const handleHandPose = useCallback((data: HandPoseData) => {
     setHandPoseData(data);
-      if (isRecordingRef.current && data.hands?.length) {
+    handPoseDataRef.current = data;
+    if (isRecordingRef.current && data.hands?.length) {
       const now = Date.now();
       if (now - lastHandSampleRef.current > 1500) {
         lastHandSampleRef.current = now;
@@ -460,10 +465,22 @@ export default function RecordingScreen() {
         return;
       }
       if (cmd === 'timeout' || cmd === 'next') {
+        const hp = handPoseDataRef.current;
+        const wrist = hp?.hands?.[0]?.joints?.find((j) => j.name === 'wrist');
         stepRecapsRef.current.push({
           stepIndex: i,
           instruction: task.instructions[i],
           stillImageUri: undefined,
+          handPoseSample: hp?.hands?.length
+            ? {
+                timestamp: hp.timestamp,
+                wristPosition: wrist ? { x: wrist.x, y: wrist.y, z: 0 } : undefined,
+                hands: hp.hands.map((h) => ({
+                  chirality: h.chirality,
+                  joints: h.joints.map((j) => ({ name: j.name, x: j.x, y: j.y, z: 0 })),
+                })),
+              }
+            : undefined,
         });
         if (i + 1 < task.instructions.length) {
           addVlmLog(`Step ${i + 1} complete → Next: "${task.instructions[i + 1].substring(0, 45)}"`, '#FFFFFF');
@@ -496,16 +513,18 @@ export default function RecordingScreen() {
     try {
       const result = await metaWearablesService.stopRecording();
       isRecordingRef.current = false;
-      setRecordedVideo({
-        filePath: result.filePath,
-        frameCount: result.frameCount,
-        duration: dur,
+      const filePath = String(result?.filePath ?? 'unknown');
+      const frameCount = Number(result?.frameCount) || 0;
+      const duration = Number(result?.duration) || 0;
+      // Defer state updates to avoid crash during native→JS transition; ensures smooth transition to review
+      InteractionManager.runAfterInteractions(() => {
+        setRecordedVideo({ filePath, frameCount, duration });
+        setPhase('review');
       });
-      setPhase('review');
     } catch (e) {
       console.error('[RecordingScreen] Failed to stop recording:', e);
       isRecordingRef.current = false;
-      setPhase('preview');
+      InteractionManager.runAfterInteractions(() => setPhase('preview'));
     }
   };
 
@@ -537,26 +556,33 @@ export default function RecordingScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!task || !recordedVideo) return;
+    if (!task || !recordedVideo || submitting) return;
     const user = auth.currentUser;
     if (!user) return;
 
-    const submission: Submission = {
-      id: `sub-${Date.now()}`,
-      taskId: task.id,
-      taskTitle: task.title,
-      userId: user.uid,
-      status: 'under_review',
-      videoFilePath: recordedVideo.filePath,
-      duration: recordedVideo.duration,
-      frameCount: recordedVideo.frameCount,
-      submittedAt: new Date(),
-      stepRecaps: stepRecapsRef.current.length ? stepRecapsRef.current : task.instructions.map((inst, i) => ({ stepIndex: i, instruction: inst })),
-      handPoseSamples: handPoseSamplesRef.current.length ? handPoseSamplesRef.current : undefined,
-    };
-
-    await addSubmission(submission);
-    navigation.goBack();
+    setSubmitting(true);
+    try {
+      const submission: Submission = {
+        id: `sub-${Date.now()}`,
+        taskId: task.id,
+        taskTitle: task.title,
+        userId: user.uid,
+        status: 'under_review',
+        videoFilePath: recordedVideo.filePath,
+        duration: recordedVideo.duration,
+        frameCount: recordedVideo.frameCount,
+        submittedAt: new Date(),
+        stepRecaps: stepRecapsRef.current.length ? stepRecapsRef.current : task.instructions.map((inst, i) => ({ stepIndex: i, instruction: inst })),
+        handPoseSamples: handPoseSamplesRef.current.length ? handPoseSamplesRef.current : undefined,
+      };
+      await addSubmission(submission);
+      (navigation as any).navigate('MainTabs', { screen: 'Submissions' });
+    } catch (err) {
+      console.error('[Recording] Submit error:', err);
+      Alert.alert('Submit Failed', 'Could not save recording. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleReRecord = () => {
@@ -652,8 +678,13 @@ export default function RecordingScreen() {
             <TouchableOpacity style={styles.rvReRecordButton} onPress={handleReRecord}>
               <Text style={styles.rvReRecordText}>Re-record</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.rvSubmitButton} onPress={handleSubmit} activeOpacity={0.8}>
-              <Text style={styles.rvSubmitText}>Submit Recording</Text>
+            <TouchableOpacity
+              style={[styles.rvSubmitButton, submitting && { opacity: 0.7 }]}
+              onPress={handleSubmit}
+              activeOpacity={0.8}
+              disabled={submitting}
+            >
+              <Text style={styles.rvSubmitText}>{submitting ? 'Submitting...' : 'Submit Recording'}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -667,7 +698,15 @@ export default function RecordingScreen() {
       <StatusBar style="light" />
 
       {/* Full-screen video — rendered natively, no bridge traffic */}
-      <View style={styles.videoContainer}>
+      <View
+        style={styles.videoContainer}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          if (width > 0 && height > 0) {
+            setVideoLayout({ width, height });
+          }
+        }}
+      >
         {NativeFrameView ? (
           <NativeFrameView style={styles.fullFrame} isActive={true} contentMode="cover" />
         ) : (
@@ -676,22 +715,31 @@ export default function RecordingScreen() {
           </View>
         )}
 
-        {/* Hand pose overlay - prominent, always on top */}
-        {handPoseData && handPoseData.hands?.length > 0 && (
+        {/* Hand pose overlay — always visible during recording when task requires hand tracking */}
+        {phase === 'recording' && task?.handTrackingRequired && (
           <View style={[StyleSheet.absoluteFillObject, { zIndex: 100, pointerEvents: 'none' }]}>
-            <HandPoseOverlay
-              handPoseData={handPoseData}
-              containerWidth={SCREEN_WIDTH}
-              containerHeight={SCREEN_HEIGHT}
-              frameWidth={handPoseData.frameWidth}
-              frameHeight={handPoseData.frameHeight}
-            />
+            {handPoseData && handPoseData.hands?.length > 0 ? (
+              <HandPoseOverlay
+                handPoseData={handPoseData}
+                containerWidth={videoLayout.width}
+                containerHeight={videoLayout.height}
+                frameWidth={handPoseData.frameWidth}
+                frameHeight={handPoseData.frameHeight}
+              />
+            ) : (
+              <View style={styles.handTrackingStatus}>
+                <View style={styles.handTrackingDot} />
+                <Text style={styles.handTrackingText}>
+                  {handPoseData ? 'Hand tracking active' : 'Waiting for hand tracking...'}
+                </Text>
+              </View>
+            )}
           </View>
         )}
       </View>
 
-      {/* Top overlay — task title prominent, back button */}
-      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
+      {/* Top overlay — task title at top of iPhone view, always visible */}
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 8), top: 0 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.topBackButton}>
           <Text style={styles.topBackArrow}>{'‹'}</Text>
         </TouchableOpacity>
@@ -911,18 +959,42 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
     fontSize: 16,
   },
+  handTrackingStatus: {
+    position: 'absolute',
+    top: 80,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  handTrackingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
+  },
+  handTrackingText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
 
-  // Top bar
+  // Top bar — fixed at top of camera FOV, high z-index so it stays visible
   topBar: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
+    zIndex: 1000,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   topBackButton: {
     width: 44,

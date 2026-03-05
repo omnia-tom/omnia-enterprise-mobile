@@ -1,6 +1,6 @@
 /**
  * Test recording using iPhone camera (no glasses required).
- * For demos when Meta glasses aren't available.
+ * Uses native hand pose tracking for real-time overlay (replaces static demo).
  */
 import React, { useState, useRef, useEffect } from 'react';
 import {
@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
 import { StatusBar } from 'expo-status-bar';
@@ -19,45 +20,19 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { auth } from '../services/firebase';
 import { typography, spacing, useThemeColors } from '../theme';
-import { RootStackParamList, Task, Submission } from '../types';
+import { RootStackParamList, Task, Submission, StepRecap } from '../types';
 import { getTaskById, addSubmission } from '../services/taskData';
 import MeshBackground from '../components/MeshBackground';
 import HandPoseOverlay from '../components/HandPoseOverlay';
+import iPhoneCameraView, { isiPhoneCameraViewAvailable } from '../components/iPhoneCameraView';
+import { iphoneCamera, iPhoneHandPoseData } from '../services/iphoneCamera';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-// Demo hand pose for iPhone prototype (same overlay as glasses — validates UI before hardware test)
-const DEMO_HAND_POSE = {
-  hands: [{
-    chirality: 'right' as const,
-    joints: [
-      { name: 'wrist', x: 0.5, y: 0.72, confidence: 0.9 },
-      { name: 'thumbCMC', x: 0.48, y: 0.68, confidence: 0.9 },
-      { name: 'thumbMP', x: 0.46, y: 0.62, confidence: 0.9 },
-      { name: 'thumbIP', x: 0.44, y: 0.56, confidence: 0.9 },
-      { name: 'thumbTip', x: 0.42, y: 0.50, confidence: 0.9 },
-      { name: 'indexMCP', x: 0.52, y: 0.66, confidence: 0.9 },
-      { name: 'indexPIP', x: 0.54, y: 0.58, confidence: 0.9 },
-      { name: 'indexDIP', x: 0.55, y: 0.50, confidence: 0.9 },
-      { name: 'indexTip', x: 0.56, y: 0.42, confidence: 0.9 },
-      { name: 'middleMCP', x: 0.54, y: 0.64, confidence: 0.9 },
-      { name: 'middlePIP', x: 0.56, y: 0.54, confidence: 0.9 },
-      { name: 'middleDIP', x: 0.57, y: 0.46, confidence: 0.9 },
-      { name: 'middleTip', x: 0.58, y: 0.38, confidence: 0.9 },
-      { name: 'ringMCP', x: 0.52, y: 0.62, confidence: 0.9 },
-      { name: 'ringPIP', x: 0.54, y: 0.52, confidence: 0.9 },
-      { name: 'ringDIP', x: 0.55, y: 0.44, confidence: 0.9 },
-      { name: 'ringTip', x: 0.56, y: 0.36, confidence: 0.9 },
-      { name: 'littleMCP', x: 0.50, y: 0.60, confidence: 0.9 },
-      { name: 'littlePIP', x: 0.52, y: 0.50, confidence: 0.9 },
-      { name: 'littleDIP', x: 0.53, y: 0.42, confidence: 0.9 },
-      { name: 'littleTip', x: 0.54, y: 0.34, confidence: 0.9 },
-    ],
-  }],
-  timestamp: Date.now() / 1000,
-  frameWidth: SCREEN_W,
-  frameHeight: SCREEN_H,
-};
+// Use native camera + hand tracking when available. Enabled now that iPhoneCameraView is registered for Fabric interop.
+const NATIVE_HAND_TRACKING_ENABLED = true;
+const useNativeHandTracking =
+  NATIVE_HAND_TRACKING_ENABLED && iphoneCamera.isAvailable() && isiPhoneCameraViewAvailable();
 
 let ExpoSpeech: any = null;
 try {
@@ -85,22 +60,34 @@ export default function IPhoneTestRecordScreen() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [micPermission, setMicPermission] = useState<boolean | null>(null);
   const [currentInstructionIndex, setCurrentInstructionIndex] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [handPoseData, setHandPoseData] = useState<iPhoneHandPoseData | null>(null);
 
   const cameraRef = useRef<CameraView>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordPromiseRef = useRef<Promise<{ uri: string } | undefined> | null>(null);
   const elapsedRef = useRef(0);
+  const stepRecapsRef = useRef<StepRecap[]>([]);
 
   useEffect(() => {
     loadTask();
     (async () => {
+      const micReq = ExpoSpeech?.requestPermissionsAsync?.();
+      const micPromise = micReq && typeof micReq.catch === 'function' ? micReq.catch(() => ({ granted: false })) : Promise.resolve({ granted: false });
       const [cam, mic] = await Promise.all([
         Camera.requestCameraPermissionsAsync(),
-        ExpoSpeech?.requestPermissionsAsync?.().catch(() => ({ granted: false })),
+        micPromise,
       ]);
       setHasPermission(cam.status === 'granted');
       setMicPermission(mic?.granted ?? false);
     })();
+  }, []);
+
+  // Real-time hand pose from native iPhone camera (replaces static demo)
+  useEffect(() => {
+    if (!useNativeHandTracking) return;
+    const remove = iphoneCamera.addHandPoseListener(setHandPoseData);
+    return () => { remove?.(); setHandPoseData(null); };
   }, []);
 
   useEffect(() => {
@@ -120,8 +107,37 @@ export default function IPhoneTestRecordScreen() {
 
   const advanceStep = () => {
     if (!task?.instructions?.length) return;
-    setCurrentInstructionIndex((prev) =>
-      Math.min(prev + 1, task!.instructions!.length - 1)
+    const prev = currentInstructionIndex;
+    const recap: StepRecap = handPoseData?.hands?.length
+      ? {
+          stepIndex: prev,
+          instruction: task!.instructions[prev],
+          handPoseSample: (() => {
+            const wrist = handPoseData!.hands[0].joints.find((j) => j.name === 'wrist');
+            return {
+              timestamp: handPoseData!.timestamp,
+              wristPosition: wrist ? { x: wrist.x, y: wrist.y, z: (wrist as any).z ?? 0 } : undefined,
+              hands: handPoseData!.hands.map((h) => ({
+                chirality: h.chirality,
+                joints: h.joints.map((j) => ({
+                  name: j.name,
+                  x: j.x,
+                  y: j.y,
+                  z: (j as any).z ?? 0,
+                })),
+              })),
+            };
+          })(),
+        }
+      : { stepIndex: prev, instruction: task!.instructions[prev] };
+
+    // One recording per step: replace any existing recap for this step
+    const recaps = stepRecapsRef.current.filter((r) => r.stepIndex !== prev);
+    recaps.push(recap);
+    recaps.sort((a, b) => a.stepIndex - b.stepIndex);
+    stepRecapsRef.current = recaps;
+    setCurrentInstructionIndex((p) =>
+      Math.min(p + 1, task!.instructions!.length - 1)
     );
   };
 
@@ -149,7 +165,10 @@ export default function IPhoneTestRecordScreen() {
     })();
     return () => {
       listener?.remove?.();
-      ExpoSpeech?.stop?.().catch(() => {});
+      const stopPromise = ExpoSpeech?.stop?.();
+      if (stopPromise && typeof stopPromise.catch === 'function') {
+        stopPromise.catch(() => {});
+      }
     };
   }, [recording, micPermission]);
 
@@ -160,10 +179,24 @@ export default function IPhoneTestRecordScreen() {
   };
 
   const startRecording = async () => {
+    if (useNativeHandTracking) {
+      stepRecapsRef.current = [];
+      setRecording(true);
+      setElapsed(0);
+      setCurrentInstructionIndex(0);
+      try {
+        await iphoneCamera.startRecording();
+      } catch (e) {
+        console.error('[IPhoneTest] Native start record error:', e);
+        setRecording(false);
+      }
+      return;
+    }
     if (!cameraRef.current || !cameraReady) return;
     setRecording(true);
     setElapsed(0);
     setCurrentInstructionIndex(0);
+    stepRecapsRef.current = [];
     try {
       recordPromiseRef.current = cameraRef.current.recordAsync();
     } catch (e) {
@@ -174,6 +207,17 @@ export default function IPhoneTestRecordScreen() {
 
   const doStopRecording = async () => {
     const finalElapsed = elapsedRef.current;
+    if (useNativeHandTracking) {
+      try {
+        const result = await iphoneCamera.stopRecording();
+        setRecordedVideo({ filePath: result.filePath, duration: result.duration || finalElapsed });
+      } catch (e) {
+        console.error('[IPhoneTest] Native stop record error:', e);
+        setRecordedVideo({ filePath: 'iphone-test-recording', duration: finalElapsed });
+      }
+      setRecording(false);
+      return;
+    }
     try {
       await cameraRef.current?.stopRecording();
       const result = await recordPromiseRef.current;
@@ -192,25 +236,37 @@ export default function IPhoneTestRecordScreen() {
   stopRecordingRef.current = doStopRecording;
 
   const handleSubmit = async () => {
-    if (!task || !recordedVideo) return;
+    if (!task || !recordedVideo || submitting) return;
     const user = auth.currentUser;
     if (!user) return;
 
-    const submission: Submission = {
-      id: `sub-${Date.now()}`,
-      taskId: task.id,
-      taskTitle: task.title,
-      userId: user.uid,
-      status: 'under_review',
-      videoFilePath: recordedVideo.filePath,
-      duration: recordedVideo.duration,
-      frameCount: 0,
-      submittedAt: new Date(),
-      payoutCents: task.payoutCents ?? 0,
-      stepRecaps: task.instructions.map((inst, i) => ({ stepIndex: i, instruction: inst })),
-    };
-    await addSubmission(submission);
-    navigation.navigate('MainTabs' as any, { screen: 'Submissions' });
+    setSubmitting(true);
+    try {
+      const stepRecaps =
+        stepRecapsRef.current.length > 0
+          ? stepRecapsRef.current
+          : task.instructions.map((inst, i) => ({ stepIndex: i, instruction: inst }));
+      const submission: Submission = {
+        id: `sub-${Date.now()}`,
+        taskId: task.id,
+        taskTitle: task.title,
+        userId: user.uid,
+        status: 'under_review',
+        videoFilePath: recordedVideo.filePath,
+        duration: recordedVideo.duration,
+        frameCount: 0,
+        submittedAt: new Date(),
+        payoutCents: task.payoutCents ?? 0,
+        stepRecaps,
+      };
+      await addSubmission(submission);
+      navigation.navigate('MainTabs' as any, { screen: 'Submissions' });
+    } catch (err) {
+      console.error('[IPhoneTest] Submit error:', err);
+      Alert.alert('Submit Failed', 'Could not save recording. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
@@ -235,8 +291,12 @@ export default function IPhoneTestRecordScreen() {
           <Text style={[styles.reviewDuration, { color: colors.textTertiary }]}>
             Duration: {formatTime(recordedVideo.duration)}
           </Text>
-          <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.accent }]} onPress={handleSubmit}>
-            <Text style={styles.submitBtnText}>Submit to History</Text>
+          <TouchableOpacity
+            style={[styles.submitBtn, { backgroundColor: colors.accent }, submitting && { opacity: 0.7 }]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            <Text style={styles.submitBtnText}>{submitting ? 'Submitting...' : 'Submit to History'}</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -256,33 +316,49 @@ export default function IPhoneTestRecordScreen() {
     <View style={styles.container}>
       <MeshBackground variant="cool" />
       <StatusBar style="light" />
-      <CameraView
-        ref={cameraRef}
-        style={StyleSheet.absoluteFill}
-        facing="back"
-        mode="video"
-        onCameraReady={() => setCameraReady(true)}
-      />
-      {/* Demo hand pose overlay — same UI as glasses, for iPhone prototyping */}
-      {recording && (
+      {useNativeHandTracking ? (
+        <iPhoneCameraView style={StyleSheet.absoluteFill} isActive={hasPermission !== false} />
+      ) : (
+        <CameraView
+          ref={cameraRef}
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          mode="video"
+          onCameraReady={() => setCameraReady(true)}
+        />
+      )}
+      {/* Real-time hand pose overlay — tracks actual hand position */}
+      {(recording || handPoseData) && (
         <View style={[StyleSheet.absoluteFillObject, { zIndex: 100, pointerEvents: 'none' }]}>
-          <HandPoseOverlay
-            handPoseData={DEMO_HAND_POSE}
-            containerWidth={SCREEN_W}
-            containerHeight={SCREEN_H}
-          />
-          <View style={styles.demoBadge}>
-            <Text style={styles.demoBadgeText}>Demo overlay</Text>
-          </View>
+          {handPoseData && handPoseData.hands?.length > 0 ? (
+            <HandPoseOverlay
+              handPoseData={handPoseData as any}
+              containerWidth={SCREEN_W}
+              containerHeight={SCREEN_H}
+              frameWidth={handPoseData.frameWidth}
+              frameHeight={handPoseData.frameHeight}
+            />
+          ) : (
+            <View style={[styles.handStatus, { position: 'absolute', top: 80, alignSelf: 'center' }]}>
+              <View style={[styles.handDot, { backgroundColor: 'rgba(52, 199, 89, 0.9)' }]} />
+              <Text style={styles.handText}>
+                {handPoseData ? 'Hand tracking active' : 'Show hands in frame'}
+              </Text>
+            </View>
+          )}
         </View>
       )}
-      <View style={[styles.overlay, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
-        <View style={styles.topRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
+      {/* Top bar — task title at very top of camera view */}
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 8) }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+        <View style={styles.topBarCenter}>
+          <Text style={styles.taskTitle} numberOfLines={2}>{task.title}</Text>
         </View>
-        <Text style={styles.taskTitle}>{task.title}</Text>
+        <View style={styles.topBarSpacer} />
+      </View>
+      <View style={[styles.overlay, { paddingTop: 0, paddingBottom: insets.bottom + 24, justifyContent: 'flex-end' }]}>
         {recording && (
           <View style={styles.recordingBadge}>
             <View style={styles.recordingDot} />
@@ -317,11 +393,13 @@ export default function IPhoneTestRecordScreen() {
           <View style={styles.controls}>
             {!recording ? (
             <TouchableOpacity
-              style={[styles.recordBtn, !cameraReady && styles.recordBtnDisabled]}
+              style={[styles.recordBtn, (!cameraReady && !useNativeHandTracking) && styles.recordBtnDisabled]}
               onPress={startRecording}
-              disabled={!cameraReady}
+              disabled={!useNativeHandTracking && !cameraReady}
             >
-              <Text style={styles.recordBtnText}>{cameraReady ? 'Start Recording' : 'Preparing...'}</Text>
+              <Text style={styles.recordBtnText}>
+                {(useNativeHandTracking || cameraReady) ? 'Start Recording' : 'Preparing...'}
+              </Text>
             </TouchableOpacity>
             ) : (
               <TouchableOpacity style={styles.stopBtn} onPress={doStopRecording}>
@@ -340,17 +418,29 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-between',
     paddingHorizontal: spacing.screenPadding,
+    pointerEvents: 'box-none',
   },
-  topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.screenPadding,
+    paddingBottom: 12,
+    zIndex: 1000,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  topBarCenter: { flex: 1, marginHorizontal: 12, justifyContent: 'center', minHeight: 0 },
+  topBarSpacer: { width: 60 },
   backBtn: { alignSelf: 'flex-start' },
   backText: { color: '#fff', fontSize: 16 },
   taskTitle: {
     color: '#fff',
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
-    marginBottom: 8,
   },
   recordingBadge: {
     flexDirection: 'row',

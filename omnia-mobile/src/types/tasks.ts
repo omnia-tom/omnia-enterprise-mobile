@@ -13,7 +13,8 @@ export type TaskCategory =
   | 'front_suspension'
   | 'rear_suspension'
   | 'overhead_systems'
-  | 'tire_wheel';
+  | 'tire_wheel'
+  | 'rear_fascia';
 export type TaskDifficulty = 'beginner' | 'intermediate' | 'advanced';
 
 export interface Task {
@@ -38,7 +39,12 @@ export interface StepRecap {
   stepIndex: number;
   instruction: string;
   stillImageUri?: string;
-  handPoseSample?: { timestamp: number; hands: Array<{ chirality: string; joints: Array<{ name: string; x: number; y: number }> }> };
+  /** Hand pose at step completion — used for thumbnail and data labeling */
+  handPoseSample?: {
+    timestamp: number;
+    wristPosition?: { x: number; y: number; z: number }; // normalized 0–1, z=0 if no depth
+    hands: Array<{ chirality: string; joints: Array<{ name: string; x: number; y: number; z?: number }> }>;
+  };
 }
 
 export interface Submission {
