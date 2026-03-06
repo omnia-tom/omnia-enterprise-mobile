@@ -268,17 +268,20 @@ export default function DakkotaHomeScreen() {
               );
             })}
           </View>
-          {selectedCategory !== 'all' && (
-            <TouchableOpacity style={styles.selectedSpotLabel} onPress={() => setSelectedCategory('all')}>
-              <GlassPill active style={styles.spotLabelPill}>
-                <Text style={styles.spotLabelText}>
-                  {categoryConfig[selectedCategory]?.label || selectedCategory}
-                </Text>
-                <Text style={styles.spotLabelClear}> ×</Text>
-              </GlassPill>
-            </TouchableOpacity>
-          )}
-          <Text style={styles.carTapHint}>Tap on a dot to filter assembly tasks</Text>
+          <View style={styles.carFilterHintSlot}>
+            {selectedCategory !== 'all' ? (
+              <TouchableOpacity style={styles.selectedSpotLabel} onPress={() => setSelectedCategory('all')}>
+                <GlassPill active style={styles.spotLabelPill}>
+                  <Text style={styles.spotLabelText}>
+                    {categoryConfig[selectedCategory]?.label || selectedCategory}
+                  </Text>
+                  <Text style={styles.spotLabelClear}> ×</Text>
+                </GlassPill>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.carTapHint}>Tap on a dot to filter assembly tasks</Text>
+            )}
+          </View>
         </View>
 
         {/* Difficulty filter - 3 buttons on one line, Veteran = advanced in data */}
@@ -451,7 +454,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   carFilterSection: {
-    marginBottom: 16,
+    marginBottom: 8,
     alignItems: 'center',
   },
   carContainer: {
@@ -459,7 +462,7 @@ const styles = StyleSheet.create({
     aspectRatio: 656 / 437.33334,
     minHeight: 320,
     position: 'relative',
-    marginBottom: 8,
+    marginBottom: 0,
   },
   carImage: {
     width: '100%',
@@ -480,9 +483,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 59, 48, 0.9)',
     borderColor: '#FFFFFF',
   },
-  selectedSpotLabel: {
-    marginBottom: 8,
+  carFilterHintSlot: {
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  selectedSpotLabel: {},
   spotLabelPill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -501,6 +507,7 @@ const styles = StyleSheet.create({
   carTapHint: {
     fontSize: 12,
     color: colors.textTertiary,
+    textAlign: 'center',
   },
   difficultyRow: {
     flexDirection: 'row',

@@ -29,8 +29,8 @@ export default function PairedProductCard() {
 
 const styles = StyleSheet.create({
   card: {
-    padding: 5,
-    paddingBottom: 12,
+    padding: 16,
+    paddingBottom: 18,
     alignItems: 'center',
     marginBottom: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -43,13 +43,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignSelf: 'flex-end',
-    marginBottom: 0, // TOP YELLOW: reduce this OR add marginTop on glassesWrapper to shrink gap icons→glasses
+    marginBottom: 0,
   },
   glassesWrapper: {
-    marginTop: -12, // TOP YELLOW: negative pulls glasses up toward icons
-    marginBottom: 0, // BOTTOM YELLOW: gap glasses→text
+    marginTop: -20,
+    marginBottom: -60,
     alignItems: 'center',
     overflow: 'visible',
+    transform: [{ translateY: -50 }],
   },
   glassesImage: {
     width: 450,
@@ -59,7 +60,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: colors.success,
-    marginTop: -8, // BOTTOM YELLOW: negative pulls "connected" up toward glasses
+    marginTop: -60,
     marginBottom: 2,
   },
   username: {
