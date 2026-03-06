@@ -41,7 +41,7 @@ export default function TaskCard({ task, onPress }: TaskCardProps) {
         <View style={styles.metaRow}>
           <View style={[styles.difficultyPill, { backgroundColor: difficulty.bg }]}>
             <Text style={[styles.difficultyText, { color: difficulty.color }]}>
-              {task.difficulty.charAt(0).toUpperCase() + task.difficulty.slice(1)}
+              {(difficulty as { label?: string }).label ?? task.difficulty.charAt(0).toUpperCase() + task.difficulty.slice(1)}
             </Text>
           </View>
           <Text style={[styles.duration, { color: colors.textTertiary }]}>{task.requiredDuration.minSeconds / 60}-{task.requiredDuration.maxSeconds / 60} min</Text>
@@ -69,18 +69,18 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
     flexShrink: 0,
     overflow: 'hidden',
   },
   categoryIcon: {
-    width: 36,
-    height: 36,
+    width: 52,
+    height: 52,
   },
   titleBlock: {
     flex: 1,

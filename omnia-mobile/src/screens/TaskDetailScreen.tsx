@@ -15,10 +15,14 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { typography, spacing, useThemeColors } from '../theme';
 import { RootStackParamList, Task } from '../types';
+import type { TaskCategory } from '../types';
 import { getTaskById } from '../services/taskData';
 import { metaWearablesService } from '../services/metaWearables';
+import { CAR_SPOTS } from '../config/carSpots';
 import GlassCard from '../components/GlassCard';
 import MeshBackground from '../components/MeshBackground';
+
+const noDotsCarImage = require('../assets/no_dots_car.png');
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'TaskDetail'>;
 type Route = RouteProp<RootStackParamList, 'TaskDetail'>;
@@ -91,6 +95,10 @@ export default function TaskDetailScreen() {
   const difficulty = difficultyConfig[task.difficulty] || difficultyConfig.beginner;
   const progress = task.maxSubmissions > 0 ? task.currentSubmissions / task.maxSubmissions : 0;
 
+  const taskSpot = CAR_SPOTS.find((s) => s.category === task.category);
+  const isAssemblyTask = !!taskSpot;
+  const categoryWithImage = category as { imageSource?: number };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <MeshBackground variant="cool" />
@@ -106,24 +114,39 @@ export default function TaskDetailScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero */}
+        {/* Hero: car diagram + overlay + dot for assembly tasks; fallback for non-assembly */}
         <View style={styles.hero}>
-          <View style={styles.heroIconWrap}>
-            {(category as { imageSource?: number })?.imageSource ? (
-              <Image
-                source={(category as { imageSource: number }).imageSource}
-                style={styles.heroCategoryIcon}
-                resizeMode="contain"
-              />
-            ) : (
-              <Ionicons
-                name={(category?.icon ?? 'construct-outline') as any}
-                size={40}
-                color={colors.accent}
-              />
-            )}
-          </View>
-          <Text style={[styles.heroCategory, { color: colors.textTertiary }]}>{category.label}</Text>
+          {isAssemblyTask ? (
+            <>
+              <View style={styles.carContainer}>
+                <Image source={noDotsCarImage} style={styles.carImage} resizeMode="contain" />
+                {/* Highlighted part: same icon as homepage TaskCard, overlaid on car outline */}
+                {taskSpot && (
+                  <View style={[styles.partOverlay, { left: taskSpot.left, top: taskSpot.top, backgroundColor: (category as { tint?: string })?.tint ?? 'rgba(255, 255, 255, 0.15)' }]}>
+                    {categoryWithImage?.imageSource ? (
+                      <Image
+                        source={categoryWithImage.imageSource}
+                        style={styles.partOverlayIcon}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <Ionicons name={(category?.icon ?? 'construct-outline') as any} size={28} color={colors.accent} />
+                    )}
+                    <View style={styles.partOverlayDot} />
+                  </View>
+                )}
+              </View>
+            </>
+          ) : (
+            <View style={styles.heroIconWrap}>
+              {categoryWithImage?.imageSource ? (
+                <Image source={categoryWithImage.imageSource} style={styles.heroCategoryIcon} resizeMode="contain" />
+              ) : (
+                <Ionicons name={(category?.icon ?? 'construct-outline') as any} size={40} color={colors.accent} />
+              )}
+            </View>
+          )}
+          <Text style={[styles.heroCategory, { color: colors.textTertiary }]}>{category.label.toUpperCase()}</Text>
           <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>{task.title}</Text>
           {stationId && procedureId && (
             <Text style={[styles.stationBadge, { color: colors.textTertiary }]}>
@@ -132,7 +155,7 @@ export default function TaskDetailScreen() {
           )}
         </View>
 
-        {/* Info row */}
+        {/* Info row (Duration & Difficulty) */}
         <GlassCard style={styles.infoRow}>
           <View style={styles.infoCol}>
             <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{task.requiredDuration.minSeconds / 60}-{task.requiredDuration.maxSeconds / 60} min</Text>
@@ -142,7 +165,7 @@ export default function TaskDetailScreen() {
           <View style={styles.infoCol}>
             <View style={[styles.difficultyPill, { backgroundColor: difficulty.bg }]}>
               <Text style={[styles.difficultyText, { color: difficulty.color }]}>
-                {task.difficulty.charAt(0).toUpperCase() + task.difficulty.slice(1)}
+                {difficulty.label}
               </Text>
             </View>
             <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>Difficulty</Text>
@@ -255,6 +278,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.sectionGap,
     marginTop: 8,
+  },
+  carContainer: {
+    width: '100%',
+    aspectRatio: 656 / 437.33334,
+    minHeight: 320,
+    position: 'relative',
+    marginBottom: 16,
+  },
+  carImage: {
+    width: '100%',
+    height: '100%',
+  },
+  partOverlay: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -32,
+    marginTop: -32,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  partOverlayIcon: {
+    width: 52,
+    height: 52,
+  },
+  partOverlayDot: {
+    position: 'absolute',
+    bottom: 4,
+    left: '50%',
+    marginLeft: -4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 59, 48, 1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   heroIconWrap: {
     width: 72,

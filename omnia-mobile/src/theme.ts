@@ -149,10 +149,11 @@ export const categoryConfig: Record<string, { icon: string; tint: string; label:
 export const darkCategoryConfig = categoryConfig;
 
 // ── Difficulty config ──────────────────────────────────────────
-export const difficultyConfig: Record<string, { color: string; bg: string }> = {
-  beginner: { color: '#30D158', bg: 'rgba(48, 209, 88, 0.15)' },
-  intermediate: { color: '#FF9F0A', bg: 'rgba(255, 159, 10, 0.15)' },
-  advanced: { color: '#FF453A', bg: 'rgba(255, 69, 58, 0.15)' },
+export const difficultyConfig: Record<string, { color: string; bg: string; label: string }> = {
+  beginner: { color: '#30D158', bg: 'rgba(48, 209, 88, 0.15)', label: 'Beginner' },
+  intermediate: { color: '#FF9F0A', bg: 'rgba(255, 159, 10, 0.15)', label: 'Intermediate' },
+  advanced: { color: '#FF453A', bg: 'rgba(255, 69, 58, 0.15)', label: 'Veteran' },
+  veteran: { color: '#FF453A', bg: 'rgba(255, 69, 58, 0.15)', label: 'Veteran' },
 };
 
 // Backward-compat alias

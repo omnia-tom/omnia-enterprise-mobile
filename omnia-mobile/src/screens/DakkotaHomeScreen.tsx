@@ -20,16 +20,23 @@ import { auth, db } from '../services/firebase';
 import { colors, typography, spacing, useThemeColors } from '../theme';
 import { Task, TaskCategory, RootStackParamList } from '../types';
 import { getAvailableTasks } from '../services/taskData';
+import { CAR_SPOTS } from '../config/carSpots';
 import TaskCard from '../components/TaskCard';
 import GlassPill from '../components/GlassPill';
 import GlassCard from '../components/GlassCard';
 import MeshBackground from '../components/MeshBackground';
+import PairedProductCard from '../components/PairedProductCard';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const WELCOME_SEEN_KEY = '@specTask_welcomeSeen';
 
 const dakkotaLogo = require('../assets/Dakkota-Logo-2.png');
+const whiteButtonQrCode = require('../assets/white_button_QR_Code.png');
+const noDotsCarImage = require('../assets/no_dots_car.png');
+const beginnerIcon = require('../assets/beginner.png');
+const intermediateIcon = require('../assets/intermediate.png');
+const veteranIcon = require('../assets/veteran.png');
 
 const ASSEMBLY_CATEGORIES: (TaskCategory | 'all')[] = [
   'all',
@@ -43,6 +50,8 @@ const ASSEMBLY_CATEGORIES: (TaskCategory | 'all')[] = [
   'rear_fascia',
 ];
 
+type DifficultyFilter = 'all' | Task['difficulty'];
+
 export default function DakkotaHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
@@ -51,6 +60,8 @@ export default function DakkotaHomeScreen() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<TaskCategory | 'all'>('all');
+  const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyFilter>('all');
+  const [showAriaPreview, setShowAriaPreview] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showWelcome, setShowWelcome] = useState<boolean>(true);
@@ -66,12 +77,15 @@ export default function DakkotaHomeScreen() {
   }, []);
 
   useEffect(() => {
-    if (selectedCategory === 'all') {
-      setFilteredTasks(tasks);
-    } else {
-      setFilteredTasks(tasks.filter(t => t.category === selectedCategory));
+    let result = tasks;
+    if (selectedCategory !== 'all') {
+      result = result.filter(t => t.category === selectedCategory);
     }
-  }, [selectedCategory, tasks]);
+    if (selectedDifficulty !== 'all') {
+      result = result.filter(t => t.difficulty === selectedDifficulty);
+    }
+    setFilteredTasks(result);
+  }, [selectedCategory, selectedDifficulty, tasks]);
 
   const loadTasks = async () => {
     const data = await getAvailableTasks();
@@ -160,36 +174,6 @@ export default function DakkotaHomeScreen() {
     );
   }
 
-  const renderCategoryPill = (cat: TaskCategory | 'all') => {
-    const isActive = selectedCategory === cat;
-    if (cat === 'all') {
-      return (
-        <TouchableOpacity key="all" onPress={() => setSelectedCategory('all')}>
-          <GlassPill active={isActive} style={styles.pill}>
-            <Text style={[styles.pillText, { color: isActive ? '#FFFFFF' : themeColors.textSecondary }]}>All</Text>
-          </GlassPill>
-        </TouchableOpacity>
-      );
-    }
-    const config = categoryConfig[cat];
-    const iconName = (config as { icon?: string })?.icon || 'ellipse-outline';
-    const imageSource = (config as { imageSource?: number })?.imageSource;
-    return (
-      <TouchableOpacity key={cat} onPress={() => setSelectedCategory(cat)}>
-        <GlassPill active={isActive} style={[styles.pill, styles.pillWithIcon]}>
-          {imageSource ? (
-            <Image source={imageSource} style={styles.pillIconImage} resizeMode="contain" />
-          ) : (
-            <Ionicons name={iconName as any} size={16} color={isActive ? '#FFFFFF' : themeColors.textSecondary} />
-          )}
-          <Text style={[styles.pillText, { color: isActive ? '#FFFFFF' : themeColors.textSecondary }]}>
-            {config?.label}
-          </Text>
-        </GlassPill>
-      </TouchableOpacity>
-    );
-  };
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <MeshBackground variant="warm" />
@@ -231,29 +215,94 @@ export default function DakkotaHomeScreen() {
         </View>
 
         {/* Pair New Device */}
-        <TouchableOpacity onPress={handlePairDevice} style={styles.pairButton}>
-          <View style={styles.pairButtonInner}>
-            <Text style={styles.pairButtonText}>Pair New Device</Text>
+        <View style={styles.pairSection}>
+          <TouchableOpacity onPress={handlePairDevice} style={styles.pairButton}>
+            <View style={styles.pairButtonInner}>
+              <Text style={styles.pairButtonText}>Pair New Device</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setShowAriaPreview(p => !p)}
+            style={styles.pairToAriaTouchable}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.pairToAriaText}>pair to ARIA</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ARIA paired product preview (demo) */}
+        {showAriaPreview && <PairedProductCard />}
+
+        {/* Dakkota Assembly - white_button_QR_Code.png, text centered per updated_design */}
+        <TouchableOpacity onPress={handleDakkotaAssembly} style={styles.dakkotaButton} activeOpacity={0.9}>
+          <View style={styles.dakkotaButtonWrapper}>
+            <Image
+              source={whiteButtonQrCode}
+              style={styles.dakkotaButtonImage}
+              resizeMode="contain"
+            />
+            <View style={styles.dakkotaButtonContent} pointerEvents="none">
+              <Text style={styles.dakkotaButtonText}>Dakkota Assembly</Text>
+              <Text style={styles.dakkotaButtonSubtext}>Workstation scan • Audio consent</Text>
+            </View>
           </View>
         </TouchableOpacity>
 
-        {/* Dakkota Assembly - primary CTA */}
-        <TouchableOpacity onPress={handleDakkotaAssembly} style={styles.dakkotaButton}>
-          <View style={styles.dakkotaButtonInner}>
-            <Text style={styles.dakkotaButtonText}>Dakkota Assembly</Text>
-            <Text style={styles.dakkotaButtonSubtext}>Workstation scan • Audio consent</Text>
+        {/* Car with spots - category filter */}
+        <View style={styles.carFilterSection}>
+          <View style={styles.carContainer}>
+            <Image source={noDotsCarImage} style={styles.carImage} resizeMode="contain" />
+            {CAR_SPOTS.map((spot) => {
+              const isActive = selectedCategory === spot.category;
+              return (
+                <TouchableOpacity
+                  key={spot.category}
+                  style={[
+                    styles.carSpot,
+                    { left: spot.left, top: spot.top },
+                    isActive && styles.carSpotActive,
+                  ]}
+                  onPress={() => setSelectedCategory(selectedCategory === spot.category ? 'all' : spot.category)}
+                  activeOpacity={0.8}
+                />
+              );
+            })}
           </View>
-        </TouchableOpacity>
+          {selectedCategory !== 'all' && (
+            <TouchableOpacity style={styles.selectedSpotLabel} onPress={() => setSelectedCategory('all')}>
+              <GlassPill active style={styles.spotLabelPill}>
+                <Text style={styles.spotLabelText}>
+                  {categoryConfig[selectedCategory]?.label || selectedCategory}
+                </Text>
+                <Text style={styles.spotLabelClear}> ×</Text>
+              </GlassPill>
+            </TouchableOpacity>
+          )}
+          <Text style={styles.carTapHint}>Tap on a dot to filter assembly tasks</Text>
+        </View>
 
-        {/* Category filter */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
-          style={styles.filterList}
-        >
-          {ASSEMBLY_CATEGORIES.map(cat => renderCategoryPill(cat))}
-        </ScrollView>
+        {/* Difficulty filter - 3 buttons on one line, Veteran = advanced in data */}
+        <View style={styles.difficultyRow}>
+          {[
+            { key: 'beginner' as const, icon: beginnerIcon, label: 'Beginner' },
+            { key: 'intermediate' as const, icon: intermediateIcon, label: 'Intermediate' },
+            { key: 'advanced' as const, icon: veteranIcon, label: 'Veteran' },
+          ].map(({ key, icon, label }) => {
+            const isActive = selectedDifficulty === key;
+            return (
+              <TouchableOpacity
+                key={key}
+                onPress={() => setSelectedDifficulty(isActive ? 'all' : key)}
+                style={[styles.difficultyButton, isActive && styles.difficultyButtonActive]}
+              >
+                <View style={styles.difficultyIconWrap}>
+                  <Image source={icon} style={styles.difficultyIcon} resizeMode="contain" />
+                </View>
+                <Text style={[styles.difficultyLabel, { color: isActive ? '#FFFFFF' : themeColors.textSecondary }]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         {/* Task list */}
         {loading ? (
@@ -341,8 +390,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
   },
-  pairButton: {
+  pairSection: {
     marginBottom: 12,
+  },
+  pairButton: {
+    marginBottom: 0,
+  },
+  pairToAriaTouchable: {
+    alignSelf: 'center',
+    marginTop: 6,
+  },
+  pairToAriaText: {
+    fontSize: 10,
+    color: colors.textTertiary,
+    opacity: 0.8,
   },
   pairButtonInner: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -360,11 +421,24 @@ const styles = StyleSheet.create({
   dakkotaButton: {
     marginBottom: 24,
   },
-  dakkotaButtonInner: {
-    backgroundColor: colors.accent,
-    borderRadius: 8,
-    padding: 16,
+  dakkotaButtonWrapper: {
+    width: '100%',
+    minHeight: 120,
+    position: 'relative',
+  },
+  dakkotaButtonImage: {
+    width: '100%',
+    height: 120,
+  },
+  dakkotaButtonContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    top: '30%',
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 20,
   },
   dakkotaButtonText: {
     color: '#0D0D12',
@@ -374,28 +448,98 @@ const styles = StyleSheet.create({
   dakkotaButtonSubtext: {
     color: 'rgba(13, 13, 18, 0.7)',
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 2,
   },
-  filterList: {
-    flexShrink: 0,
+  carFilterSection: {
     marginBottom: 16,
+    alignItems: 'center',
   },
-  filterRow: {
+  carContainer: {
+    width: '100%',
+    aspectRatio: 656 / 437.33334,
+    minHeight: 320,
+    position: 'relative',
+    marginBottom: 8,
+  },
+  carImage: {
+    width: '100%',
+    height: '100%',
+  },
+  carSpot: {
+    position: 'absolute',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255, 59, 48, 0.6)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 59, 48, 1)',
+    marginLeft: -11,
+    marginTop: -11,
+  },
+  carSpotActive: {
+    backgroundColor: 'rgba(255, 59, 48, 0.9)',
+    borderColor: '#FFFFFF',
+  },
+  selectedSpotLabel: {
+    marginBottom: 8,
+  },
+  spotLabelPill: {
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    gap: 8,
-  },
-  pill: {},
-  pillIconImage: {
-    width: 20,
-    height: 20,
-  },
-  pillWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
   },
-  pillText: {
+  spotLabelText: {
     ...typography.caption1,
+    color: '#FFFFFF',
+  },
+  spotLabelClear: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    marginLeft: 2,
+  },
+  carTapHint: {
+    fontSize: 12,
+    color: colors.textTertiary,
+  },
+  difficultyRow: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 10,
+  },
+  difficultyButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    minWidth: 0,
+  },
+  difficultyButtonActive: {
+    backgroundColor: 'rgba(255, 159, 10, 0.25)',
+    borderColor: 'rgba(255, 159, 10, 0.5)',
+  },
+  difficultyIconWrap: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  difficultyIcon: {
+    width: 18,
+    height: 18,
+  },
+  difficultyLabel: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   tasksSectionTitle: {
     fontSize: 18,
